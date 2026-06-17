@@ -1,0 +1,79 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+	"meshvault/internal/download/mp3party"
+)
+
+// rootCmd represents the base command when called without any subcommands
+var rootCmd = &cobra.Command{
+	Use:   "meshvault",
+	Short: "A brief description of your application",
+	Long: `A longer description that spans multiple lines and likely contains
+examples and usage of using your application. For example:
+
+Cobra is a CLI library for Go that empowers applications.
+This application is a tool to generate the needed files
+to quickly create a Cobra application.`,
+
+	Run: func(cmd *cobra.Command, args []string) {
+		songList := []string{
+			"Wildways Ветром стать",
+			"Geoxor You & I",
+		}
+
+		for _, song := range songList {
+			items, err := mp3party.FindMusics(song)
+			if err != nil {
+				fmt.Println("err ", err)
+				continue
+			}
+
+			if len(items) == 0 {
+				fmt.Println("no results for ", song)
+				continue
+			}
+
+			for _, item := range items {
+				fmt.Printf("%#v\n", item)
+				bytes, err := mp3party.Download(item)
+				if err != nil {
+					fmt.Println("err download", err)
+					continue
+				}
+
+				err = os.WriteFile(item.SongID+".mp3", bytes, 0o666)
+				if err != nil {
+					fmt.Println("err write", err)
+					continue
+				}
+			}
+
+		}
+	},
+}
+
+// Execute adds all child commands to the root command and sets flags appropriately.
+// This is called by main.main(). It only needs to happen once to the rootCmd.
+func Execute() {
+	rootCmd.AddCommand(authCmd)
+	err := rootCmd.Execute()
+	if err != nil {
+		os.Exit(1)
+	}
+}
+
+func init() {
+	// Here you will define your flags and configuration settings.
+	// Cobra supports persistent flags, which, if defined here,
+	// will be global for your application.
+
+	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.meshvault.yaml)")
+
+	// Cobra also supports local flags, which will only run
+	// when this action is called directly.
+	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+}
