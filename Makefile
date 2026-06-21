@@ -5,14 +5,14 @@ GOOSE=goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH)
 
 build: clean
 	mkdir -p bin
-	go build -o ./bin/meshvault .
+	go build -o ./bin/meshvault ./cmd/cli/
 
 clean:
 	rm -rf ./bin/
 	rm -rf ./tmp_music/*
 
 run: clean
-	go run ./...
+	go run ./cmd/cli/
 
 migrate-up:
 	$(GOOSE) up
