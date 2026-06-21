@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"meshvault/internal/download"
 )
 
 const (
@@ -21,7 +22,42 @@ const (
 
 var defaultUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0"
 
-func FindMusics(songName string) ([]Track, error) {
+// Provider реализует download.Provider для mp3party.net
+type Provider struct{}
+
+func NewProvider() *Provider { return &Provider{} }
+
+func (p *Provider) Name() string { return "mp3party" }
+
+func (p *Provider) Search(query string) ([]download.Track, error) {
+	tracks, err := findMusics(query)
+	if err != nil {
+		return nil, err
+	}
+	return tracksToCommon(tracks), nil
+}
+
+func (p *Provider) Download(track download.Track) (io.ReadCloser, error) {
+	if err := pingTrackPage(track.ID); err != nil {
+		return nil, fmt.Errorf("ping before download: %w", err)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, baseDownloadURL+"/"+track.ID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	req.Header.Set("User-Agent", defaultUA)
+
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("do request: %w", err)
+	}
+
+	return resp.Body, nil
+}
+
+func findMusics(songName string) ([]trackInternal, error) {
 	u, err := url.Parse(baseSearchURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse base url: %w", err)
@@ -53,7 +89,7 @@ func FindMusics(songName string) ([]Track, error) {
 		return nil, err
 	}
 
-	var tracks []Track
+	var tracks []trackInternal
 
 	doc.Find("div.track.song-item").Each(func(i int, s *goquery.Selection) {
 		userPanel := s.Find(".track__user-panel")
@@ -77,7 +113,7 @@ func FindMusics(songName string) ([]Track, error) {
 			title = titleText
 		}
 
-		track := Track{
+		track := trackInternal{
 			SongID:     songID,
 			Artist:     artist,
 			Title:      title,
@@ -170,25 +206,4 @@ func pingTrackPage(trackID string) error {
 	}
 
 	return nil
-}
-
-func Download(track Track) ([]byte, error) {
-	if err := pingTrackPage(track.SongID); err != nil {
-		return nil, fmt.Errorf("ping before download: %w", err)
-	}
-
-	req, err := http.NewRequest(http.MethodGet, baseDownloadURL+"/"+track.SongID, nil)
-	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
-	}
-
-	req.Header.Set("User-Agent", defaultUA)
-
-	resp, err := (&http.Client{}).Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	return io.ReadAll(resp.Body)
 }

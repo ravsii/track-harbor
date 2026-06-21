@@ -1,6 +1,8 @@
 package mp3party
 
-type Track struct {
+import "meshvault/internal/download"
+
+type trackInternal struct {
 	SongID     string
 	Artist     string
 	Title      string
@@ -12,4 +14,23 @@ type Track struct {
 	PageURL    string
 	IsPlaylist bool
 	Favorite   string
+}
+
+func (t trackInternal) toCommon() download.Track {
+	return download.Track{
+		ID:       t.SongID,
+		Artist:   t.Artist,
+		Title:    t.Title,
+		Duration: t.Duration,
+		Size:     t.Size,
+		Bitrate:  t.Bitrate,
+	}
+}
+
+func tracksToCommon(ts []trackInternal) []download.Track {
+	out := make([]download.Track, 0, len(ts))
+	for _, t := range ts {
+		out = append(out, t.toCommon())
+	}
+	return out
 }
