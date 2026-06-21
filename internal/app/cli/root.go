@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"meshvault/internal/db"
@@ -14,7 +15,10 @@ import (
 	"meshvault/internal/repository"
 )
 
-const testFolder = "tmp_music"
+const (
+	testFolder      = "tmp_music"
+	downloadWorkers = 10
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -45,44 +49,61 @@ to quickly create a Cobra application.`,
 			log.Fatalln(err)
 		}
 
+		sem := make(chan struct{}, downloadWorkers)
+		var wg sync.WaitGroup
+
 		for _, song := range songList {
-			var artists []string
+			wg.Add(1)
+			sem <- struct{}{}
 
-			err = json.NewDecoder(strings.NewReader(song.Artists)).Decode(&artists)
-			if err != nil {
-				log.Fatalln(err)
-			}
+			go func(s repository.Song) {
+				defer wg.Done()
+				defer func() { <-sem }()
 
-			name := strings.Join(artists, " ") + " " + song.Title
-			fmt.Println(name)
-
-			items, err := mp3party.FindMusics(name)
-			if err != nil {
-				fmt.Println("err ", err)
-				continue
-			}
-
-			if len(items) == 0 {
-				fmt.Println("no results for ", song)
-				continue
-			}
-
-			for _, item := range items {
-				bytes, err := mp3party.Download(item)
-				if err != nil {
-					fmt.Println("err download", err)
-					continue
-				}
-
-				err = os.WriteFile(path.Join(testFolder, item.SongID+".mp3"), bytes, 0o666)
-				if err != nil {
-					fmt.Println("err write", err)
-					continue
-				}
-			}
-
+				processSong(s)
+			}(song)
 		}
+
+		wg.Wait()
 	},
+}
+
+func processSong(song repository.Song) {
+	var artists []string
+
+	err := json.NewDecoder(strings.NewReader(song.Artists)).Decode(&artists)
+	if err != nil {
+		log.Printf("decode artists for song %q: %v", song.Title, err)
+		return
+	}
+
+	name := strings.Join(artists, " ") + " " + song.Title
+	fmt.Println(name)
+
+	items, err := mp3party.FindMusics(name)
+	if err != nil {
+		fmt.Println("err search:", err)
+		return
+	}
+
+	if len(items) == 0 {
+		fmt.Println("no results for", song.Title)
+		return
+	}
+
+	for _, item := range items {
+		bytes, err := mp3party.Download(item)
+		if err != nil {
+			fmt.Println("err download:", err)
+			continue
+		}
+
+		err = os.WriteFile(path.Join(testFolder, item.SongID+".mp3"), bytes, 0o666)
+		if err != nil {
+			fmt.Println("err write:", err)
+			continue
+		}
+	}
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
