@@ -9,15 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 	"meshvault/internal/db"
+	"meshvault/internal/repository"
 	"meshvault/internal/source/spotify"
 )
-
-type Song struct {
-	ID        int64     `db:"id"`
-	Artists   string    `db:"artists"`
-	Title     string    `db:"title"`
-	CreatedAt time.Time `db:"created_at"`
-}
 
 var syncCmd = &cobra.Command{
 	Use:   "sync",
@@ -31,17 +25,19 @@ var syncCmd = &cobra.Command{
 
 		fmt.Printf("%#v\n", info)
 
-		db, err := db.New()
+		database, err := db.New()
 		if err != nil {
 			log.Fatalln(err)
 		}
 
-		_, err = db.Exec("DELETE FROM songs;")
+		repo := repository.NewSongRepository(database)
+
+		err = repo.DeleteAll()
 		if err != nil {
 			log.Fatalln(err)
 		}
 
-		var ss []Song
+		var ss []repository.Song
 
 		for _, song := range info.Data.PlaylistV2.Content.Items {
 			artists := make([]string, 0, len(song.ItemV3.Data.IdentityTrait.Contributors.Items))
@@ -59,37 +55,14 @@ var syncCmd = &cobra.Command{
 				log.Fatalln(err)
 			}
 
-			ss = append(ss, Song{
+			ss = append(ss, repository.Song{
 				Artists:   buf.String(),
 				Title:     song.ItemV3.Data.IdentityTrait.Name,
 				CreatedAt: time.Now(),
 			})
 		}
 
-		tx, err := db.Beginx()
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		defer tx.Rollback()
-
-		stmt, err := tx.PrepareNamed(`
-	INSERT INTO songs (artists, title, created_at)
-	VALUES (:artists, :title, :created_at)
-`)
-		if err != nil {
-			log.Fatalln(err)
-		}
-		defer stmt.Close()
-
-		for _, s := range ss {
-			_, err := stmt.Exec(s)
-			if err != nil {
-				log.Fatalln(err)
-			}
-		}
-
-		err = tx.Commit()
+		err = repo.BulkInsert(ss)
 		if err != nil {
 			log.Fatalln(err)
 		}

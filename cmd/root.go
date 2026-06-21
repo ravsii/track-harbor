@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"meshvault/internal/db"
 	"meshvault/internal/download/mp3party"
+	"meshvault/internal/repository"
 )
 
 const testFolder = "tmp_music"
@@ -27,14 +28,14 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		db, err := db.New()
+		database, err := db.New()
 		if err != nil {
 			log.Fatalln(err)
 		}
 
-		var songList []Song
+		repo := repository.NewSongRepository(database)
 
-		err = db.Select(&songList, "SELECT * FROM songs")
+		songList, err := repo.GetAll()
 		if err != nil {
 			log.Fatalln(err)
 		}
