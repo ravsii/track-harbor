@@ -2,6 +2,7 @@ package download
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 )
 
@@ -10,36 +11,51 @@ type StatusKind int
 
 const (
 	StatusSearching   StatusKind = iota // поиск треков по запросу
-	StatusDownloading                    // скачивание конкретного трека
-	StatusDone                           // успешно сохранён
-	StatusFailed                         // ошибка на любом этапе
+	StatusDownloading                   // скачивание конкретного трека
+	StatusDone                          // успешно сохранён
+	StatusFailed                        // ошибка на любом этапе
 )
 
 // StatusEvent — событие жизненного цикла обработки одного трека/запроса.
 type StatusEvent struct {
-	Kind   StatusKind
-	Source string // имя провайдера ("mp3party")
-	Name   string // название запроса или "Artist — Title"
-	Err    error
+	Kind            StatusKind
+	Source          string // имя провайдера ("mp3party")
+	Name            string // название запроса или "Artist — Title"
+	Err             error
+	TotalBytes      int64 // общий размер (если известен), иначе -1
+	DownloadedBytes int64 // сколько байт уже скачано
 }
 
 // Display — live-статус в терминале через ANSI.
 // Выводит две секции: "Downloading" (активные) и "Completed" (завершённые).
 type Display struct {
 	mu      sync.Mutex
-	done    []StatusEvent
-	lines   int  // сколько строк напечатали в прошлый раз
+	active  map[string]*StatusEvent // текущее состояние активных (Source::Name → событие)
+	done    []StatusEvent           // только терминальные (Done/Failed)
+	lines   int                     // сколько строк напечатали в прошлый раз
 	started bool
 }
 
-func NewDisplay() *Display { return &Display{} }
+func NewDisplay() *Display {
+	return &Display{active: make(map[string]*StatusEvent)}
+}
 
 // Update — потокобезопасный вызов из горутин-воркеров.
 func (d *Display) Update(evt StatusEvent) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	d.done = append(d.done, evt)
+	key := evt.Source + "::" + evt.Name
+
+	if isTerminal(evt.Kind) {
+		// Терминальное — убираем из активных и добавляем в завершённые
+		delete(d.active, key)
+		d.done = append(d.done, evt)
+	} else {
+		// Промежуточное (Searching/Downloading) — обновляем или создаём в active
+		d.active[key] = &evt
+	}
+
 	d.render()
 }
 
@@ -76,7 +92,7 @@ func (d *Display) render() {
 		desc := "searching..."
 		if ev.Kind == StatusDownloading {
 			icon = "⬇"
-			desc = "downloading..."
+			desc = ev.progressBar()
 		}
 		fmt.Printf("  %s [%s] %s  %s\n", icon, ev.Source, ev.Name, desc)
 		rows++
@@ -87,12 +103,12 @@ func (d *Display) render() {
 		rows++
 	}
 
-	// ---- Completed ----
+	// ---- Completed (только терминальные) ----
 	if len(d.done) > 0 {
 		fmt.Println("━━━ Completed ───────────────────────")
 		rows++
 
-		const maxDisplay = 15
+		const maxDisplay = 10
 		start := 0
 		if len(d.done) > maxDisplay {
 			start = len(d.done) - maxDisplay
@@ -137,36 +153,98 @@ func (d *Display) printSummary() {
 	fmt.Printf("\nDone: %d ok, %d failed\n", ok, fail)
 }
 
-// activeUnsafe возвращает активные (без завершающего Done/Failed для того же Name+Source).
-func (d *Display) activeUnsafe() []StatusEvent {
-	// помечаем индексы терминальных событий
-	terminalIdx := make(map[string]int)
-	for i, ev := range d.done {
-		if isTerminal(ev.Kind) {
-			key := ev.Source + "::" + ev.Name
-			terminalIdx[key] = i
+// progress сортирует активные события:
+// 1. Downloading — по убыванию процента прогресса (самые близкие к завершению сверху)
+// 2. Searching — в конце
+func sortActive(evs []StatusEvent) {
+	sort.Slice(evs, func(i, j int) bool {
+		// Сначала Downloading, потом Searching
+		if evs[i].Kind != evs[j].Kind {
+			return evs[i].Kind == StatusDownloading
 		}
-	}
-
-	var active []StatusEvent
-	for i := len(d.done) - 1; i >= 0 && len(active) < 5; i-- {
-		ev := d.done[i]
-		if ev.Kind == StatusSearching || ev.Kind == StatusDownloading {
-			key := ev.Source + "::" + ev.Name
-			if termIdx, ok := terminalIdx[key]; ok && termIdx > i {
-				continue // есть более поздний терминальный — пропускаем
+		// Оба Downloading — сортируем по убыванию прогресса
+		if evs[i].Kind == StatusDownloading {
+			pctI := progressPercent(evs[i])
+			pctJ := progressPercent(evs[j])
+			if pctI != pctJ {
+				return pctI > pctJ
 			}
-			active = append(active, ev)
 		}
-	}
+		// Стабильный порядок для одинаковых — по имени
+		return evs[i].Name < evs[j].Name
+	})
+}
 
-	// разворачиваем в хронологический порядок
-	for i, j := 0, len(active)-1; i < j; i, j = i+1, j-1 {
-		active[i], active[j] = active[j], active[i]
+// progressPercent возвращает 0..100 прогресс скачивания (или -1 если неизвестен).
+func progressPercent(ev StatusEvent) float64 {
+	if ev.TotalBytes <= 0 {
+		return -1
 	}
-	return active
+	pct := float64(ev.DownloadedBytes) / float64(ev.TotalBytes) * 100
+	if pct > 100 {
+		pct = 100
+	}
+	return pct
+}
+
+// activeUnsafe возвращает активные события (из карты active), отсортированные по прогрессу.
+// Мьютекс должен быть захвачен вызывающим.
+func (d *Display) activeUnsafe() []StatusEvent {
+	if len(d.active) == 0 {
+		return nil
+	}
+	out := make([]StatusEvent, 0, len(d.active))
+	for _, ev := range d.active {
+		out = append(out, *ev)
+	}
+	sortActive(out)
+	return out
 }
 
 func isTerminal(k StatusKind) bool {
 	return k == StatusDone || k == StatusFailed
+}
+
+// progressBar возвращает визуальный индикатор прогресса скачивания,
+// либо "downloading..." если размер неизвестен.
+func (e StatusEvent) progressBar() string {
+	if e.TotalBytes <= 0 {
+		return "downloading..."
+	}
+	if e.DownloadedBytes >= e.TotalBytes {
+		return " 100% " + progressBarString(1.0)
+	}
+	pct := float64(e.DownloadedBytes) / float64(e.TotalBytes)
+	return fmt.Sprintf(" %3.0f%% %s", pct*100, progressBarString(pct))
+}
+
+// progressBarString рисует полоску: [████████░░░░] шириной 20 символов.
+func progressBarString(pct float64) string {
+	const barWidth = 20
+	filled := int(pct * barWidth)
+	if filled > barWidth {
+		filled = barWidth
+	}
+	bar := make([]rune, barWidth+2)
+	bar[0] = '['
+	for i := 1; i <= barWidth; i++ {
+		if i <= filled {
+			bar[i] = '█'
+		} else {
+			bar[i] = '░'
+		}
+	}
+	bar[barWidth+1] = ']'
+	return string(bar)
+}
+
+// humanBytes форматирует байты в человекопонятный вид (КБ, МБ).
+func humanBytes(b int64) string {
+	if b < 1024 {
+		return fmt.Sprintf("%d B", b)
+	}
+	if b < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(b)/1024)
+	}
+	return fmt.Sprintf("%.1f MB", float64(b)/(1024*1024))
 }

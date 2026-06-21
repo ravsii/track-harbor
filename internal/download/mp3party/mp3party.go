@@ -3,11 +3,11 @@ package mp3party
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/PuerkitoBio/goquery"
 	"meshvault/internal/download"
@@ -23,41 +23,63 @@ const (
 var defaultUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0"
 
 // Provider реализует download.Provider для mp3party.net
-type Provider struct{}
+type Provider struct {
+	client *http.Client
+}
 
-func NewProvider() *Provider { return &Provider{} }
+func NewProvider() *Provider {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		panic(fmt.Sprintf("create cookie jar: %v", err))
+	}
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	}
+	return &Provider{
+		client: &http.Client{
+			Jar:       jar,
+			Transport: transport,
+			Timeout:   30 * time.Second,
+		},
+	}
+}
 
 func (p *Provider) Name() string { return "mp3party" }
 
 func (p *Provider) Search(query string) (download.Track, error) {
-	tracks, err := findMusics(query)
+	tracks, err := p.findMusics(query)
 	if err != nil {
 		return download.Track{}, err
 	}
 	return firstToCommon(tracks)
 }
 
-func (p *Provider) Download(track download.Track) (io.ReadCloser, error) {
-	if err := pingTrackPage(track.ID); err != nil {
-		return nil, fmt.Errorf("ping before download: %w", err)
+func (p *Provider) Download(track download.Track) (download.DownloadResponse, error) {
+	if err := p.pingTrackPage(track.ID); err != nil {
+		return download.DownloadResponse{}, fmt.Errorf("ping before download: %w", err)
 	}
 
 	req, err := http.NewRequest(http.MethodGet, baseDownloadURL+"/"+track.ID, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		return download.DownloadResponse{}, fmt.Errorf("create request: %w", err)
 	}
 
 	req.Header.Set("User-Agent", defaultUA)
 
-	resp, err := (&http.Client{}).Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		return download.DownloadResponse{}, fmt.Errorf("do request: %w", err)
 	}
 
-	return resp.Body, nil
+	return download.DownloadResponse{
+		Body:          resp.Body,
+		ContentLength: resp.ContentLength,
+	}, nil
 }
 
-func findMusics(songName string) ([]trackInternal, error) {
+func (p *Provider) findMusics(songName string) ([]trackInternal, error) {
 	u, err := url.Parse(baseSearchURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse base url: %w", err)
@@ -74,7 +96,7 @@ func findMusics(songName string) ([]trackInternal, error) {
 
 	req.Header.Set("User-Agent", defaultUA)
 
-	resp, err := (&http.Client{}).Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("do request: %w", err)
 	}
@@ -139,13 +161,7 @@ func findMusics(songName string) ([]trackInternal, error) {
 	return tracks, nil
 }
 
-func pingTrackPage(trackID string) error {
-	jar, err := cookiejar.New(nil)
-	if err != nil {
-		return fmt.Errorf("create cookie jar: %w", err)
-	}
-	client := &http.Client{Jar: jar}
-
+func (p *Provider) pingTrackPage(trackID string) error {
 	trackURL := fmt.Sprintf("%s/%s", baseTrackURL, trackID)
 
 	// Step 1: GET track page — получаем cookies и CSRF-токен
@@ -155,7 +171,7 @@ func pingTrackPage(trackID string) error {
 	}
 	req.Header.Set("User-Agent", defaultUA)
 
-	resp, err := client.Do(req)
+	resp, err := p.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("get track page: %w", err)
 	}
@@ -194,15 +210,14 @@ func pingTrackPage(trackID string) error {
 	req2.Header.Set("Accept", "application/json")
 	req2.Header.Set("Origin", "https://mp3party.net")
 
-	resp2, err := client.Do(req2)
+	resp2, err := p.client.Do(req2)
 	if err != nil {
 		return fmt.Errorf("send permissions request: %w", err)
 	}
 	defer resp2.Body.Close()
 
 	if resp2.StatusCode != http.StatusOK && resp2.StatusCode != http.StatusNoContent {
-		body, _ := io.ReadAll(resp2.Body)
-		return fmt.Errorf("permissions request: bad status %s, body: %s", resp2.Status, string(body))
+		return fmt.Errorf("permissions request: bad status %s", resp2.Status)
 	}
 
 	return nil

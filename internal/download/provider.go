@@ -18,6 +18,12 @@ type Track struct {
 	Bitrate  string
 }
 
+// DownloadResponse — результат скачивания трека.
+type DownloadResponse struct {
+	Body          io.ReadCloser
+	ContentLength int64 // -1, если неизвестен
+}
+
 // Provider — интерфейс, который должна реализовать каждая площадка-источник.
 type Provider interface {
 	// Name — уникальное имя провайдера (например "mp3party").
@@ -27,7 +33,6 @@ type Provider interface {
 	// Возвращает ErrNotFound, если ничего не найдено.
 	Search(query string) (Track, error)
 
-	// Download — скачивание трека, возвращает io.ReadCloser аудио-данных.
-	// Вызывающий закрывает ReadCloser после использования.
-	Download(track Track) (io.ReadCloser, error)
+	// Download — скачивание трека, возвращает DownloadResponse с телом и размером.
+	Download(track Track) (DownloadResponse, error)
 }

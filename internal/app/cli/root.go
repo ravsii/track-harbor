@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"os"
+	"runtime/pprof"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -29,6 +30,45 @@ var rootCmd = &cobra.Command{
 		to quickly create a Cobra application.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
+		if allocsEnabled, _ := cmd.Flags().GetBool("allocs"); allocsEnabled {
+			allocF, err := os.Create("meshvault_allocs.pprof")
+			if err != nil {
+				log.Printf("create allocs profile: %v", err)
+			} else {
+				defer allocF.Close()
+				if err := pprof.Lookup("allocs").WriteTo(allocF, 0); err != nil {
+					log.Printf("write allocs profile: %v", err)
+				} else {
+					log.Println("pprof: allocs profile saved to meshvault_allocs.pprof")
+				}
+			}
+		}
+
+		if pprofEnabled, _ := cmd.Flags().GetBool("pprof"); pprofEnabled {
+			f, err := os.Create("meshvault_cpu.pprof")
+			if err != nil {
+				log.Fatalf("create cpu profile: %v", err)
+			}
+			defer func() {
+				pprof.StopCPUProfile()
+				f.Close()
+				log.Println("pprof: cpu profile saved to meshvault_cpu.pprof")
+
+				memF, err := os.Create("meshvault_mem.pprof")
+				if err != nil {
+					log.Printf("create mem profile: %v", err)
+					return
+				}
+				defer memF.Close()
+				if err := pprof.WriteHeapProfile(memF); err != nil {
+					log.Printf("write mem profile: %v", err)
+					return
+				}
+				log.Println("pprof: mem profile saved to meshvault_mem.pprof")
+			}()
+			pprof.StartCPUProfile(f)
+		}
+
 		database, err := db.New()
 		if err != nil {
 			log.Fatalln(err)
@@ -80,4 +120,6 @@ func Execute() {
 
 func init() {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
+	rootCmd.Flags().Bool("pprof", false, "Save cpu+mem profile to meshvault_{cpu,mem}.pprof")
+	rootCmd.Flags().Bool("allocs", false, "Save allocs profile to meshvault_allocs.pprof")
 }

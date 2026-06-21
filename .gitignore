@@ -2,3 +2,4 @@
 /tmp_music
 /.DS_Store
 /meshtune.db
+*.pprof

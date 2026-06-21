@@ -7,8 +7,44 @@ import (
 	"os"
 	"path"
 	"sync"
+	"sync/atomic"
 	"time"
 )
+
+// progressReader оборачивает io.ReadCloser и вызывает callback
+// асинхронно с частотой не чаще чем throttle (не блокирует чтение).
+type progressReader struct {
+	reader     io.ReadCloser
+	total      int64
+	downloaded atomic.Int64
+	onProgress func(downloaded, total int64)
+}
+
+func newProgressReader(r io.ReadCloser, total int64, onProgress func(downloaded, total int64)) *progressReader {
+	return &progressReader{
+		reader:     r,
+		total:      total,
+		onProgress: onProgress,
+	}
+}
+
+func (pr *progressReader) Read(p []byte) (int, error) {
+	n, err := pr.reader.Read(p)
+	if n > 0 {
+		pr.downloaded.Add(int64(n))
+		downloaded := pr.downloaded.Load()
+
+		// колбэк асинхронно — не блокируем io.Copy
+		if pr.onProgress != nil {
+			pr.onProgress(downloaded, pr.total)
+		}
+	}
+	return n, err
+}
+
+func (pr *progressReader) Close() error {
+	return pr.reader.Close()
+}
 
 // Downloader — оркестратор загрузок с worker pool.
 type Downloader struct {
@@ -87,24 +123,51 @@ func (d *Downloader) downloadQuery(query string) {
 
 	name := track.Artist + " — " + track.Title
 
-	reader, err := d.provider.Download(track)
+	resp, err := d.provider.Download(track)
 	if err != nil {
 		d.sendEvent(StatusFailed, name, err)
 		return
 	}
 
-	data, err := io.ReadAll(reader)
-	reader.Close()
+	filePath := path.Join(d.outputDir, track.ID+".mp3")
+	f, err := os.Create(filePath)
 	if err != nil {
+		resp.Body.Close()
 		d.sendEvent(StatusFailed, name, err)
 		return
 	}
 
-	err = os.WriteFile(path.Join(d.outputDir, track.ID+".mp3"), data, 0o666)
+	// Шлём начальное событие старта скачивания
+	d.sendEventDownloading(name, resp.ContentLength, 0)
+
+	// pr := newProgressReader(resp.Body, resp.ContentLength,
+	// 	func(downloaded, total int64) {
+	// 		d.sendEventDownloading(name, total, downloaded)
+	// 	})
+
+	_, err = io.Copy(f, resp.Body)
+	// pr.Close()
+	f.Close()
+
 	if err != nil {
+		os.Remove(filePath)
 		d.sendEvent(StatusFailed, name, err)
 		return
 	}
 
 	d.sendEvent(StatusDone, name, nil)
+}
+
+// sendEventDownloading отправляет событие скачивания с прогрессом.
+func (d *Downloader) sendEventDownloading(name string, total, downloaded int64) {
+	if d.display == nil {
+		return
+	}
+	d.display.Update(StatusEvent{
+		Kind:            StatusDownloading,
+		Source:          d.provider.Name(),
+		Name:            name,
+		TotalBytes:      total,
+		DownloadedBytes: downloaded,
+	})
 }
