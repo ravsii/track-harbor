@@ -1,12 +1,19 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
+	"path"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"meshvault/internal/db"
 	"meshvault/internal/download/mp3party"
 )
+
+const testFolder = "tmp_music"
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -20,13 +27,30 @@ This application is a tool to generate the needed files
 to quickly create a Cobra application.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
-		songList := []string{
-			"Wildways Ветром стать",
-			"Geoxor You & I",
+		db, err := db.New()
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		var songList []Song
+
+		err = db.Select(&songList, "SELECT * FROM songs")
+		if err != nil {
+			log.Fatalln(err)
 		}
 
 		for _, song := range songList {
-			items, err := mp3party.FindMusics(song)
+			var artists []string
+
+			err = json.NewDecoder(strings.NewReader(song.Artists)).Decode(&artists)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			name := strings.Join(artists, " ") + " " + song.Title
+			fmt.Println(name)
+
+			items, err := mp3party.FindMusics(name)
 			if err != nil {
 				fmt.Println("err ", err)
 				continue
@@ -38,14 +62,13 @@ to quickly create a Cobra application.`,
 			}
 
 			for _, item := range items {
-				fmt.Printf("%#v\n", item)
 				bytes, err := mp3party.Download(item)
 				if err != nil {
 					fmt.Println("err download", err)
 					continue
 				}
 
-				err = os.WriteFile(item.SongID+".mp3", bytes, 0o666)
+				err = os.WriteFile(path.Join(testFolder, item.SongID+".mp3"), bytes, 0o666)
 				if err != nil {
 					fmt.Println("err write", err)
 					continue
@@ -60,6 +83,7 @@ to quickly create a Cobra application.`,
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
 	rootCmd.AddCommand(authCmd)
+	rootCmd.AddCommand(syncCmd)
 	err := rootCmd.Execute()
 	if err != nil {
 		os.Exit(1)
