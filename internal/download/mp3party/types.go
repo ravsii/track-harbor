@@ -34,3 +34,10 @@ func tracksToCommon(ts []trackInternal) []download.Track {
 	}
 	return out
 }
+
+func firstToCommon(ts []trackInternal) (download.Track, error) {
+	if len(ts) == 0 {
+		return download.Track{}, download.ErrNotFound
+	}
+	return ts[0].toCommon(), nil
+}

@@ -1,6 +1,12 @@
 package download
 
-import "io"
+import (
+	"errors"
+	"io"
+)
+
+// ErrNotFound — провайдер не нашёл подходящий трек.
+var ErrNotFound = errors.New("track not found")
 
 // Track — общий результат поиска, понятный любому провайдеру загрузки.
 type Track struct {
@@ -17,8 +23,9 @@ type Provider interface {
 	// Name — уникальное имя провайдера (например "mp3party").
 	Name() string
 
-	// Search — поиск треков по строке запроса.
-	Search(query string) ([]Track, error)
+	// Search — поиск лучшего трека по строке запроса.
+	// Возвращает ErrNotFound, если ничего не найдено.
+	Search(query string) (Track, error)
 
 	// Download — скачивание трека, возвращает io.ReadCloser аудио-данных.
 	// Вызывающий закрывает ReadCloser после использования.

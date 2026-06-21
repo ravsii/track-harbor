@@ -29,12 +29,12 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Name() string { return "mp3party" }
 
-func (p *Provider) Search(query string) ([]download.Track, error) {
+func (p *Provider) Search(query string) (download.Track, error) {
 	tracks, err := findMusics(query)
 	if err != nil {
-		return nil, err
+		return download.Track{}, err
 	}
-	return tracksToCommon(tracks), nil
+	return firstToCommon(tracks)
 }
 
 func (p *Provider) Download(track download.Track) (io.ReadCloser, error) {
