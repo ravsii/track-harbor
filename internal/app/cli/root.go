@@ -46,8 +46,9 @@ var rootCmd = &cobra.Command{
 			log.Fatalln(err)
 		}
 
+		disp := download.NewDisplay()
 		provider := mp3party.NewProvider()
-		downloader := download.New(provider, downloadWorkers, testFolder)
+		downloader := download.New(provider, downloadWorkers, testFolder).WithDisplay(disp)
 
 		queries := buildQueries(songList)
 		downloader.Run(queries)
