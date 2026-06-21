@@ -1,9 +1,11 @@
 package mp3party
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/url"
 	"strings"
 
@@ -11,9 +13,13 @@ import (
 )
 
 const (
-	baseSearchURL = "https://mp3party.net/search"
-	baseTrackURL  = "https://mp3party.net/music"
+	baseSearchURL      = "https://mp3party.net/search"
+	baseTrackURL       = "https://mp3party.net/music"
+	baseDownloadURL    = "https://dl2.mp3party.net/download"
+	songPermissionsURL = "https://mp3party.net/song_permissions/"
 )
+
+var defaultUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0"
 
 func FindMusics(songName string) ([]Track, error) {
 	u, err := url.Parse(baseSearchURL)
@@ -30,8 +36,7 @@ func FindMusics(songName string) ([]Track, error) {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	// optional but helps avoid some basic bot blocking
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Go scraper)")
+	req.Header.Set("User-Agent", defaultUA)
 
 	resp, err := (&http.Client{}).Do(req)
 	if err != nil {
@@ -59,13 +64,10 @@ func FindMusics(songName string) ([]Track, error) {
 		playURL := userPanel.AttrOr("data-js-url", "")
 		isPlaylist := userPanel.AttrOr("data-is-playlist", "false")
 
-		// link to track page
 		pageURL, _ := s.Find("a.track__title").Attr("href")
 
-		// title text fallback (optional)
 		titleText := strings.TrimSpace(s.Find("a.track__title").Text())
 
-		// info items: duration, size, bitrate
 		var info []string
 		s.Find(".track__info-item").Each(func(_ int, el *goquery.Selection) {
 			info = append(info, strings.TrimSpace(el.Text()))
@@ -102,23 +104,69 @@ func FindMusics(songName string) ([]Track, error) {
 }
 
 func pingTrackPage(trackID string) error {
+	jar, err := cookiejar.New(nil)
+	if err != nil {
+		return fmt.Errorf("create cookie jar: %w", err)
+	}
+	client := &http.Client{Jar: jar}
+
 	trackURL := fmt.Sprintf("%s/%s", baseTrackURL, trackID)
 
+	// Step 1: GET track page — получаем cookies и CSRF-токен
 	req, err := http.NewRequest(http.MethodGet, trackURL, nil)
 	if err != nil {
-		return fmt.Errorf("create ping request: %w", err)
+		return fmt.Errorf("create track page request: %w", err)
 	}
+	req.Header.Set("User-Agent", defaultUA)
 
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Go scraper)")
-
-	resp, err := (&http.Client{}).Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("ping track page: %w", err)
+		return fmt.Errorf("get track page: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("ping track page: bad status %s", resp.Status)
+		return fmt.Errorf("get track page: bad status %s", resp.Status)
+	}
+
+	doc, err := goquery.NewDocumentFromReader(resp.Body)
+	if err != nil {
+		return fmt.Errorf("parse track page: %w", err)
+	}
+
+	csrfToken, exists := doc.Find("meta[name=csrf-token]").Attr("content")
+	if !exists {
+		return fmt.Errorf("csrf token not found on track page")
+	}
+
+	// Step 2: POST song_permissions только для текущего трека
+	payload := map[string][]string{"ids": {trackID}}
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal permissions payload: %w", err)
+	}
+
+	req2, err := http.NewRequest(http.MethodPost, songPermissionsURL, strings.NewReader(string(bodyBytes)))
+	if err != nil {
+		return fmt.Errorf("create permissions request: %w", err)
+	}
+
+	req2.Header.Set("User-Agent", defaultUA)
+	req2.Header.Set("Content-Type", "application/json")
+	req2.Header.Set("X-CSRF-Token", csrfToken)
+	req2.Header.Set("Referer", trackURL)
+	req2.Header.Set("Accept", "application/json")
+	req2.Header.Set("Origin", "https://mp3party.net")
+
+	resp2, err := client.Do(req2)
+	if err != nil {
+		return fmt.Errorf("send permissions request: %w", err)
+	}
+	defer resp2.Body.Close()
+
+	if resp2.StatusCode != http.StatusOK && resp2.StatusCode != http.StatusNoContent {
+		body, _ := io.ReadAll(resp2.Body)
+		return fmt.Errorf("permissions request: bad status %s, body: %s", resp2.Status, string(body))
 	}
 
 	return nil
@@ -129,13 +177,12 @@ func Download(track Track) ([]byte, error) {
 		return nil, fmt.Errorf("ping before download: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, track.URL, nil)
+	req, err := http.NewRequest(http.MethodGet, baseDownloadURL+"/"+track.SongID, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 
-	// optional but helps avoid some basic bot blocking
-	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Go scraper)")
+	req.Header.Set("User-Agent", defaultUA)
 
 	resp, err := (&http.Client{}).Do(req)
 	if err != nil {

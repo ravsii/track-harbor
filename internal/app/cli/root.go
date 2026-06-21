@@ -40,6 +40,11 @@ to quickly create a Cobra application.`,
 			log.Fatalln(err)
 		}
 
+		err = os.MkdirAll(testFolder, os.ModePerm)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
 		for _, song := range songList {
 			var artists []string
 
