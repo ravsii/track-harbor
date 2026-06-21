@@ -12,6 +12,7 @@ import (
 
 const (
 	baseSearchURL = "https://mp3party.net/search"
+	baseTrackURL  = "https://mp3party.net/music"
 )
 
 func FindMusics(songName string) ([]Track, error) {
@@ -100,7 +101,34 @@ func FindMusics(songName string) ([]Track, error) {
 	return tracks, nil
 }
 
+func pingTrackPage(trackID string) error {
+	trackURL := fmt.Sprintf("%s/%s", baseTrackURL, trackID)
+
+	req, err := http.NewRequest(http.MethodGet, trackURL, nil)
+	if err != nil {
+		return fmt.Errorf("create ping request: %w", err)
+	}
+
+	req.Header.Set("User-Agent", "Mozilla/5.0 (compatible; Go scraper)")
+
+	resp, err := (&http.Client{}).Do(req)
+	if err != nil {
+		return fmt.Errorf("ping track page: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("ping track page: bad status %s", resp.Status)
+	}
+
+	return nil
+}
+
 func Download(track Track) ([]byte, error) {
+	if err := pingTrackPage(track.SongID); err != nil {
+		return nil, fmt.Errorf("ping before download: %w", err)
+	}
+
 	req, err := http.NewRequest(http.MethodGet, track.URL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
