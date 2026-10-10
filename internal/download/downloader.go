@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
+
+	"go.uber.org/zap"
 )
 
 // progressReader сообщает число прочитанных байт после каждого чтения.
@@ -52,12 +55,13 @@ type Downloader struct {
 	outputDir string
 	display   *Display
 	store     DownloadStore
+	logger    *zap.Logger
 	fileLocks sync.Map // absolute file path → *sync.Mutex
 }
 
 // New создаёт Downloader.
 func New(provider Provider, workers int, outputDir string) *Downloader {
-	return &Downloader{provider: provider, workers: workers, outputDir: outputDir}
+	return &Downloader{provider: provider, workers: workers, outputDir: outputDir, logger: zap.NewNop()}
 }
 
 // WithDisplay привязывает live-дисплей для отображения статуса.
@@ -68,6 +72,8 @@ func (d *Downloader) WithDisplay(disp *Display) *Downloader {
 
 // Run запускает worker pool для параллельной обработки поисковых запросов.
 func (d *Downloader) Run(queries []string) {
+	started := time.Now()
+	d.logger.Info("run_started", zap.Int("total", len(queries)), zap.Int("workers", d.workers), zap.String("output_dir", d.outputDir))
 	if d.display != nil {
 		d.display.SetTotal(len(queries))
 	}
@@ -88,6 +94,7 @@ func (d *Downloader) Run(queries []string) {
 	}
 
 	wg.Wait()
+	d.logger.Info("run_finished", zap.Int("total", len(queries)), zap.Duration("duration", time.Since(started)))
 
 	if d.display != nil {
 		d.display.Stop()
@@ -99,7 +106,7 @@ func (d *Downloader) sendEvent(kind StatusKind, jobID, name string, err error) {
 		switch kind {
 		case StatusSearching:
 			fmt.Println(name)
-		case StatusFailed:
+		case StatusFailed, StatusNotFound:
 			fmt.Printf("err: %s — %v\n", name, err)
 		}
 		return
@@ -115,23 +122,41 @@ func (d *Downloader) sendEvent(kind StatusKind, jobID, name string, err error) {
 }
 
 func (d *Downloader) downloadQuery(jobID, query string) {
+	started := time.Now()
+	name := query
+	logger := d.logger.With(zap.String("job_id", jobID), zap.String("source", d.provider.Name()), zap.String("query", query))
+	fail := func(stage string, err error, details ...zap.Field) {
+		fields := append(details, zap.String("stage", stage), zap.String("error", safeError(err)), zap.Duration("duration", time.Since(started)))
+		var httpErr *HTTPError
+		if errors.As(err, &httpErr) {
+			fields = append(fields, zap.Int("http_status", httpErr.StatusCode), zap.String("http_stage", httpErr.Stage))
+		}
+		if stage == "search" && errors.Is(err, ErrNotFound) {
+			logger.Warn("not_found", fields...)
+			d.sendEvent(StatusNotFound, jobID, name, err)
+		} else {
+			logger.Error("failed", fields...)
+			d.sendEvent(StatusFailed, jobID, name, err)
+		}
+	}
+	logger.Info("searching")
 	track, err := d.provider.Search(query)
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			d.sendEvent(StatusFailed, jobID, query, fmt.Errorf("no results"))
-		} else {
-			d.sendEvent(StatusFailed, jobID, query, err)
-		}
+		fail("search", err)
 		return
 	}
 
-	name := track.Artist + " — " + track.Title
+	name = track.Artist + " — " + track.Title
+	logger = logger.With(zap.String("track_id", track.ID), zap.String("name", name))
+	logger.Info("search_finished", zap.Duration("duration", time.Since(started)))
 	d.sendEvent(StatusChecking, jobID, name, nil)
 	filePath, err := filepath.Abs(filepath.Join(d.outputDir, track.ID+".mp3"))
 	if err != nil {
-		d.sendEvent(StatusFailed, jobID, name, err)
+		fail("path", err)
 		return
 	}
+	logger = logger.With(zap.String("file_path", filePath))
+	logger.Info("checking_hash")
 	// Different playlist entries can resolve to the same provider track.
 	// Check and download under one lock so they cannot overwrite each other.
 	lock, _ := d.fileLocks.LoadOrStore(filePath, &sync.Mutex{})
@@ -140,18 +165,20 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 	defer mu.Unlock()
 	verified, err := d.alreadyDownloaded(track.ID, filePath)
 	if err != nil {
-		d.sendEvent(StatusFailed, jobID, name, fmt.Errorf("проверка скачанного файла: %w", err))
+		fail("check_hash", fmt.Errorf("проверка скачанного файла: %w", err))
 		return
 	}
 	if verified {
+		logger.Info("skipped", zap.Duration("duration", time.Since(started)))
 		d.sendEvent(StatusSkipped, jobID, name, nil)
 		return
 	}
 	d.sendEvent(StatusPreparing, jobID, name, nil)
+	logger.Info("preparing")
 
 	resp, err := d.provider.Download(track)
 	if err != nil {
-		d.sendEvent(StatusFailed, jobID, name, err)
+		fail("prepare", err)
 		return
 	}
 
@@ -159,7 +186,7 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 	f, err := os.CreateTemp(filepath.Dir(filePath), ".download-*.tmp")
 	if err != nil {
 		resp.Body.Close()
-		d.sendEvent(StatusFailed, jobID, name, err)
+		fail("create_file", err)
 		return
 	}
 	defer os.Remove(f.Name())
@@ -167,6 +194,7 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 
 	// Шлём начальное событие старта скачивания
 	d.sendEventDownloading(jobID, name, resp.ContentLength, 0)
+	logger.Info("downloading", zap.Int64("expected_bytes", resp.ContentLength))
 
 	pr := newProgressReader(resp.Body, resp.ContentLength,
 		func(downloaded, total int64) {
@@ -174,6 +202,7 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 		})
 
 	hash := sha256.New()
+	failureStage := "downloading"
 	written, err := io.Copy(io.MultiWriter(f, hash), pr)
 	bodyCloseErr := pr.Close()
 	fileCloseErr := f.Close()
@@ -184,6 +213,9 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 		err = fmt.Errorf("неполный файл: получено %d из %d байт", written, resp.ContentLength)
 	}
 	if err == nil {
+		failureStage = "saving"
+		logger.Info("saving", zap.Int64("bytes", written))
+		d.sendEvent(StatusSaving, jobID, name, nil)
 		err = os.Rename(f.Name(), filePath)
 	}
 	if err == nil && d.store != nil {
@@ -191,10 +223,11 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 	}
 
 	if err != nil {
-		d.sendEvent(StatusFailed, jobID, name, err)
+		fail(failureStage, err, zap.Int64("bytes", written), zap.Int64("expected_bytes", resp.ContentLength))
 		return
 	}
 
+	logger.Info("downloaded", zap.Int64("bytes", written), zap.String("sha256", fmt.Sprintf("%x", hash.Sum(nil))), zap.Duration("duration", time.Since(started)))
 	d.sendEvent(StatusDone, jobID, name, nil)
 }
 

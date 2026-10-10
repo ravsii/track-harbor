@@ -3,6 +3,7 @@ package mp3party
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -117,5 +118,38 @@ func TestProviderAllowsLongerFileTransfers(t *testing.T) {
 	}
 	if p.client.Jar != p.downloadClient.Jar {
 		t.Fatal("metadata and downloads must share permission cookies")
+	}
+}
+
+func TestSearchEmptyResultsAreDistinctFromHTTPFailures(t *testing.T) {
+	for _, status := range []int{200, 404, 500} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(status)
+				io.WriteString(w, "<html><body>No matches</body></html>")
+			}))
+			defer server.Close()
+			local, err := url.Parse(server.URL)
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := NewProvider()
+			p.client.Transport = routedTransport(func(req *http.Request) (*http.Response, error) {
+				req = req.Clone(req.Context())
+				req.URL.Scheme, req.URL.Host = local.Scheme, local.Host
+				return http.DefaultTransport.RoundTrip(req)
+			})
+			_, err = p.Search("Missing song")
+			if status == 200 {
+				if !errors.Is(err, download.ErrNotFound) {
+					t.Fatalf("successful empty search not recognized: %v", err)
+				}
+			} else {
+				var httpErr *download.HTTPError
+				if errors.Is(err, download.ErrNotFound) || !errors.As(err, &httpErr) || httpErr.StatusCode != status || httpErr.Stage != "search" {
+					t.Fatalf("HTTP failure mistaken for empty search: %v", err)
+				}
+			}
+		})
 	}
 }

@@ -25,6 +25,8 @@ const (
 	StatusSkipped                       // файл уже скачан и его хеш совпал
 	StatusChecking                      // проверка файла и его хеша
 	StatusPreparing                     // получение разрешений и ответа сервера
+	StatusNotFound                      // успешный поиск без результатов
+	StatusSaving                        // сохранение файла и хеша
 )
 
 // StatusEvent — событие жизненного цикла обработки одного трека/запроса.
@@ -171,7 +173,7 @@ func (d *Display) Stop() {
 // render перерисовывает экран.
 // Мьютекс должен быть захвачен вызывающим.
 func (d *Display) render() {
-	var ok, fail, skipped int
+	var ok, fail, skipped, notFound int
 	for _, ev := range d.done {
 		switch ev.Kind {
 		case StatusDone:
@@ -180,6 +182,8 @@ func (d *Display) render() {
 			fail++
 		case StatusSkipped:
 			skipped++
+		case StatusNotFound:
+			notFound++
 		}
 	}
 	active := d.activeUnsafe()
@@ -205,10 +209,48 @@ func (d *Display) render() {
 		}
 		frame = append(frame, line)
 	}
+	var sections []string
+	sectionCount := 0
+	if notFound > 0 {
+		sectionCount++
+	}
+	if fail > 0 {
+		sectionCount++
+	}
+	detailLimit := 3
+	if d.interactive && sectionCount > 0 {
+		detailLimit = min(3, max(0, (height-1-len(frame)-sectionCount-min(len(active), 2))/sectionCount))
+	}
+	for _, group := range []struct {
+		kind  StatusKind
+		title string
+		count int
+	}{
+		{StatusNotFound, "Не найдено на сайте", notFound},
+		{StatusFailed, "Технические ошибки", fail},
+	} {
+		if group.count == 0 {
+			continue
+		}
+		sections = append(sections, fmt.Sprintf("%s: %d", group.title, group.count))
+		shown := 0
+		for i := len(d.done) - 1; i >= 0 && shown < detailLimit; i-- {
+			ev := d.done[i]
+			if ev.Kind != group.kind {
+				continue
+			}
+			line := "  " + ev.Name
+			if ev.Kind == StatusFailed && ev.Err != nil {
+				line = "  " + safeError(ev.Err) + " — " + ev.Name
+			}
+			sections = append(sections, line)
+			shown++
+		}
+	}
 	// Leave one column and one screen row free to avoid auto-wrap/scroll.
 	visible := len(active)
 	if d.interactive {
-		visible = min(visible, max(0, height-1-len(frame)))
+		visible = min(visible, max(0, height-1-len(frame)-len(sections)))
 		if visible < len(active) && visible > 0 {
 			visible--
 		}
@@ -221,6 +263,8 @@ func (d *Display) render() {
 			status = "Проверка хеша"
 		case StatusPreparing:
 			status = "Подготовка"
+		case StatusSaving:
+			status = "Сохранение"
 		case StatusDownloading:
 			status = "Скачивается"
 			pct = progressPercent(ev)
@@ -250,9 +294,10 @@ func (d *Display) render() {
 		}
 		frame = append(frame, fmt.Sprintf("  %s  %s", status, ev.Name))
 	}
-	if visible < len(active) {
+	if visible < len(active) && (!d.interactive || len(frame)+len(sections) < height-1) {
 		frame = append(frame, fmt.Sprintf("  … ещё в работе: %d", len(active)-visible))
 	}
+	frame = append(frame, sections...)
 	if d.interactive && len(frame) >= height {
 		frame = frame[:max(1, height-1)]
 	}
@@ -329,7 +374,7 @@ func (d *Display) activeUnsafe() []StatusEvent {
 }
 
 func isTerminal(k StatusKind) bool {
-	return k == StatusDone || k == StatusFailed || k == StatusSkipped
+	return k == StatusDone || k == StatusFailed || k == StatusSkipped || k == StatusNotFound
 }
 
 // progressBar возвращает визуальный индикатор прогресса скачивания,

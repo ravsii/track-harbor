@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -39,6 +40,15 @@ func TestDownloadCommandHandlesEmptyDatabase(t *testing.T) {
 	cmd.SetOut(&output)
 	defer cmd.SetOut(nil)
 	cmd.Run(cmd, nil)
+	journal, err := os.ReadFile("logs/download.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, action := range []string{"command_started", "database_loaded", "command_finished"} {
+		if !strings.Contains(string(journal), `"msg":"`+action+`"`) {
+			t.Fatalf("CLI did not record %s: %s", action, journal)
+		}
+	}
 	path, err := filepath.Abs("meshtune.db")
 	if err != nil {
 		t.Fatal(err)
@@ -54,5 +64,31 @@ func TestDownloadCommandHandlesEmptyDatabase(t *testing.T) {
 	var count int
 	if err := database.QueryRow("SELECT COUNT(*) FROM songs").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("download modified the songs table: count=%d err=%v", count, err)
+	}
+}
+
+func TestDownloadLogsStartupFailure(t *testing.T) {
+	if os.Getenv("MESHVAULT_TEST_STARTUP_FAILURE") == "1" {
+		cmd, _, err := rootCmd.Find([]string{"download"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd.Run(cmd, nil) // Missing songs table must exit, after recording the error.
+		t.Fatal("download accepted a database with no songs table")
+	}
+	dir := t.TempDir()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestDownloadLogsStartupFailure$")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "MESHVAULT_TEST_STARTUP_FAILURE=1")
+	output, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("missing database schema did not fail: %s", output)
+	}
+	journal, err := os.ReadFile(filepath.Join(dir, "logs", "download.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(journal), `"msg":"command_failed"`) || !strings.Contains(string(journal), "no such table: songs") || strings.Contains(string(journal), `"msg":"command_finished"`) {
+		t.Fatalf("startup error not recorded accurately: %s", journal)
 	}
 }

@@ -91,7 +91,7 @@ func (p *Provider) Download(track download.Track) (download.DownloadResponse, er
 	}
 	if resp.StatusCode != http.StatusOK {
 		resp.Body.Close()
-		return download.DownloadResponse{}, fmt.Errorf("download: HTTP %d", resp.StatusCode)
+		return download.DownloadResponse{}, &download.HTTPError{Stage: "download", StatusCode: resp.StatusCode}
 	}
 
 	return download.DownloadResponse{
@@ -124,7 +124,7 @@ func (p *Provider) findMusics(songName string) ([]trackInternal, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("bad status: %s", resp.Status)
+		return nil, &download.HTTPError{Stage: "search", StatusCode: resp.StatusCode}
 	}
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
@@ -199,7 +199,7 @@ func (p *Provider) pingTrackPage(trackID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("get track page: bad status %s", resp.Status)
+		return &download.HTTPError{Stage: "track_page", StatusCode: resp.StatusCode}
 	}
 
 	doc, err := goquery.NewDocumentFromReader(resp.Body)
@@ -238,7 +238,7 @@ func (p *Provider) pingTrackPage(trackID string) error {
 	defer resp2.Body.Close()
 
 	if resp2.StatusCode != http.StatusOK && resp2.StatusCode != http.StatusNoContent {
-		return fmt.Errorf("permissions request: bad status %s", resp2.Status)
+		return &download.HTTPError{Stage: "permissions", StatusCode: resp2.StatusCode}
 	}
 
 	return nil

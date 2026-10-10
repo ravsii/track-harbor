@@ -29,8 +29,10 @@ func TestDownloaderLeavesNoSearchingRows(t *testing.T) {
 		want     StatusKind
 	}{
 		{"success", &testProvider{body: io.NopCloser(strings.NewReader("abcdef"))}, StatusDone},
-		{"search failure", &testProvider{searchErr: ErrNotFound}, StatusFailed},
+		{"empty search", &testProvider{searchErr: ErrNotFound}, StatusNotFound},
+		{"HTTP search failure", &testProvider{searchErr: &HTTPError{Stage: "search", StatusCode: 404}}, StatusFailed},
 		{"download failure", &testProvider{downloadErr: errors.New("offline")}, StatusFailed},
+		{"download not found is technical", &testProvider{downloadErr: ErrNotFound}, StatusFailed},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := NewDisplay()

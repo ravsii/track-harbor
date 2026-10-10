@@ -9,6 +9,8 @@ import (
 	"runtime/pprof"
 	"strings"
 
+	"go.uber.org/zap"
+
 	"github.com/spf13/cobra"
 	"meshvault/internal/db"
 	"meshvault/internal/download"
@@ -32,6 +34,24 @@ var rootCmd = &cobra.Command{
 		to quickly create a Cobra application.`,
 
 	Run: func(cmd *cobra.Command, args []string) {
+		logger, closeLog, err := download.NewFileLogger("logs/download.jsonl")
+		if err != nil {
+			log.Fatalln("создание журнала:", err)
+		}
+		logger.Info("command_started")
+		defer func() {
+			logger.Info("command_finished")
+			if err := closeLog(); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Ошибка журнала скачивания: %v\n", err)
+			}
+		}()
+		fatal := func(err error) {
+			logger.Error("command_failed", zap.Error(err))
+			if logErr := closeLog(); logErr != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Ошибка журнала скачивания: %v\n", logErr)
+			}
+			log.Fatal(err)
+		}
 		if allocsEnabled, _ := cmd.Flags().GetBool("allocs"); allocsEnabled {
 			allocF, err := os.Create("meshvault_allocs.pprof")
 			if err != nil {
@@ -49,7 +69,7 @@ var rootCmd = &cobra.Command{
 		if pprofEnabled, _ := cmd.Flags().GetBool("pprof"); pprofEnabled {
 			f, err := os.Create("meshvault_cpu.pprof")
 			if err != nil {
-				log.Fatalf("create cpu profile: %v", err)
+				fatal(fmt.Errorf("create cpu profile: %w", err))
 			}
 			defer func() {
 				pprof.StopCPUProfile()
@@ -73,7 +93,7 @@ var rootCmd = &cobra.Command{
 
 		database, err := db.New()
 		if err != nil {
-			log.Fatalln(err)
+			fatal(err)
 		}
 		defer database.Close()
 
@@ -81,14 +101,16 @@ var rootCmd = &cobra.Command{
 
 		songList, err := repo.GetAll()
 		if err != nil {
-			log.Fatalln(err)
+			fatal(err)
 		}
 		databasePath, err := filepath.Abs("meshtune.db")
 		if err != nil {
-			log.Fatalln(err)
+			fatal(err)
 		}
 		out := cmd.OutOrStdout()
 		fmt.Fprintf(out, "База: %s\nТреков в базе: %d\n", databasePath, len(songList))
+		fmt.Fprintln(out, "Журнал: logs/download.jsonl")
+		logger.Info("database_loaded", zap.String("database", databasePath), zap.Int("total", len(songList)))
 		if len(songList) == 0 {
 			fmt.Fprintln(out, "В базе нет треков. Сначала выполните meshvault sync.")
 			return
@@ -96,29 +118,37 @@ var rootCmd = &cobra.Command{
 
 		err = os.MkdirAll(testFolder, os.ModePerm)
 		if err != nil {
-			log.Fatalln(err)
+			fatal(err)
 		}
 
 		disp := download.NewDisplay()
 		store, err := repository.NewDownloadedTracksRepository(database)
 		if err != nil {
-			log.Fatalln("инициализация истории скачиваний:", err)
+			fatal(fmt.Errorf("инициализация истории скачиваний: %w", err))
 		}
 		provider := mp3party.NewProvider()
-		downloader := download.New(provider, downloadWorkers, testFolder).WithDownloadStore(store).WithDisplay(disp)
+		downloader := download.New(provider, downloadWorkers, testFolder).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
 
-		queries := buildQueries(songList)
+		queries := buildQueriesLogged(songList, logger)
+		logger.Info("queries_prepared", zap.Int("total", len(queries)))
 		downloader.Run(queries)
 	},
 }
 
 func buildQueries(songs []repository.Song) []string {
+	return buildQueriesLogged(songs, nil)
+}
+
+func buildQueriesLogged(songs []repository.Song, logger *zap.Logger) []string {
 	out := make([]string, 0, len(songs))
 	for _, song := range songs {
 		var artists []string
 		err := json.NewDecoder(strings.NewReader(song.Artists)).Decode(&artists)
 		if err != nil {
 			log.Printf("decode artists for song %q: %v", song.Title, err)
+			if logger != nil {
+				logger.Warn("query_rejected", zap.String("query", song.Title), zap.Error(err))
+			}
 			continue
 		}
 		out = append(out, strings.Join(artists, " ")+" "+song.Title)

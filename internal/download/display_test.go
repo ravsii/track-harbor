@@ -62,9 +62,50 @@ func TestDisplayShowsOnlyActiveTracksAndCounters(t *testing.T) {
 			t.Errorf("missing %q: %q", want, output)
 		}
 	}
-	for _, unwanted := range []string{"Completed track", "Skipped track", "Failed track", "Completed ─", "offline"} {
+	for _, unwanted := range []string{"Completed track", "Skipped track", "Completed ─"} {
 		if strings.Contains(output, unwanted) {
 			t.Errorf("completed history leaked into statistics: %q", output)
+		}
+	}
+}
+
+func TestDisplaySeparatesNotFoundAndTechnicalErrors(t *testing.T) {
+	output := captureDisplayOutput(t, func() {
+		d := NewDisplay()
+		d.Update(StatusEvent{JobID: "1", Kind: StatusNotFound, Name: "Missing song", Err: ErrNotFound})
+		d.Update(StatusEvent{JobID: "2", Kind: StatusFailed, Name: "Broken request", Err: &HTTPError{Stage: "search", StatusCode: 500}})
+		d.Stop()
+	})
+	for _, want := range []string{"Не найдено на сайте: 1", "Технические ошибки: 1", "Missing song", "Broken request", "HTTP 500", "Ошибок: 1", "В работе: 0"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("missing error section %q: %s", want, output)
+		}
+	}
+	if strings.Index(output, "Missing song") > strings.Index(output, "Технические ошибки:") {
+		t.Fatal("empty search mixed with technical errors")
+	}
+}
+
+func TestErrorSectionHeadersRemainVisibleInShortTerminal(t *testing.T) {
+	output := captureDisplayOutput(t, func() {
+		d := NewDisplay()
+		d.interactive = true
+		d.size = func() (int, int) { return 80, 10 }
+		d.SetTotal(20)
+		for i := 0; i < 10; i++ {
+			d.Update(StatusEvent{JobID: strconv.Itoa(i), Kind: StatusSearching, Name: "Active song"})
+		}
+		d.Update(StatusEvent{JobID: "11", Kind: StatusNotFound, Name: "Missing song", Err: ErrNotFound})
+		d.Update(StatusEvent{JobID: "12", Kind: StatusFailed, Name: "Broken request", Err: &HTTPError{Stage: "search", StatusCode: 500}})
+		d.Stop()
+		if d.lines > 9 {
+			t.Fatal("error sections caused terminal scrolling")
+		}
+	})
+	final := output[strings.LastIndex(output, "\033[J")+len("\033[J"):]
+	for _, want := range []string{"Не найдено на сайте: 1", "Технические ошибки: 1", "HTTP 500", "Ищется"} {
+		if !strings.Contains(final, want) {
+			t.Errorf("short display hid %q: %s", want, final)
 		}
 	}
 }
