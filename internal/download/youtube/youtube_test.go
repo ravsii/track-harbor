@@ -3,11 +3,13 @@ package youtube
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -208,5 +210,83 @@ func TestProcessExitCodeIsPreserved(t *testing.T) {
 	var exitErr *exec.ExitError
 	if !errors.As(err, &exitErr) || exitErr.ExitCode() != 7 {
 		t.Fatalf("exit code lost: %v", err)
+	}
+}
+
+type sequenceProxies struct {
+	calls atomic.Int64
+	err   error
+}
+
+func (p *sequenceProxies) Next() (string, error) {
+	if p.err != nil {
+		return "", p.err
+	}
+	return fmt.Sprintf("http://203.0.113.%d:8080", p.calls.Add(1)), nil
+}
+
+func TestEverySearchAndDownloadSelectsANewProxy(t *testing.T) {
+	dir := fakeTools(t, `if [ -n "$HTTP_PROXY$HTTPS_PROXY$ALL_PROXY$NO_PROXY$http_proxy$https_proxy$all_proxy$no_proxy" ]; then exit 9; fi
+printf '%s\n' "$@" >> "$ARGS_FILE"
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--output" ]; then shift; output="$1"; fi
+  shift
+done
+if [ -n "$output" ]; then
+  printf '%s' 'mp3 bytes' > "${output%.*}.mp3"
+else
+  printf '%s' '{"entries":[{"id":"dQw4w9WgXcQ","title":"Song","uploader":"Artist"}]}'
+fi`)
+	argsFile := filepath.Join(dir, "args")
+	t.Setenv("ARGS_FILE", argsFile)
+	for _, key := range []string{"HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY", "http_proxy", "https_proxy", "all_proxy", "no_proxy"} {
+		t.Setenv(key, "inherited-proxy")
+	}
+	p, err := NewProvider()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool := &sequenceProxies{}
+	p.WithProxies(pool)
+	track, err := p.Search("Song")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.Search("Song retry"); err != nil {
+		t.Fatal(err)
+	}
+	response, err := p.Download(track)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	args, err := os.ReadFile(argsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pool.calls.Load() != 3 {
+		t.Fatal("not every invocation selected a proxy")
+	}
+	for i := 1; i <= 3; i++ {
+		if !strings.Contains(string(args), fmt.Sprintf("--proxy\nhttp://203.0.113.%d:8080", i)) {
+			t.Fatalf("missing rotated proxy in %s", args)
+		}
+	}
+}
+
+func TestProxySelectionFailureNeverRunsDirectly(t *testing.T) {
+	dir := fakeTools(t, `printf ran > "$ARGS_FILE"`)
+	argsFile := filepath.Join(dir, "args")
+	t.Setenv("ARGS_FILE", argsFile)
+	p, err := NewProvider()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.WithProxies(&sequenceProxies{err: errors.New("pool unavailable")})
+	if _, err := p.Search("Song"); err == nil {
+		t.Fatal("unavailable pool accepted")
+	}
+	if _, err := os.Stat(argsFile); !os.IsNotExist(err) {
+		t.Fatal("yt-dlp ran without a selected proxy")
 	}
 }

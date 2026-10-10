@@ -15,6 +15,7 @@ import (
 	"meshvault/internal/db"
 	"meshvault/internal/download"
 	"meshvault/internal/download/youtube"
+	"meshvault/internal/proxy"
 	"meshvault/internal/repository"
 )
 
@@ -126,6 +127,24 @@ var downloadCmd = &cobra.Command{
 			fatal(err)
 		}
 		fmt.Fprintf(out, "Источник: %s\n", provider.Name())
+		proxyStore, err := repository.NewProxyRepository(database)
+		if err != nil {
+			fatal(fmt.Errorf("инициализация кеша прокси: %w", err))
+		}
+		fmt.Fprintln(out, "Прокси: загрузка свежего кеша или проверка списка ProxyScrape (до 2000 адресов, 100 проверок параллельно)…")
+		pool, err := proxy.NewManager(proxy.NewProxyScrape(), proxy.NewHTTPSChecker(), proxyStore, logger).Prepare(cmd.Context(), func(checked, total, valid int) {
+			if total == 0 && valid > 0 {
+				fmt.Fprintf(out, "Прокси из кеша: %d (кеш действует 1 час)\n", valid)
+			}
+			if total > 0 && (checked%100 == 0 || checked == total) {
+				fmt.Fprintf(out, "Проверка прокси: %d/%d, валидных: %d\n", checked, total, valid)
+			}
+		})
+		if err != nil {
+			fatal(fmt.Errorf("подготовка прокси: %w", err))
+		}
+		provider.WithProxies(pool)
+		fmt.Fprintf(out, "Пул прокси готов: %d. Поиск и скачивание используют случайный прокси для каждой попытки.\n", pool.Len())
 		downloader := download.New(provider, downloadWorkers, testFolder).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
 
 		queries := buildQueriesLogged(songList, logger)

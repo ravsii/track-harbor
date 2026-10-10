@@ -21,7 +21,14 @@ import (
 var videoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
 var httpStatus = regexp.MustCompile(`HTTP Error ([0-9]{3})`)
 
-type Provider struct{ executable string }
+type ProxySelector interface{ Next() (string, error) }
+
+type Provider struct {
+	executable string
+	proxies    ProxySelector
+}
+
+func (p *Provider) WithProxies(proxies ProxySelector) *Provider { p.proxies = proxies; return p }
 
 func NewProvider() (*Provider, error) {
 	path, err := exec.LookPath("yt-dlp")
@@ -40,7 +47,31 @@ func (p *Provider) run(stage string, timeout time.Duration, args ...string) ([]b
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	// Never invoke a shell; query strings are a single argument, not commands.
-	cmd := exec.CommandContext(ctx, p.executable, append([]string{"--ignore-config", "--no-progress", "--no-cache-dir", "--socket-timeout", "15", "--retries", "0", "--fragment-retries", "0", "--extractor-retries", "0", "--file-access-retries", "0"}, args...)...)
+	options := []string{"--ignore-config", "--no-progress", "--no-cache-dir", "--socket-timeout", "15", "--retries", "0", "--fragment-retries", "0", "--extractor-retries", "0", "--file-access-retries", "0"}
+	if p.proxies != nil {
+		address, err := p.proxies.Next()
+		if err != nil {
+			return nil, fmt.Errorf("yt-dlp %s proxy: %w", stage, err)
+		}
+		if address == "" {
+			return nil, fmt.Errorf("yt-dlp %s: empty proxy; direct connection forbidden", stage)
+		}
+		options = append(options, "--proxy", address)
+	}
+	cmd := exec.CommandContext(ctx, p.executable, append(options, args...)...)
+	if p.proxies != nil {
+		// Explicit routing must not be bypassed by inherited NO_PROXY or a
+		// conflicting global HTTP_PROXY; never change the parent environment.
+		cmd.Env = make([]string, 0, len(os.Environ()))
+		for _, env := range os.Environ() {
+			key, _, _ := strings.Cut(env, "=")
+			switch strings.ToUpper(key) {
+			case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY":
+				continue
+			}
+			cmd.Env = append(cmd.Env, env)
+		}
+	}
 	cmd.WaitDelay = time.Second
 	configureCancellation(cmd)
 	var stderr bytes.Buffer
