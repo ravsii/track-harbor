@@ -2,7 +2,7 @@ package spotify
 
 import (
 	"encoding/json"
-	"log"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -13,9 +13,28 @@ func GetSongInfo(
 	bearer string,
 	clientToken string,
 ) (*PlaylistResponse, error) {
+	return GetSongInfoPage(bearer, clientToken, 0)
+}
+
+// GetSongInfoPage fetches up to 50 playlist entries starting at offset.
+func GetSongInfoPage(bearer, clientToken string, offset int) (*PlaylistResponse, error) {
 	url := "https://api-partner.spotify.com/pathfinder/v2/query"
 
-	payload := strings.NewReader("{\n  \"variables\": {\n    \"uri\": \"spotify:playlist:37i9dQZF1F5p3rmiWPIYgZ\",\n    \"offset\": 0,\n    \"limit\": 50,\n    \"includeEpisodeContentRatingsV2\": true\n  },\n  \"operationName\": \"fetchPlaylistContents\",\n  \"extensions\": {\n    \"persistedQuery\": {\n      \"version\": 1,\n      \"sha256Hash\": \"a65e12194ed5fc443a1cdebed5fabe33ca5b07b987185d63c72483867ad13cb4\"\n    }\n  }\n}")
+	payload := strings.NewReader(fmt.Sprintf(`{
+		"variables": {
+			"uri": "spotify:playlist:37i9dQZF1F5p3rmiWPIYgZ",
+			"offset": %d,
+			"limit": 50,
+			"includeEpisodeContentRatingsV2": true
+		},
+		"operationName": "fetchPlaylistContents",
+		"extensions": {
+			"persistedQuery": {
+				"version": 1,
+				"sha256Hash": "a65e12194ed5fc443a1cdebed5fabe33ca5b07b987185d63c72483867ad13cb4"
+			}
+		}
+	}`, offset))
 
 	req, _ := http.NewRequest("POST", url, payload)
 
@@ -37,19 +56,59 @@ func GetSongInfo(
 	req.Header.Add("connection", "keep-alive")
 	req.Header.Add("priority", "u=4")
 
-	resp, _ := http.DefaultClient.Do(req)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
 
 	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+	}
 
 	decoder, err := zstd.NewReader(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		return nil, fmt.Errorf("распаковка ответа: %w", err)
 	}
 	defer decoder.Close()
 
+	var response struct {
+		Data struct {
+			PlaylistV2 json.RawMessage `json:"playlistV2"`
+		} `json:"data"`
+		Errors []json.RawMessage `json:"errors"`
+	}
+	if err := json.NewDecoder(decoder).Decode(&response); err != nil {
+		return nil, fmt.Errorf("чтение ответа Spotify: %w", err)
+	}
+	if len(response.Errors) > 0 {
+		// Do not log response messages: they may contain session information.
+		return nil, fmt.Errorf("Spotify вернул ошибку запроса")
+	}
+	if len(response.Data.PlaylistV2) == 0 || string(response.Data.PlaylistV2) == "null" {
+		return nil, fmt.Errorf("в ответе Spotify отсутствует плейлист")
+	}
+	var shape struct {
+		Content *struct {
+			Items      *json.RawMessage `json:"items"`
+			TotalCount *int             `json:"totalCount"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(response.Data.PlaylistV2, &shape); err != nil {
+		return nil, fmt.Errorf("чтение плейлиста Spotify: %w", err)
+	}
+	if shape.Content == nil || shape.Content.Items == nil {
+		return nil, fmt.Errorf("в ответе Spotify отсутствует список треков")
+	}
+	if shape.Content.TotalCount == nil || *shape.Content.TotalCount < 0 {
+		return nil, fmt.Errorf("в ответе Spotify отсутствует корректное количество треков")
+	}
 	var responseFull PlaylistResponse
-
-	err = json.NewDecoder(decoder).Decode(&responseFull)
-
-	return &responseFull, err
+	if err := json.Unmarshal(response.Data.PlaylistV2, &responseFull.Data.PlaylistV2); err != nil {
+		return nil, fmt.Errorf("чтение плейлиста Spotify: %w", err)
+	}
+	if responseFull.Data.PlaylistV2.Content.PagingInfo.Offset != offset {
+		return nil, fmt.Errorf("Spotify вернул неверное смещение %d вместо %d", responseFull.Data.PlaylistV2.Content.PagingInfo.Offset, offset)
+	}
+	return &responseFull, nil
 }

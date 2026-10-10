@@ -2,8 +2,10 @@ package cli
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"runtime/pprof"
 	"strings"
 
@@ -73,12 +75,23 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			log.Fatalln(err)
 		}
+		defer database.Close()
 
 		repo := repository.NewSongRepository(database)
 
 		songList, err := repo.GetAll()
 		if err != nil {
 			log.Fatalln(err)
+		}
+		databasePath, err := filepath.Abs("meshtune.db")
+		if err != nil {
+			log.Fatalln(err)
+		}
+		out := cmd.OutOrStdout()
+		fmt.Fprintf(out, "База: %s\nТреков в базе: %d\n", databasePath, len(songList))
+		if len(songList) == 0 {
+			fmt.Fprintln(out, "В базе нет треков. Сначала выполните meshvault sync.")
+			return
 		}
 
 		err = os.MkdirAll(testFolder, os.ModePerm)

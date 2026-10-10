@@ -57,3 +57,41 @@ func (r *SongRepository) BulkInsert(songs []Song) error {
 
 	return tx.Commit()
 }
+
+// ReplaceAll atomically replaces the library, keeping one record per song.
+// Repeated playlist entries do not violate the unique artists/title index.
+func (r *SongRepository) ReplaceAll(songs []Song) (int, error) {
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec("DELETE FROM songs"); err != nil {
+		return 0, err
+	}
+	stmt, err := tx.PrepareNamed(`
+		INSERT INTO songs (artists, title, created_at)
+		VALUES (:artists, :title, :created_at)
+		ON CONFLICT (artists, title) DO NOTHING
+	`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+	saved := 0
+	for _, song := range songs {
+		result, err := stmt.Exec(song)
+		if err != nil {
+			return 0, err
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			return 0, err
+		}
+		saved += int(rows)
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return saved, nil
+}
