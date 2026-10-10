@@ -18,15 +18,16 @@ import (
 type StatusKind int
 
 const (
-	StatusSearching   StatusKind = iota // поиск треков по запросу
-	StatusDownloading                   // скачивание конкретного трека
-	StatusDone                          // успешно сохранён
-	StatusFailed                        // ошибка на любом этапе
-	StatusSkipped                       // файл уже скачан и его хеш совпал
-	StatusChecking                      // проверка файла и его хеша
-	StatusPreparing                     // получение разрешений и ответа сервера
-	StatusNotFound                      // успешный поиск без результатов
-	StatusSaving                        // сохранение файла и хеша
+	StatusSearching    StatusKind = iota // поиск треков по запросу
+	StatusDownloading                    // скачивание конкретного трека
+	StatusDone                           // успешно сохранён
+	StatusFailed                         // ошибка на любом этапе
+	StatusSkipped                        // файл уже скачан и его хеш совпал
+	StatusChecking                       // проверка файла и его хеша
+	StatusPreparing                      // получение разрешений и ответа сервера
+	StatusNotFound                       // успешный поиск без результатов
+	StatusSaving                         // сохранение файла и хеша
+	StatusRetryWaiting                   // отложенный повтор в очереди
 )
 
 // StatusEvent — событие жизненного цикла обработки одного трека/запроса.
@@ -189,6 +190,17 @@ func (d *Display) render() {
 	active := d.activeUnsafe()
 	total := max(d.total, len(active)+len(d.done))
 	queued := max(0, total-len(active)-len(d.done))
+	waiting := 0
+	processing := active[:0:0]
+	for _, ev := range active {
+		if ev.Kind == StatusRetryWaiting {
+			waiting++
+		} else {
+			processing = append(processing, ev)
+		}
+	}
+	active = processing
+	queued += waiting
 	width, height := d.size()
 	frame := []string{"Скачивание"}
 	// Wrap counters between fields, not through values, in narrow windows.
@@ -208,6 +220,9 @@ func (d *Display) render() {
 			line += counter
 		}
 		frame = append(frame, line)
+	}
+	if waiting > 0 {
+		frame = append(frame, fmt.Sprintf("Ожидают повтора: %d", waiting))
 	}
 	var sections []string
 	sectionCount := 0

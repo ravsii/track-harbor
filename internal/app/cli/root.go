@@ -15,6 +15,7 @@ import (
 	"meshvault/internal/db"
 	"meshvault/internal/download"
 	"meshvault/internal/download/mp3party"
+	"meshvault/internal/download/youtube"
 	"meshvault/internal/repository"
 )
 
@@ -126,7 +127,10 @@ var rootCmd = &cobra.Command{
 		if err != nil {
 			fatal(fmt.Errorf("инициализация истории скачиваний: %w", err))
 		}
-		provider := mp3party.NewProvider()
+		providerName,_:=cmd.Flags().GetString("provider")
+		provider,err:=newDownloadProvider(providerName)
+		if err!=nil { fatal(err) }
+		fmt.Fprintf(out,"Источник: %s\n",provider.Name())
 		downloader := download.New(provider, downloadWorkers, testFolder).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
 
 		queries := buildQueriesLogged(songList, logger)
@@ -137,6 +141,14 @@ var rootCmd = &cobra.Command{
 
 func buildQueries(songs []repository.Song) []string {
 	return buildQueriesLogged(songs, nil)
+}
+
+func newDownloadProvider(name string) (download.Provider,error) {
+	switch name {
+	case "mp3party": return mp3party.NewProvider(),nil
+	case "youtube": return youtube.NewProvider()
+	default: return nil,fmt.Errorf("неизвестный провайдер %q: используйте mp3party или youtube",name)
+	}
 }
 
 func buildQueriesLogged(songs []repository.Song, logger *zap.Logger) []string {
@@ -169,4 +181,5 @@ func init() {
 	rootCmd.Flags().BoolP("toggle", "t", false, "Help message for toggle")
 	rootCmd.Flags().Bool("pprof", false, "Save cpu+mem profile to meshvault_{cpu,mem}.pprof")
 	rootCmd.Flags().Bool("allocs", false, "Save allocs profile to meshvault_allocs.pprof")
+	rootCmd.Flags().String("provider","mp3party","Источник скачивания: mp3party или youtube")
 }

@@ -36,7 +36,7 @@ func TestDownloaderLeavesNoSearchingRows(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := NewDisplay()
-			New(tc.provider, 1, t.TempDir()).WithDisplay(d).Run([]string{"original query"})
+			fastDownloader(tc.provider, 1, t.TempDir()).WithDisplay(d).Run([]string{"original query"})
 			if len(d.active) != 0 {
 				t.Errorf("finished job left active rows: %+v", d.activeUnsafe())
 			}

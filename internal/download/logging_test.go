@@ -50,7 +50,7 @@ func TestZapFileLoggingDistinguishesEmptySearchAndHTTPFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			New(&testProvider{searchErr: tc.err}, 10, t.TempDir()).WithLogger(logger).Run([]string{"Original query"})
+			fastDownloader(&testProvider{searchErr: tc.err}, 10, t.TempDir()).WithLogger(logger).Run([]string{"Original query"})
 			if err := closeLog(); err != nil {
 				t.Fatal(err)
 			}
@@ -130,7 +130,7 @@ func TestZapFileLoggingRedactsMalformedRedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	New(&testProvider{searchErr: requestErr}, 1, t.TempDir()).WithLogger(logger).Run([]string{"Track"})
+	fastDownloader(&testProvider{searchErr: requestErr}, 1, t.TempDir()).WithLogger(logger).Run([]string{"Track"})
 	if err := closeLog(); err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +149,7 @@ func TestZapFileLoggingRecordsPartialDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	New(&cacheProvider{body: "partial", length: 100}, 1, t.TempDir()).WithLogger(logger).Run([]string{"Track"})
+	fastDownloader(&cacheProvider{body: "partial", length: 100}, 1, t.TempDir()).WithLogger(logger).Run([]string{"Track"})
 	if err := closeLog(); err != nil {
 		t.Fatal(err)
 	}
@@ -159,4 +159,34 @@ func TestZapFileLoggingRecordsPartialDownload(t *testing.T) {
 		}
 	}
 	t.Fatal("partial download lost byte counts and failure stage")
+}
+
+func TestZapLogsFiveRetriesAndOneFinalFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "download.jsonl")
+	logger, closeLog, err := NewFileLogger(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fastDownloader(&testProvider{searchErr: &HTTPError{Stage: "search", StatusCode: 500}}, 1, t.TempDir()).WithLogger(logger).Run([]string{"Track"})
+	if err := closeLog(); err != nil {
+		t.Fatal(err)
+	}
+	retries, failures := 0, 0
+	for _, record := range readLog(t, path) {
+		if record["msg"] == "retry_scheduled" {
+			retries++
+			if record["retry"] != float64(retries) || record["attempt"] != float64(retries) || record["http_status"] != float64(500) || record["delay"] == nil {
+				t.Fatalf("missing retry fields: %v", record)
+			}
+		}
+		if record["msg"] == "failed" {
+			failures++
+			if record["attempt"] != float64(6) {
+				t.Fatalf("final attempt wrong: %v", record)
+			}
+		}
+	}
+	if retries != 5 || failures != 1 {
+		t.Fatalf("retries=%d final failures=%d", retries, failures)
+	}
 }

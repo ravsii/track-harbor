@@ -50,19 +50,24 @@ func (pr *progressReader) Close() error {
 
 // Downloader — оркестратор загрузок с worker pool.
 type Downloader struct {
-	provider  Provider
-	workers   int
-	outputDir string
-	display   *Display
-	store     DownloadStore
-	logger    *zap.Logger
-	fileLocks sync.Map // absolute file path → *sync.Mutex
+	provider   Provider
+	workers    int
+	outputDir  string
+	display    *Display
+	store      DownloadStore
+	logger     *zap.Logger
+	retryDelay func(int) time.Duration
+	fileLocks  sync.Map // absolute file path → *sync.Mutex
 }
 
 // New создаёт Downloader.
 func New(provider Provider, workers int, outputDir string) *Downloader {
-	return &Downloader{provider: provider, workers: workers, outputDir: outputDir, logger: zap.NewNop()}
+	return &Downloader{provider: provider, workers: max(1, workers), outputDir: outputDir, logger: zap.NewNop(), retryDelay: retryDelay}
 }
+
+const maxRetries = 5
+
+func retryDelay(retry int) time.Duration { return time.Second << retry }
 
 // WithDisplay привязывает live-дисплей для отображения статуса.
 func (d *Downloader) WithDisplay(disp *Display) *Downloader {
@@ -77,23 +82,36 @@ func (d *Downloader) Run(queries []string) {
 	if d.display != nil {
 		d.display.SetTotal(len(queries))
 	}
-	sem := make(chan struct{}, d.workers)
-	var wg sync.WaitGroup
-
-	for i, query := range queries {
-		wg.Add(1)
-		sem <- struct{}{}
-		jobID := strconv.Itoa(i + 1)
-		d.sendEvent(StatusSearching, jobID, query, nil)
-
-		go func(id, q string) {
-			defer wg.Done()
-			defer func() { <-sem }()
-			d.downloadQuery(id, q)
-		}(jobID, query)
+	type job struct {
+		id, query string
+		retry     int
 	}
-
-	wg.Wait()
+	queue := make(chan job, len(queries))
+	var jobs, workers sync.WaitGroup
+	jobs.Add(len(queries))
+	for i, query := range queries {
+		queue <- job{id: strconv.Itoa(i + 1), query: query}
+	}
+	for i := 0; i < d.workers; i++ {
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			for current := range queue {
+				d.sendEvent(StatusSearching, current.id, current.query, nil)
+				if d.downloadQuery(current.id, current.query, current.retry) {
+					delay := d.retryDelay(current.retry)
+					current.retry++
+					time.AfterFunc(delay, func() { queue <- current })
+				} else {
+					jobs.Done()
+				}
+			}
+		}()
+	}
+	// A job remains outstanding while its delayed retry is waiting.
+	jobs.Wait()
+	close(queue)
+	workers.Wait()
 	d.logger.Info("run_finished", zap.Int("total", len(queries)), zap.Duration("duration", time.Since(started)))
 
 	if d.display != nil {
@@ -121,10 +139,10 @@ func (d *Downloader) sendEvent(kind StatusKind, jobID, name string, err error) {
 	})
 }
 
-func (d *Downloader) downloadQuery(jobID, query string) {
+func (d *Downloader) downloadQuery(jobID, query string, retry int) (retryNeeded bool) {
 	started := time.Now()
 	name := query
-	logger := d.logger.With(zap.String("job_id", jobID), zap.String("source", d.provider.Name()), zap.String("query", query))
+	logger := d.logger.With(zap.String("job_id", jobID), zap.String("source", d.provider.Name()), zap.String("query", query), zap.Int("attempt", retry+1))
 	fail := func(stage string, err error, details ...zap.Field) {
 		fields := append(details, zap.String("stage", stage), zap.String("error", safeError(err)), zap.Duration("duration", time.Since(started)))
 		var httpErr *HTTPError
@@ -134,6 +152,10 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 		if stage == "search" && errors.Is(err, ErrNotFound) {
 			logger.Warn("not_found", fields...)
 			d.sendEvent(StatusNotFound, jobID, name, err)
+		} else if retry < maxRetries {
+			retryNeeded = true
+			logger.Warn("retry_scheduled", append(fields, zap.Int("retry", retry+1), zap.Duration("delay", d.retryDelay(retry)))...)
+			d.sendEvent(StatusRetryWaiting, jobID, name, err)
 		} else {
 			logger.Error("failed", fields...)
 			d.sendEvent(StatusFailed, jobID, name, err)
@@ -229,6 +251,7 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 
 	logger.Info("downloaded", zap.Int64("bytes", written), zap.String("sha256", fmt.Sprintf("%x", hash.Sum(nil))), zap.Duration("duration", time.Since(started)))
 	d.sendEvent(StatusDone, jobID, name, nil)
+	return
 }
 
 // sendEventDownloading отправляет событие скачивания с прогрессом.

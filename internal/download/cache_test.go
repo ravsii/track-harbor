@@ -53,7 +53,7 @@ func cacheDatabase(t *testing.T) (*sqlx.DB, *repository.DownloadedTracksReposito
 func runCached(t *testing.T, p Provider, dir string, store DownloadStore, queries ...string) *Display {
 	t.Helper()
 	display := NewDisplay()
-	New(p, 10, dir).WithDownloadStore(store).WithDisplay(display).Run(queries)
+	fastDownloader(p, 10, dir).WithDownloadStore(store).WithDisplay(display).Run(queries)
 	if len(display.active) != 0 {
 		t.Fatal("completed jobs remained active")
 	}
