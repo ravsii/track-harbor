@@ -156,8 +156,23 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	logger := d.logger.With(zap.String("job_id", jobID), zap.String("source", d.provider.Name()), zap.String("query", query), zap.Int("attempt", attempt+1))
 	var generation uint64
 	gate := d.searchGate
+	var proxyAddress string
+	onProxy := func(stage string, kind StatusKind) func(string) {
+		return func(address string) {
+			proxyAddress = ProxyLabel(address)
+			logger.Info("request_started", zap.String("stage", stage), zap.String("proxy", proxyAddress))
+			if d.display != nil {
+				d.display.Update(StatusEvent{JobID: jobID, Source: d.provider.Name(), Kind: kind, Name: name, Proxy: proxyAddress, TotalBytes: -1})
+			} else {
+				fmt.Printf("%s: %s · прокси: %s\n", stage, name, proxyAddress)
+			}
+		}
+	}
 	fail := func(stage string, err error, details ...zap.Field) {
 		fields := append(details, zap.String("stage", stage), zap.String("error", safeError(err)), zap.Duration("duration", time.Since(started)))
+		if proxyAddress != "" {
+			fields = append(fields, zap.String("proxy", proxyAddress))
+		}
 		var httpErr *HTTPError
 		if errors.As(err, &httpErr) {
 			fields = append(fields, zap.Int("http_status", httpErr.StatusCode), zap.String("http_stage", httpErr.Stage))
@@ -191,7 +206,13 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	}
 	logger.Info("searching")
 	generation = d.waitForRequest(gate, jobID, query, StatusSearching)
-	track, err := d.provider.Search(query)
+	var track Track
+	var err error
+	if provider, ok := d.provider.(ProxyAwareProvider); ok {
+		track, err = provider.SearchWithProxy(query, onProxy("search", StatusSearching))
+	} else {
+		track, err = d.provider.Search(query)
+	}
 	if err != nil {
 		fail("search", err)
 		return
@@ -199,7 +220,7 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 
 	name = track.Artist + " — " + track.Title
 	logger = logger.With(zap.String("track_id", track.ID), zap.String("name", name))
-	logger.Info("search_finished", zap.Duration("duration", time.Since(started)))
+	logger.Info("search_finished", zap.Duration("duration", time.Since(started)), zap.String("proxy", proxyAddress))
 	d.sendEvent(StatusChecking, jobID, name, nil)
 	filePath, err := filepath.Abs(filepath.Join(d.outputDir, audioFilename(track)))
 	if err != nil {
@@ -228,10 +249,16 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 		return
 	}
 	logger.Info("preparing")
+	proxyAddress = "" // A download has not selected a route while it waits for admission.
 	gate = d.downloadGate
 	generation = d.waitForRequest(gate, jobID, name, StatusPreparing)
 
-	resp, err := d.provider.Download(track)
+	var resp DownloadResponse
+	if provider, ok := d.provider.(ProxyAwareProvider); ok {
+		resp, err = provider.DownloadWithProxy(track, onProxy("download", StatusDownloading))
+	} else {
+		resp, err = d.provider.Download(track)
+	}
 	if err != nil {
 		fail("prepare", err)
 		return
@@ -248,12 +275,12 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	defer f.Close()
 
 	// Шлём начальное событие старта скачивания
-	d.sendEventDownloading(jobID, name, resp.ContentLength, 0)
-	logger.Info("downloading", zap.Int64("expected_bytes", resp.ContentLength))
+	d.sendEventDownloading(jobID, name, resp.ContentLength, 0, proxyAddress)
+	logger.Info("downloading", zap.Int64("expected_bytes", resp.ContentLength), zap.String("proxy", proxyAddress))
 
 	pr := newProgressReader(resp.Body, resp.ContentLength,
 		func(downloaded, total int64) {
-			d.sendEventDownloading(jobID, name, total, downloaded)
+			d.sendEventDownloading(jobID, name, total, downloaded, proxyAddress)
 		})
 
 	hash := sha256.New()
@@ -288,9 +315,13 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 }
 
 // sendEventDownloading отправляет событие скачивания с прогрессом.
-func (d *Downloader) sendEventDownloading(jobID, name string, total, downloaded int64) {
+func (d *Downloader) sendEventDownloading(jobID, name string, total, downloaded int64, proxy ...string) {
 	if d.display == nil {
 		return
+	}
+	address := ""
+	if len(proxy) > 0 {
+		address = ProxyLabel(proxy[0])
 	}
 	d.display.Update(StatusEvent{
 		JobID:           jobID,
@@ -299,5 +330,6 @@ func (d *Downloader) sendEventDownloading(jobID, name string, total, downloaded 
 		Name:            name,
 		TotalBytes:      total,
 		DownloadedBytes: downloaded,
+		Proxy:           address,
 	})
 }

@@ -37,6 +37,7 @@ type StatusEvent struct {
 	Kind            StatusKind
 	Source          string // имя провайдера ("youtube")
 	Name            string // название запроса или "Artist — Title"
+	Proxy           string // безопасный адрес выбранного прокси этого запроса
 	Err             error
 	TotalBytes      int64 // общий размер (если известен), иначе -1
 	DownloadedBytes int64 // сколько байт уже скачано
@@ -113,6 +114,7 @@ func (d *Display) startUnsafe() {
 
 // Update — потокобезопасный вызов из горутин-воркеров.
 func (d *Display) Update(evt StatusEvent) {
+	evt.Proxy = ProxyLabel(evt.Proxy)
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.stopped {
@@ -319,6 +321,9 @@ func (d *Display) render() {
 			if pct >= 0 {
 				status = fmt.Sprintf("Скачивается %3.0f%%", pct)
 			}
+		}
+		if ev.Proxy != "" {
+			status += " · прокси: " + ev.Proxy
 		}
 		// Keep the progress bar complete; shorten the name first. Narrow
 		// windows get a shorter bar rather than a clipped closing bracket.

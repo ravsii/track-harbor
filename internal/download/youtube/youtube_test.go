@@ -356,3 +356,45 @@ func TestYouTubeReports429EvenAlongsideOtherSubprocessErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestYouTubeObservesActualProxyBeforeStartingEachStage(t *testing.T) {
+	dir := fakeTools(t, `if [ ! -f "$OBSERVER_MARKER" ]; then exit 9; fi
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--output" ]; then shift; output="$1"; fi
+  shift
+done
+if [ -n "$output" ]; then
+  printf 'mp3' > "${output%.*}.mp3"
+else
+  echo '{"entries":[{"id":"dQw4w9WgXcQ","title":"Song","uploader":"Artist"}]}'
+fi`)
+	marker := filepath.Join(dir, "observer")
+	t.Setenv("OBSERVER_MARKER", marker)
+	p, err := NewProvider()
+	if err != nil {
+		t.Fatal(err)
+	}
+	p.WithProxies(&sequenceProxies{})
+	var selected []string
+	onProxy := func(address string) {
+		selected = append(selected, address)
+		if err := os.WriteFile(marker, []byte(address), 0600); err != nil {
+			t.Error(err)
+		}
+	}
+	track, err := p.SearchWithProxy("Song", onProxy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(marker); err != nil {
+		t.Fatal(err)
+	}
+	response, err := p.DownloadWithProxy(track, onProxy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	if fmt.Sprint(selected) != "[http://203.0.113.1:8080 http://203.0.113.2:8080]" {
+		t.Fatalf("wrong request proxies: %v", selected)
+	}
+}

@@ -44,6 +44,10 @@ func NewProvider() (*Provider, error) {
 func (p *Provider) Name() string { return "youtube" }
 
 func (p *Provider) run(stage string, timeout time.Duration, args ...string) ([]byte, error) {
+	return p.runWithProxy(stage, timeout, nil, args...)
+}
+
+func (p *Provider) runWithProxy(stage string, timeout time.Duration, onProxy func(string), args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	// Never invoke a shell; query strings are a single argument, not commands.
@@ -65,6 +69,9 @@ func (p *Provider) run(stage string, timeout time.Duration, args ...string) ([]b
 			return nil, fmt.Errorf("yt-dlp %s: empty proxy; direct connection forbidden", stage)
 		}
 		options = append(options, "--proxy", proxyAddress)
+		if onProxy != nil {
+			onProxy(download.ProxyLabel(proxyAddress))
+		}
 	}
 	cmd := exec.CommandContext(ctx, p.executable, append(options, args...)...)
 	if p.proxies != nil {
@@ -120,7 +127,11 @@ func (p *Provider) run(stage string, timeout time.Duration, args ...string) ([]b
 }
 
 func (p *Provider) Search(query string) (download.Track, error) {
-	output, err := p.run("search", time.Minute, "--flat-playlist", "--dump-single-json", "--", "ytsearch1:"+query)
+	return p.SearchWithProxy(query, nil)
+}
+
+func (p *Provider) SearchWithProxy(query string, onProxy func(string)) (download.Track, error) {
+	output, err := p.runWithProxy("search", time.Minute, onProxy, "--flat-playlist", "--dump-single-json", "--", "ytsearch1:"+query)
 	if err != nil {
 		return download.Track{}, err
 	}
@@ -153,6 +164,10 @@ func (p *Provider) Search(query string) (download.Track, error) {
 }
 
 func (p *Provider) Download(track download.Track) (download.DownloadResponse, error) {
+	return p.DownloadWithProxy(track, nil)
+}
+
+func (p *Provider) DownloadWithProxy(track download.Track, onProxy func(string)) (download.DownloadResponse, error) {
 	if !videoID.MatchString(track.ID) {
 		return download.DownloadResponse{}, fmt.Errorf("YouTube: invalid video ID")
 	}
@@ -166,7 +181,7 @@ func (p *Provider) Download(track download.Track) (download.DownloadResponse, er
 			os.RemoveAll(dir)
 		}
 	}()
-	_, err = p.run("download", 5*time.Minute, "--no-playlist", "--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K", "--output", filepath.Join(dir, "audio.%(ext)s"), "--", "https://www.youtube.com/watch?v="+track.ID)
+	_, err = p.runWithProxy("download", 5*time.Minute, onProxy, "--no-playlist", "--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K", "--output", filepath.Join(dir, "audio.%(ext)s"), "--", "https://www.youtube.com/watch?v="+track.ID)
 	if err != nil {
 		return download.DownloadResponse{}, err
 	}

@@ -36,3 +36,11 @@ type Provider interface {
 	// Download — скачивание трека, возвращает DownloadResponse с телом и размером.
 	Download(track Track) (DownloadResponse, error)
 }
+
+// ProxyAwareProvider reports the selected route synchronously for this exact
+// invocation, before starting the connection. Provider stays compatible with
+// implementations that do not expose connection diagnostics.
+type ProxyAwareProvider interface {
+	SearchWithProxy(query string, onProxy func(string)) (Track, error)
+	DownloadWithProxy(track Track, onProxy func(string)) (DownloadResponse, error)
+}
