@@ -15,7 +15,7 @@ type ProxyRepository struct {
 
 // Changed when sources or verification policy change, so an older pool cannot
 // bypass discovery or the new one-second check on the next download startup.
-const proxyCachePolicy = "proxyscrape+proxifly/1s/v1"
+const proxyCachePolicy = "proxyscrape+proxifly+speedx/1s/v1"
 
 func NewProxyRepository(db *sqlx.DB) (*ProxyRepository, error) {
 	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS verified_proxies (

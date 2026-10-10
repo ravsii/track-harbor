@@ -22,11 +22,15 @@ func NewProxifly() *Proxifly {
 }
 
 func (s *Proxifly) Fetch(ctx context.Context) ([]string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.endpoint, nil)
+	return fetchTextList(ctx, s.client, s.endpoint, "")
+}
+
+func fetchTextList(ctx context.Context, client *http.Client, endpoint, protocol string) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := s.client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -40,12 +44,15 @@ func (s *Proxifly) Fetch(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	if len(body) > maxBytes {
-		return nil, fmt.Errorf("Proxifly list exceeds size limit")
+		return nil, fmt.Errorf("proxy list exceeds size limit")
 	}
 	scanner := bufio.NewScanner(strings.NewReader(string(body)))
 	var addresses []string
 	for scanner.Scan() {
 		if line := strings.TrimSpace(scanner.Text()); line != "" {
+			if protocol != "" && !strings.Contains(line, "://") {
+				line = protocol + "://" + line
+			}
 			addresses = append(addresses, line)
 		}
 	}
@@ -66,7 +73,12 @@ type CombinedSource struct {
 }
 
 func NewSources(logger *zap.Logger) *CombinedSource {
-	return &CombinedSource{sources: []namedSource{{"proxyscrape", NewProxyScrape()}, {"proxifly", NewProxifly()}}, logger: logger}
+	return &CombinedSource{sources: []namedSource{
+		{"proxyscrape", NewProxyScrape()}, {"proxifly", NewProxifly()},
+		{"speedx_http", newSpeedX("http")},
+		{"speedx_socks4", newSpeedX("socks4")},
+		{"speedx_socks5", newSpeedX("socks5")},
+	}, logger: logger}
 }
 
 // One unavailable source does not prevent using the other source's list.
@@ -93,7 +105,7 @@ func (s *CombinedSource) Fetch(ctx context.Context) ([]string, error) {
 	}
 	addresses = usableAddresses(addresses)
 	if len(addresses) == 0 {
-		return nil, fmt.Errorf("ни один источник не вернул пригодных адресов прокси (ProxyScrape/Proxifly)")
+		return nil, fmt.Errorf("ни один источник не вернул пригодных адресов прокси (ProxyScrape/Proxifly/TheSpeedX)")
 	}
 	return addresses, nil
 }
