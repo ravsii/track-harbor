@@ -34,7 +34,7 @@ const (
 type StatusEvent struct {
 	JobID           string // постоянный ID запроса, не зависит от найденного названия
 	Kind            StatusKind
-	Source          string // имя провайдера ("mp3party")
+	Source          string // имя провайдера ("youtube")
 	Name            string // название запроса или "Artist — Title"
 	Err             error
 	TotalBytes      int64 // общий размер (если известен), иначе -1

@@ -7,7 +7,8 @@ go run ./cmd/cli sync
 go run ./cmd/cli download
 ```
 
-По умолчанию источник скачивания — `mp3party`. Для поиска и скачивания с YouTube:
+Единственный источник скачивания сейчас — YouTube. Он используется по умолчанию;
+явный флаг также поддерживается:
 
 ```sh
 go run ./cmd/cli download --provider youtube

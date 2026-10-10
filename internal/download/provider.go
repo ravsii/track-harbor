@@ -26,7 +26,7 @@ type DownloadResponse struct {
 
 // Provider — интерфейс, который должна реализовать каждая площадка-источник.
 type Provider interface {
-	// Name — уникальное имя провайдера (например "mp3party").
+	// Name — уникальное имя провайдера (например "youtube").
 	Name() string
 
 	// Search — поиск лучшего трека по строке запроса.

@@ -8,6 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
+	"meshvault/internal/download"
 )
 
 func TestDownloadCommandIsRegistered(t *testing.T) {
@@ -19,6 +22,47 @@ func TestDownloadCommandIsRegistered(t *testing.T) {
 		if err := cmd.ParseFlags([]string{"--" + flag + "=false"}); err != nil {
 			t.Errorf("download does not accept profiling flag %s: %v", flag, err)
 		}
+	}
+}
+
+func TestDownloadProviderSelection(t *testing.T) {
+	for _, cmd := range []*cobra.Command{rootCmd, downloadCmd} {
+		name, err := cmd.Flags().GetString("provider")
+		if err != nil || name != "youtube" {
+			t.Fatalf("default provider: %s %v", name, err)
+		}
+		if err := cmd.ParseFlags([]string{"--provider", "youtube"}); err != nil {
+			t.Fatal(err)
+		}
+		name, _ = cmd.Flags().GetString("provider")
+		if name != "youtube" {
+			t.Fatal("YouTube flag ignored")
+		}
+		if err := cmd.Flags().Set("provider", "youtube"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := newDownloadProvider("mp3party"); err == nil {
+		t.Fatal("removed provider accepted")
+	}
+	if _, err := newDownloadProvider("unknown"); err == nil {
+		t.Fatal("unknown provider accepted")
+	}
+	t.Setenv("PATH", t.TempDir())
+	if _, err := newDownloadProvider("youtube"); err == nil {
+		t.Fatal("missing tools accepted")
+	}
+	tools := t.TempDir()
+	for _, name := range []string{"yt-dlp", "ffmpeg"} {
+		if err := os.WriteFile(filepath.Join(tools, name), []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", tools)
+	var provider download.Provider
+	provider, err := newDownloadProvider("youtube")
+	if err != nil || provider.Name() != "youtube" {
+		t.Fatalf("YouTube provider unavailable: %v", err)
 	}
 }
 
