@@ -7,7 +7,8 @@ import (
 
 func rateLimitDelay(round int) time.Duration { return time.Duration(min(round+1, 6)) * 5 * time.Second }
 
-// requestGate is shared by all workers and by search and audio requests.
+// requestGate is shared by all workers of one stage. Search and downloads
+// have independent gates: only downloads have normal start spacing.
 // No future start is reserved: every waiter rechecks the latest global pause.
 type requestGate struct {
 	mu                      sync.Mutex
@@ -70,8 +71,8 @@ func (g *requestGate) block(generation uint64) (time.Duration, bool) {
 	return delay, true
 }
 
-func (d *Downloader) waitForRequest(jobID, name string, kind StatusKind) uint64 {
-	generation := d.gate.wait(func(paused bool) {
+func (d *Downloader) waitForRequest(gate *requestGate, jobID, name string, kind StatusKind) uint64 {
+	generation := gate.wait(func(paused bool) {
 		status := StatusQueued
 		if paused {
 			status = StatusRetryWaiting

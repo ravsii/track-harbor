@@ -59,7 +59,8 @@ type Downloader struct {
 	retryDelay     func(int) time.Duration
 	startInterval  time.Duration
 	rateLimitDelay func(int) time.Duration
-	gate           *requestGate
+	searchGate     *requestGate
+	downloadGate   *requestGate
 	fileLocks      sync.Map // absolute file path → *sync.Mutex
 }
 
@@ -80,7 +81,8 @@ func (d *Downloader) WithDisplay(disp *Display) *Downloader {
 
 // Run запускает worker pool для параллельной обработки поисковых запросов.
 func (d *Downloader) Run(queries []string) {
-	d.gate = &requestGate{interval: d.startInterval, delay: d.rateLimitDelay}
+	d.searchGate = &requestGate{delay: d.rateLimitDelay}
+	d.downloadGate = &requestGate{interval: d.startInterval, delay: d.rateLimitDelay}
 	started := time.Now()
 	d.logger.Info("run_started", zap.Int("total", len(queries)), zap.Int("workers", d.workers), zap.String("output_dir", d.outputDir))
 	if d.display != nil {
@@ -153,6 +155,7 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	name := query
 	logger := d.logger.With(zap.String("job_id", jobID), zap.String("source", d.provider.Name()), zap.String("query", query), zap.Int("attempt", attempt+1))
 	var generation uint64
+	gate := d.searchGate
 	fail := func(stage string, err error, details ...zap.Field) {
 		fields := append(details, zap.String("stage", stage), zap.String("error", safeError(err)), zap.Duration("duration", time.Since(started)))
 		var httpErr *HTTPError
@@ -164,9 +167,9 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 			d.sendEvent(StatusNotFound, jobID, name, err)
 		} else if httpErr != nil && httpErr.StatusCode == 429 {
 			retryNeeded, rateLimited = true, true
-			delay, changed := d.gate.block(generation)
+			delay, changed := gate.block(generation)
 			if changed {
-				logger.Warn("rate_limit_pause", zap.Duration("delay", delay), zap.Int("http_status", 429))
+				logger.Warn("rate_limit_pause", zap.String("stage", stage), zap.Duration("delay", delay), zap.Int("http_status", 429))
 			}
 			logger.Warn("retry_scheduled", append(fields, zap.Int("retry", attempt+1), zap.Duration("delay", delay))...)
 			d.sendEvent(StatusRetryWaiting, jobID, name, err)
@@ -180,7 +183,7 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 		}
 	}
 	logger.Info("searching")
-	generation = d.waitForRequest(jobID, query, StatusSearching)
+	generation = d.waitForRequest(gate, jobID, query, StatusSearching)
 	track, err := d.provider.Search(query)
 	if err != nil {
 		fail("search", err)
@@ -215,7 +218,8 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 		return
 	}
 	logger.Info("preparing")
-	generation = d.waitForRequest(jobID, name, StatusPreparing)
+	gate = d.downloadGate
+	generation = d.waitForRequest(gate, jobID, name, StatusPreparing)
 
 	resp, err := d.provider.Download(track)
 	if err != nil {

@@ -94,6 +94,8 @@ func Test429RetriesBeyondFiveAttemptsUntilSuccess(t *testing.T) {
 type pacedProvider struct {
 	mu                sync.Mutex
 	starts            []time.Time
+	searchStarts      []time.Time
+	downloadStarts    []time.Time
 	active, maxActive int
 	failFirst         bool
 	failDownload      bool
@@ -110,6 +112,9 @@ func (p *pacedProvider) record() int {
 }
 func (p *pacedProvider) Search(query string) (Track, error) {
 	call := p.record()
+	p.mu.Lock()
+	p.searchStarts = append(p.searchStarts, time.Now())
+	p.mu.Unlock()
 	if p.searchHook != nil {
 		p.searchHook(call)
 	}
@@ -124,6 +129,7 @@ func (p *pacedProvider) Search(query string) (Track, error) {
 func (p *pacedProvider) Download(Track) (DownloadResponse, error) {
 	p.record()
 	p.mu.Lock()
+	p.downloadStarts = append(p.downloadStarts, time.Now())
 	if p.failDownload {
 		p.failDownload = false
 		p.limitedAt = time.Now()
@@ -142,7 +148,7 @@ func (p *pacedProvider) Download(Track) (DownloadResponse, error) {
 	return DownloadResponse{Body: io.NopCloser(strings.NewReader("audio")), ContentLength: 5}, nil
 }
 
-func TestDownloaderPacesBothSearchAndAudioDownloads(t *testing.T) {
+func TestDownloaderPacesOnlyAudioDownloads(t *testing.T) {
 	p := &pacedProvider{}
 	d := fastDownloader(p, 10, t.TempDir())
 	d.startInterval = 5 * time.Millisecond
@@ -154,9 +160,9 @@ func TestDownloaderPacesBothSearchAndAudioDownloads(t *testing.T) {
 	if len(p.starts) != 24 {
 		t.Fatalf("missing requests: %d", len(p.starts))
 	}
-	for i := 1; i < len(p.starts); i++ {
-		if p.starts[i].Sub(p.starts[i-1]) < 4*time.Millisecond {
-			t.Fatal("search or audio start bypassed pacing")
+	for i := 1; i < len(p.downloadStarts); i++ {
+		if p.downloadStarts[i].Sub(p.downloadStarts[i-1]) < 4*time.Millisecond {
+			t.Fatal("audio start bypassed pacing")
 		}
 	}
 	if p.maxActive < 2 || p.maxActive > 10 {
@@ -166,7 +172,7 @@ func TestDownloaderPacesBothSearchAndAudioDownloads(t *testing.T) {
 
 func TestQueuedWorkDoesNotStartDuring429Cooldown(t *testing.T) {
 	p := &pacedProvider{failFirst: true}
-	d := fastDownloader(p, 10, t.TempDir())
+	d := fastDownloader(p, 1, t.TempDir())
 	d.startInterval = 5 * time.Millisecond
 	d.rateLimitDelay = func(int) time.Duration { return 40 * time.Millisecond }
 	d.Run([]string{"first", "second", "third"})
@@ -175,20 +181,51 @@ func TestQueuedWorkDoesNotStartDuring429Cooldown(t *testing.T) {
 	}
 }
 
-func TestAudio429AlsoPausesSubsequentSearches(t *testing.T) {
+func TestAudio429PausesDownloadsButNotSearches(t *testing.T) {
 	p := &pacedProvider{failDownload: true}
-	d := fastDownloader(p, 10, t.TempDir())
+	d := fastDownloader(p, 1, t.TempDir())
 	d.startInterval = 5 * time.Millisecond
 	d.rateLimitDelay = func(int) time.Duration { return 40 * time.Millisecond }
 	d.Run([]string{"first", "second", "third"})
 	var afterLimit []time.Time
-	for _, start := range p.starts {
+	for _, start := range p.downloadStarts {
 		if start.After(p.limitedAt) {
 			afterLimit = append(afterLimit, start)
 		}
 	}
 	if len(afterLimit) == 0 || afterLimit[0].Sub(p.limitedAt) < 40*time.Millisecond {
-		t.Fatalf("audio 429 did not stop requests: %v", p.starts)
+		t.Fatalf("audio 429 did not stop downloads: %v", p.downloadStarts)
+	}
+	if p.searchStarts[1].Sub(p.limitedAt) >= 40*time.Millisecond {
+		t.Fatalf("audio 429 blocked search: %v", p.searchStarts)
+	}
+}
+
+func TestSearchesStartInParallelWithoutOneSecondSpacing(t *testing.T) {
+	allSearching := make(chan struct{})
+	var searchMu sync.Mutex
+	entered := 0
+	p := &pacedProvider{searchHook: func(int) {
+		searchMu.Lock()
+		entered++
+		if entered == 10 {
+			close(allSearching)
+		}
+		searchMu.Unlock()
+		select {
+		case <-allSearching:
+		case <-time.After(time.Second):
+		}
+	}}
+	d := fastDownloader(p, 10, t.TempDir())
+	d.startInterval = 40 * time.Millisecond
+	var queries []string
+	for i := 0; i < 10; i++ {
+		queries = append(queries, fmt.Sprint(i))
+	}
+	d.Run(queries)
+	if len(p.searchStarts) != 10 || p.searchStarts[9].Sub(p.searchStarts[0]) >= 200*time.Millisecond {
+		t.Fatalf("search was paced like downloads: %v", p.searchStarts)
 	}
 }
 
