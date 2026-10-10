@@ -10,7 +10,6 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
-	"meshvault/internal/download"
 )
 
 func TestDownloadCommandIsRegistered(t *testing.T) {
@@ -25,44 +24,41 @@ func TestDownloadCommandIsRegistered(t *testing.T) {
 	}
 }
 
-func TestDownloadProviderSelection(t *testing.T) {
+func TestProviderFlagIsRemoved(t *testing.T) {
 	for _, cmd := range []*cobra.Command{rootCmd, downloadCmd} {
-		name, err := cmd.Flags().GetString("provider")
-		if err != nil || name != "youtube" {
-			t.Fatalf("default provider: %s %v", name, err)
+		if cmd.Flags().Lookup("provider") != nil {
+			t.Errorf("%s still exposes --provider", cmd.Name())
 		}
-		if err := cmd.ParseFlags([]string{"--provider", "youtube"}); err != nil {
+		if err := cmd.ParseFlags([]string{"--provider", "youtube"}); err == nil {
+			t.Errorf("%s accepts removed flag", cmd.Name())
+		}
+	}
+}
+
+func TestBareCommandShowsHelpWithoutSideEffects(t *testing.T) {
+	if os.Getenv("MESHVAULT_TEST_BARE_COMMAND") == "1" {
+		rootCmd.SetArgs([]string{})
+		if err := rootCmd.Execute(); err != nil {
 			t.Fatal(err)
 		}
-		name, _ = cmd.Flags().GetString("provider")
-		if name != "youtube" {
-			t.Fatal("YouTube flag ignored")
-		}
-		if err := cmd.Flags().Set("provider", "youtube"); err != nil {
-			t.Fatal(err)
-		}
+		return
 	}
-	if _, err := newDownloadProvider("mp3party"); err == nil {
-		t.Fatal("removed provider accepted")
+	dir := t.TempDir()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestBareCommandShowsHelpWithoutSideEffects$")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "MESHVAULT_TEST_BARE_COMMAND=1")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bare command failed: %v\n%s", err, output)
 	}
-	if _, err := newDownloadProvider("unknown"); err == nil {
-		t.Fatal("unknown provider accepted")
-	}
-	t.Setenv("PATH", t.TempDir())
-	if _, err := newDownloadProvider("youtube"); err == nil {
-		t.Fatal("missing tools accepted")
-	}
-	tools := t.TempDir()
-	for _, name := range []string{"yt-dlp", "ffmpeg"} {
-		if err := os.WriteFile(filepath.Join(tools, name), []byte("#!/bin/sh\nexit 0\n"), 0700); err != nil {
-			t.Fatal(err)
+	for _, want := range []string{"Usage:", "download"} {
+		if !strings.Contains(string(output), want) {
+			t.Fatalf("missing help %q: %s", want, output)
 		}
 	}
-	t.Setenv("PATH", tools)
-	var provider download.Provider
-	provider, err := newDownloadProvider("youtube")
-	if err != nil || provider.Name() != "youtube" {
-		t.Fatalf("YouTube provider unavailable: %v", err)
+	files, err := os.ReadDir(dir)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("bare command created files: %v, %v", files, err)
 	}
 }
 
