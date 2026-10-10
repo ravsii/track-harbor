@@ -6,13 +6,12 @@ import (
 	"io"
 	"os"
 	"path"
+	"strconv"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
-// progressReader оборачивает io.ReadCloser и вызывает callback
-// асинхронно с частотой не чаще чем throttle (не блокирует чтение).
+// progressReader сообщает число прочитанных байт после каждого чтения.
 type progressReader struct {
 	reader     io.ReadCloser
 	total      int64
@@ -34,7 +33,6 @@ func (pr *progressReader) Read(p []byte) (int, error) {
 		pr.downloaded.Add(int64(n))
 		downloaded := pr.downloaded.Load()
 
-		// колбэк асинхронно — не блокируем io.Copy
 		if pr.onProgress != nil {
 			pr.onProgress(downloaded, pr.total)
 		}
@@ -70,26 +68,27 @@ func (d *Downloader) Run(queries []string) {
 	sem := make(chan struct{}, d.workers)
 	var wg sync.WaitGroup
 
-	for _, query := range queries {
+	for i, query := range queries {
 		wg.Add(1)
 		sem <- struct{}{}
+		jobID := strconv.Itoa(i + 1)
+		d.sendEvent(StatusSearching, jobID, query, nil)
 
-		go func(q string) {
+		go func(id, q string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			d.downloadQuery(q)
-		}(query)
+			d.downloadQuery(id, q)
+		}(jobID, query)
 	}
 
 	wg.Wait()
 
 	if d.display != nil {
-		time.Sleep(100 * time.Millisecond)
 		d.display.Stop()
 	}
 }
 
-func (d *Downloader) sendEvent(kind StatusKind, name string, err error) {
+func (d *Downloader) sendEvent(kind StatusKind, jobID, name string, err error) {
 	if d.display == nil {
 		switch kind {
 		case StatusSearching:
@@ -101,6 +100,7 @@ func (d *Downloader) sendEvent(kind StatusKind, name string, err error) {
 	}
 
 	d.display.Update(StatusEvent{
+		JobID:  jobID,
 		Kind:   kind,
 		Source: d.provider.Name(),
 		Name:   name,
@@ -108,24 +108,23 @@ func (d *Downloader) sendEvent(kind StatusKind, name string, err error) {
 	})
 }
 
-func (d *Downloader) downloadQuery(query string) {
-	d.sendEvent(StatusSearching, query, nil)
-
+func (d *Downloader) downloadQuery(jobID, query string) {
 	track, err := d.provider.Search(query)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			d.sendEvent(StatusFailed, query, fmt.Errorf("no results"))
+			d.sendEvent(StatusFailed, jobID, query, fmt.Errorf("no results"))
 		} else {
-			d.sendEvent(StatusFailed, query, err)
+			d.sendEvent(StatusFailed, jobID, query, err)
 		}
 		return
 	}
 
 	name := track.Artist + " — " + track.Title
+	d.sendEvent(StatusSearching, jobID, name, nil)
 
 	resp, err := d.provider.Download(track)
 	if err != nil {
-		d.sendEvent(StatusFailed, name, err)
+		d.sendEvent(StatusFailed, jobID, name, err)
 		return
 	}
 
@@ -133,37 +132,38 @@ func (d *Downloader) downloadQuery(query string) {
 	f, err := os.Create(filePath)
 	if err != nil {
 		resp.Body.Close()
-		d.sendEvent(StatusFailed, name, err)
+		d.sendEvent(StatusFailed, jobID, name, err)
 		return
 	}
 
 	// Шлём начальное событие старта скачивания
-	d.sendEventDownloading(name, resp.ContentLength, 0)
+	d.sendEventDownloading(jobID, name, resp.ContentLength, 0)
 
-	// pr := newProgressReader(resp.Body, resp.ContentLength,
-	// 	func(downloaded, total int64) {
-	// 		d.sendEventDownloading(name, total, downloaded)
-	// 	})
+	pr := newProgressReader(resp.Body, resp.ContentLength,
+		func(downloaded, total int64) {
+			d.sendEventDownloading(jobID, name, total, downloaded)
+		})
 
-	_, err = io.Copy(f, resp.Body)
-	// pr.Close()
+	_, err = io.Copy(f, pr)
+	pr.Close()
 	f.Close()
 
 	if err != nil {
 		os.Remove(filePath)
-		d.sendEvent(StatusFailed, name, err)
+		d.sendEvent(StatusFailed, jobID, name, err)
 		return
 	}
 
-	d.sendEvent(StatusDone, name, nil)
+	d.sendEvent(StatusDone, jobID, name, nil)
 }
 
 // sendEventDownloading отправляет событие скачивания с прогрессом.
-func (d *Downloader) sendEventDownloading(name string, total, downloaded int64) {
+func (d *Downloader) sendEventDownloading(jobID, name string, total, downloaded int64) {
 	if d.display == nil {
 		return
 	}
 	d.display.Update(StatusEvent{
+		JobID:           jobID,
 		Kind:            StatusDownloading,
 		Source:          d.provider.Name(),
 		Name:            name,

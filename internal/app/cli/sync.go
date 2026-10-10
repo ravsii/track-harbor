@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -18,7 +21,18 @@ var syncCmd = &cobra.Command{
 	Short: "sync",
 	Long:  `sync long`,
 	Run: func(cmd *cobra.Command, args []string) {
-		info, err := spotify.GetSongInfo()
+		fmt.Println("Parse spotify headers:")
+		hMap, err := parseHeaders()
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Println(hMap)
+
+		info, err := spotify.GetSongInfo(
+			hMap["authorization"],
+			hMap["client-token"],
+		)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -67,4 +81,27 @@ var syncCmd = &cobra.Command{
 			log.Fatalln(err)
 		}
 	},
+}
+
+func parseHeaders() (map[string]string, error) {
+	scanner := bufio.NewScanner(os.Stdin)
+
+	headerMap := make(map[string]string)
+
+	for scanner.Scan() {
+		text := scanner.Text()
+		headers := strings.SplitN(text, ":", 2)
+		if len(headers) != 2 {
+			fmt.Println(headers)
+			continue
+		}
+		key, value := strings.ToLower(headers[0]), strings.TrimSpace(headers[1])
+		headerMap[key] = value
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return headerMap, nil
 }

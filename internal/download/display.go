@@ -2,8 +2,8 @@ package download
 
 import (
 	"fmt"
-	"sort"
 	"sync"
+	"time"
 )
 
 // StatusKind — тип события для статус-дисплея.
@@ -18,6 +18,7 @@ const (
 
 // StatusEvent — событие жизненного цикла обработки одного трека/запроса.
 type StatusEvent struct {
+	JobID           string // постоянный ID запроса, не зависит от найденного названия
 	Kind            StatusKind
 	Source          string // имя провайдера ("mp3party")
 	Name            string // название запроса или "Artist — Title"
@@ -30,46 +31,93 @@ type StatusEvent struct {
 // Выводит две секции: "Downloading" (активные) и "Completed" (завершённые).
 type Display struct {
 	mu      sync.Mutex
-	active  map[string]*StatusEvent // текущее состояние активных (Source::Name → событие)
+	active  map[string]*StatusEvent // Source::JobID → событие
+	order   []string                // порядок появления запросов
 	done    []StatusEvent           // только терминальные (Done/Failed)
 	lines   int                     // сколько строк напечатали в прошлый раз
 	started bool
+	dirty   bool
+	stopped bool
+	stop    chan struct{}
+	wg      sync.WaitGroup
 }
 
 func NewDisplay() *Display {
-	return &Display{active: make(map[string]*StatusEvent)}
+	return &Display{active: make(map[string]*StatusEvent), stop: make(chan struct{})}
 }
 
 // Update — потокобезопасный вызов из горутин-воркеров.
 func (d *Display) Update(evt StatusEvent) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.stopped {
+		return
+	}
 
-	key := evt.Source + "::" + evt.Name
+	id := evt.JobID
+	if id == "" {
+		id = evt.Name
+	}
+	key := evt.Source + "::" + id
 
 	if isTerminal(evt.Kind) {
 		// Терминальное — убираем из активных и добавляем в завершённые
 		delete(d.active, key)
+		for i, k := range d.order {
+			if k == key {
+				d.order = append(d.order[:i], d.order[i+1:]...)
+				break
+			}
+		}
 		d.done = append(d.done, evt)
 	} else {
 		// Промежуточное (Searching/Downloading) — обновляем или создаём в active
+		if _, exists := d.active[key]; !exists {
+			d.order = append(d.order, key)
+		}
 		d.active[key] = &evt
 	}
 
-	d.render()
+	d.dirty = true
+	if !d.started {
+		d.render()
+		d.dirty = false
+		d.wg.Add(1)
+		go d.refresh()
+	}
+}
+
+// refresh отделяет частоту перерисовки от скорости чтения файлов.
+func (d *Display) refresh() {
+	defer d.wg.Done()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-d.stop:
+			return
+		case <-ticker.C:
+			d.mu.Lock()
+			if d.dirty && !d.stopped {
+				d.render()
+				d.dirty = false
+			}
+			d.mu.Unlock()
+		}
+	}
 }
 
 // Stop — финальный вывод (отключает ANSI-перерисовку).
 func (d *Display) Stop() {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.lines > 0 {
-		fmt.Printf("\033[%dA", d.lines)
-		fmt.Print("\033[J")
+	if !d.stopped {
+		d.stopped = true
+		close(d.stop)
+		d.render()
+		d.printSummary()
 	}
-
-	d.printSummary()
+	d.mu.Unlock()
+	d.wg.Wait()
 }
 
 // render перерисовывает экран.
@@ -110,7 +158,7 @@ func (d *Display) render() {
 
 		const maxDisplay = 10
 		start := 0
-		if len(d.done) > maxDisplay {
+		if !d.stopped && len(d.done) > maxDisplay {
 			start = len(d.done) - maxDisplay
 		}
 
@@ -129,8 +177,8 @@ func (d *Display) render() {
 			rows++
 		}
 
-		if len(d.done) > maxDisplay {
-			remaining := len(d.done) - maxDisplay
+		if start > 0 {
+			remaining := start
 			fmt.Printf("  … and %d more\n", remaining)
 			rows++
 		}
@@ -153,28 +201,6 @@ func (d *Display) printSummary() {
 	fmt.Printf("\nDone: %d ok, %d failed\n", ok, fail)
 }
 
-// progress сортирует активные события:
-// 1. Downloading — по убыванию процента прогресса (самые близкие к завершению сверху)
-// 2. Searching — в конце
-func sortActive(evs []StatusEvent) {
-	sort.Slice(evs, func(i, j int) bool {
-		// Сначала Downloading, потом Searching
-		if evs[i].Kind != evs[j].Kind {
-			return evs[i].Kind == StatusDownloading
-		}
-		// Оба Downloading — сортируем по убыванию прогресса
-		if evs[i].Kind == StatusDownloading {
-			pctI := progressPercent(evs[i])
-			pctJ := progressPercent(evs[j])
-			if pctI != pctJ {
-				return pctI > pctJ
-			}
-		}
-		// Стабильный порядок для одинаковых — по имени
-		return evs[i].Name < evs[j].Name
-	})
-}
-
 // progressPercent возвращает 0..100 прогресс скачивания (или -1 если неизвестен).
 func progressPercent(ev StatusEvent) float64 {
 	if ev.TotalBytes <= 0 {
@@ -187,17 +213,16 @@ func progressPercent(ev StatusEvent) float64 {
 	return pct
 }
 
-// activeUnsafe возвращает активные события (из карты active), отсортированные по прогрессу.
+// activeUnsafe возвращает активные события в порядке появления запросов.
 // Мьютекс должен быть захвачен вызывающим.
 func (d *Display) activeUnsafe() []StatusEvent {
 	if len(d.active) == 0 {
 		return nil
 	}
 	out := make([]StatusEvent, 0, len(d.active))
-	for _, ev := range d.active {
-		out = append(out, *ev)
+	for _, key := range d.order {
+		out = append(out, *d.active[key])
 	}
-	sortActive(out)
 	return out
 }
 
