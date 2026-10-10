@@ -20,16 +20,24 @@ import (
 )
 
 const (
-	testFolder      = "tmp_music"
-	downloadWorkers = 10
+	testFolder             = "tmp_music"
+	defaultDownloadWorkers = 50
 )
 
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Скачать все треки из базы",
-	Long:  "Скачать все треки из meshtune.db в tmp_music через YouTube. Параллельность фиксирована: 10 загрузок.",
+	Long:  "Скачать все треки из meshtune.db в tmp_music через YouTube. Число параллельных задач — минимум из числа валидных прокси и --workers (по умолчанию 50).",
+	PreRunE: func(cmd *cobra.Command, args []string) error {
+		_, err := downloadWorkerLimit(cmd)
+		return err
+	},
 
 	Run: func(cmd *cobra.Command, args []string) {
+		workerLimit, err := downloadWorkerLimit(cmd)
+		if err != nil {
+			log.Fatal(err)
+		}
 		logger, closeLog, err := download.NewFileLogger("logs/download.jsonl")
 		if err != nil {
 			log.Fatalln("создание журнала:", err)
@@ -145,7 +153,10 @@ var downloadCmd = &cobra.Command{
 		}
 		provider.WithProxies(pool)
 		fmt.Fprintf(out, "Пул прокси готов: %d. Выбор LRU: давно не использованный прокси без активной паузы HTTP 429.\n", pool.Len())
-		downloader := download.New(provider, downloadWorkers, testFolder).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
+		workers := effectiveDownloadWorkers(pool.Len(), workerLimit)
+		fmt.Fprintf(out, "Параллельность поиска и скачивания: %d (валидных прокси: %d, лимит --workers: %d).\n", workers, pool.Len(), workerLimit)
+		logger.Info("workers_configured", zap.Int("workers", workers), zap.Int("proxy_count", pool.Len()), zap.Int("workers_limit", workerLimit))
+		downloader := download.New(provider, workers, testFolder).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
 
 		queries := buildQueriesLogged(songList, logger)
 		logger.Info("queries_prepared", zap.Int("total", len(queries)))
@@ -175,7 +186,23 @@ func buildQueriesLogged(songs []repository.Song, logger *zap.Logger) []string {
 }
 
 func init() {
+	downloadCmd.Flags().Int("workers", defaultDownloadWorkers, "Лимит параллельных задач поиска и скачивания (>0); фактически не больше числа валидных прокси")
 	downloadCmd.Flags().Bool("pprof", false, "Save cpu+mem profile to meshvault_{cpu,mem}.pprof")
 	downloadCmd.Flags().Bool("allocs", false, "Save allocs profile to meshvault_allocs.pprof")
 	rootCmd.AddCommand(downloadCmd)
+}
+
+func downloadWorkerLimit(cmd *cobra.Command) (int, error) {
+	limit, err := cmd.Flags().GetInt("workers")
+	if err != nil {
+		return 0, err
+	}
+	if limit <= 0 {
+		return 0, fmt.Errorf("--workers должен быть положительным числом")
+	}
+	return limit, nil
+}
+
+func effectiveDownloadWorkers(proxyCount, limit int) int {
+	return min(proxyCount, limit)
 }
