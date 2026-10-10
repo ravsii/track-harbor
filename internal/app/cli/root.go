@@ -100,8 +100,12 @@ var rootCmd = &cobra.Command{
 		}
 
 		disp := download.NewDisplay()
+		store, err := repository.NewDownloadedTracksRepository(database)
+		if err != nil {
+			log.Fatalln("инициализация истории скачиваний:", err)
+		}
 		provider := mp3party.NewProvider()
-		downloader := download.New(provider, downloadWorkers, testFolder).WithDisplay(disp)
+		downloader := download.New(provider, downloadWorkers, testFolder).WithDownloadStore(store).WithDisplay(disp)
 
 		queries := buildQueries(songList)
 		downloader.Run(queries)

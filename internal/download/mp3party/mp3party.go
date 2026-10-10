@@ -24,7 +24,8 @@ var defaultUA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/2
 
 // Provider реализует download.Provider для mp3party.net
 type Provider struct {
-	client *http.Client
+	client         *http.Client
+	downloadClient *http.Client
 }
 
 func NewProvider() *Provider {
@@ -37,11 +38,27 @@ func NewProvider() *Provider {
 		MaxIdleConnsPerHost: 10,
 		IdleConnTimeout:     90 * time.Second,
 	}
+	// The download host serves parallel HTTP/2 streams much slower than
+	// separate HTTP/1.1 connections. Do not change metadata requests.
+	protocols := new(http.Protocols)
+	protocols.SetHTTP1(true)
+	downloadTransport := &http.Transport{
+		Protocols:           protocols,
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 10,
+		IdleConnTimeout:     90 * time.Second,
+	}
 	return &Provider{
 		client: &http.Client{
 			Jar:       jar,
 			Transport: transport,
 			Timeout:   30 * time.Second,
+		},
+		downloadClient: &http.Client{
+			Jar:       jar,
+			Transport: downloadTransport,
+			// Client.Timeout includes reading the entire audio response body.
+			Timeout: 5 * time.Minute,
 		},
 	}
 }
@@ -68,9 +85,13 @@ func (p *Provider) Download(track download.Track) (download.DownloadResponse, er
 
 	req.Header.Set("User-Agent", defaultUA)
 
-	resp, err := p.client.Do(req)
+	resp, err := p.downloadClient.Do(req)
 	if err != nil {
 		return download.DownloadResponse{}, fmt.Errorf("do request: %w", err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return download.DownloadResponse{}, fmt.Errorf("download: HTTP %d", resp.StatusCode)
 	}
 
 	return download.DownloadResponse{

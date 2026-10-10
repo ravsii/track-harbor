@@ -1,11 +1,12 @@
 package download
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path"
+	"path/filepath"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -50,6 +51,8 @@ type Downloader struct {
 	workers   int
 	outputDir string
 	display   *Display
+	store     DownloadStore
+	fileLocks sync.Map // absolute file path → *sync.Mutex
 }
 
 // New создаёт Downloader.
@@ -121,6 +124,26 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 
 	name := track.Artist + " — " + track.Title
 	d.sendEvent(StatusSearching, jobID, name, nil)
+	filePath, err := filepath.Abs(filepath.Join(d.outputDir, track.ID+".mp3"))
+	if err != nil {
+		d.sendEvent(StatusFailed, jobID, name, err)
+		return
+	}
+	// Different playlist entries can resolve to the same provider track.
+	// Check and download under one lock so they cannot overwrite each other.
+	lock, _ := d.fileLocks.LoadOrStore(filePath, &sync.Mutex{})
+	mu := lock.(*sync.Mutex)
+	mu.Lock()
+	defer mu.Unlock()
+	verified, err := d.alreadyDownloaded(track.ID, filePath)
+	if err != nil {
+		d.sendEvent(StatusFailed, jobID, name, fmt.Errorf("проверка скачанного файла: %w", err))
+		return
+	}
+	if verified {
+		d.sendEvent(StatusSkipped, jobID, name, nil)
+		return
+	}
 
 	resp, err := d.provider.Download(track)
 	if err != nil {
@@ -128,13 +151,15 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 		return
 	}
 
-	filePath := path.Join(d.outputDir, track.ID+".mp3")
-	f, err := os.Create(filePath)
+	// Only replace the destination after a complete, successfully closed copy.
+	f, err := os.CreateTemp(filepath.Dir(filePath), ".download-*.tmp")
 	if err != nil {
 		resp.Body.Close()
 		d.sendEvent(StatusFailed, jobID, name, err)
 		return
 	}
+	defer os.Remove(f.Name())
+	defer f.Close()
 
 	// Шлём начальное событие старта скачивания
 	d.sendEventDownloading(jobID, name, resp.ContentLength, 0)
@@ -144,12 +169,24 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 			d.sendEventDownloading(jobID, name, total, downloaded)
 		})
 
-	_, err = io.Copy(f, pr)
-	pr.Close()
-	f.Close()
+	hash := sha256.New()
+	written, err := io.Copy(io.MultiWriter(f, hash), pr)
+	bodyCloseErr := pr.Close()
+	fileCloseErr := f.Close()
+	if err == nil {
+		err = errors.Join(bodyCloseErr, fileCloseErr)
+	}
+	if err == nil && resp.ContentLength >= 0 && written != resp.ContentLength {
+		err = fmt.Errorf("неполный файл: получено %d из %d байт", written, resp.ContentLength)
+	}
+	if err == nil {
+		err = os.Rename(f.Name(), filePath)
+	}
+	if err == nil && d.store != nil {
+		err = d.store.SaveHash(d.provider.Name(), track.ID, filePath, fmt.Sprintf("%x", hash.Sum(nil)))
+	}
 
 	if err != nil {
-		os.Remove(filePath)
 		d.sendEvent(StatusFailed, jobID, name, err)
 		return
 	}

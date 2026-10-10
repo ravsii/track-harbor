@@ -106,3 +106,17 @@ func TestDisplayStopKeepsAllResults(t *testing.T) {
 		t.Fatalf("final output retained %d of 12 results: %q", got, final)
 	}
 }
+
+func TestDisplayReportsSkippedFilesSeparately(t *testing.T) {
+	output := captureDisplayOutput(t, func() {
+		d := NewDisplay()
+		d.Update(StatusEvent{JobID: "1", Kind: StatusSkipped, Name: "Cached track"})
+		d.Stop()
+		if len(d.active) != 0 {
+			t.Fatal("skipped track remained active")
+		}
+	})
+	if !strings.Contains(output, "хеш совпадает") || !strings.Contains(output, "0 ok, 0 failed, 1 skipped") {
+		t.Fatalf("skipped track shown as a download: %q", output)
+	}
+}

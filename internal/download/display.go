@@ -14,6 +14,7 @@ const (
 	StatusDownloading                   // скачивание конкретного трека
 	StatusDone                          // успешно сохранён
 	StatusFailed                        // ошибка на любом этапе
+	StatusSkipped                       // файл уже скачан и его хеш совпал
 )
 
 // StatusEvent — событие жизненного цикла обработки одного трека/запроса.
@@ -33,7 +34,7 @@ type Display struct {
 	mu      sync.Mutex
 	active  map[string]*StatusEvent // Source::JobID → событие
 	order   []string                // порядок появления запросов
-	done    []StatusEvent           // только терминальные (Done/Failed)
+	done    []StatusEvent           // только терминальные (Done/Failed/Skipped)
 	lines   int                     // сколько строк напечатали в прошлый раз
 	started bool
 	dirty   bool
@@ -169,6 +170,10 @@ func (d *Display) render() {
 				icon = "✗"
 				desc = ev.Err.Error()
 			}
+			if ev.Kind == StatusSkipped {
+				icon = "↷"
+				desc = "уже скачан, хеш совпадает"
+			}
 			if desc != "" {
 				fmt.Printf("  %s [%s] %s — %s\n", icon, ev.Source, ev.Name, desc)
 			} else {
@@ -189,16 +194,22 @@ func (d *Display) render() {
 
 // printSummary печатает итоговую статистику.
 func (d *Display) printSummary() {
-	var ok, fail int
+	var ok, fail, skipped int
 	for _, ev := range d.done {
 		switch ev.Kind {
 		case StatusDone:
 			ok++
 		case StatusFailed:
 			fail++
+		case StatusSkipped:
+			skipped++
 		}
 	}
-	fmt.Printf("\nDone: %d ok, %d failed\n", ok, fail)
+	fmt.Printf("\nDone: %d ok, %d failed", ok, fail)
+	if skipped > 0 {
+		fmt.Printf(", %d skipped", skipped)
+	}
+	fmt.Println()
 }
 
 // progressPercent возвращает 0..100 прогресс скачивания (или -1 если неизвестен).
@@ -227,7 +238,7 @@ func (d *Display) activeUnsafe() []StatusEvent {
 }
 
 func isTerminal(k StatusKind) bool {
-	return k == StatusDone || k == StatusFailed
+	return k == StatusDone || k == StatusFailed || k == StatusSkipped
 }
 
 // progressBar возвращает визуальный индикатор прогресса скачивания,
