@@ -144,7 +144,7 @@ var downloadCmd = &cobra.Command{
 			fatal(fmt.Errorf("подготовка прокси: %w", err))
 		}
 		provider.WithProxies(pool)
-		fmt.Fprintf(out, "Пул прокси готов: %d. Поиск и скачивание используют случайный прокси для каждой попытки.\n", pool.Len())
+		fmt.Fprintf(out, "Пул прокси готов: %d. Выбор LRU: давно не использованный прокси без активной паузы HTTP 429.\n", pool.Len())
 		downloader := download.New(provider, downloadWorkers, testFolder).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
 
 		queries := buildQueriesLogged(songList, logger)

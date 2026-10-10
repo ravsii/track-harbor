@@ -48,15 +48,23 @@ func (p *Provider) run(stage string, timeout time.Duration, args ...string) ([]b
 	defer cancel()
 	// Never invoke a shell; query strings are a single argument, not commands.
 	options := []string{"--ignore-config", "--no-progress", "--no-cache-dir", "--socket-timeout", "15", "--retries", "0", "--fragment-retries", "0", "--extractor-retries", "0", "--file-access-retries", "0"}
+	var proxyAddress string
 	if p.proxies != nil {
-		address, err := p.proxies.Next()
+		var err error
+		if pool, ok := p.proxies.(interface {
+			NextContext(context.Context) (string, error)
+		}); ok {
+			proxyAddress, err = pool.NextContext(ctx)
+		} else {
+			proxyAddress, err = p.proxies.Next()
+		}
 		if err != nil {
 			return nil, fmt.Errorf("yt-dlp %s proxy: %w", stage, err)
 		}
-		if address == "" {
+		if proxyAddress == "" {
 			return nil, fmt.Errorf("yt-dlp %s: empty proxy; direct connection forbidden", stage)
 		}
-		options = append(options, "--proxy", address)
+		options = append(options, "--proxy", proxyAddress)
 	}
 	cmd := exec.CommandContext(ctx, p.executable, append(options, args...)...)
 	if p.proxies != nil {
@@ -77,10 +85,27 @@ func (p *Provider) run(stage string, timeout time.Duration, args ...string) ([]b
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	output, err := cmd.Output()
+	rateLimited := false
+	if err != nil {
+		for _, match := range httpStatus.FindAllStringSubmatch(stderr.String(), -1) {
+			if match[1] == "429" {
+				rateLimited = true
+				break
+			}
+		}
+		if rateLimited && proxyAddress != "" {
+			if pool, ok := p.proxies.(interface{ ReportRateLimit(string) }); ok {
+				pool.ReportRateLimit(proxyAddress)
+			}
+		}
+	}
 	if ctx.Err() != nil {
 		return nil, fmt.Errorf("yt-dlp %s: %w", stage, ctx.Err())
 	}
 	if err != nil {
+		if rateLimited {
+			return nil, &download.HTTPError{Stage: stage, StatusCode: 429}
+		}
 		if strings.Contains(strings.ToLower(stderr.String()), "timed out") {
 			return nil, fmt.Errorf("yt-dlp %s: %w", stage, context.DeadlineExceeded)
 		}

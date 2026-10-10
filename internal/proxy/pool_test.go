@@ -171,7 +171,7 @@ func TestFullCacheExpiresNoLaterThanFirstVerifiedProxy(t *testing.T) {
 	}
 }
 
-func TestRandomPoolUsesEveryProxyBeforeRepeating(t *testing.T) {
+func TestLRUPoolUsesEveryAvailableProxyBeforeRepeating(t *testing.T) {
 	pool, err := NewPool([]string{"http://203.0.113.1:80", "http://203.0.113.2:80", "http://203.0.113.3:80"})
 	if err != nil {
 		t.Fatal(err)

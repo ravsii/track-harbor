@@ -290,3 +290,69 @@ func TestProxySelectionFailureNeverRunsDirectly(t *testing.T) {
 		t.Fatal("yt-dlp ran without a selected proxy")
 	}
 }
+
+type rateLimitedProxies struct {
+	sequenceProxies
+	reported         string
+	selectionContext bool
+}
+
+func (p *rateLimitedProxies) NextContext(ctx context.Context) (string, error) {
+	if _, ok := ctx.Deadline(); !ok {
+		return "", errors.New("proxy wait has no timeout")
+	}
+	p.selectionContext = true
+	return p.Next()
+}
+func (p *rateLimitedProxies) ReportRateLimit(address string) { p.reported = address }
+
+func TestYouTubeReports429ForTheSelectedProxy(t *testing.T) {
+	for _, status := range []int{429, 403} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			fakeTools(t, fmt.Sprintf("echo 'ERROR: HTTP Error %d' >&2; exit 1", status))
+			p, err := NewProvider()
+			if err != nil {
+				t.Fatal(err)
+			}
+			pool := &rateLimitedProxies{}
+			p.WithProxies(pool)
+			_, err = p.Search("Song")
+			var httpErr *download.HTTPError
+			if !errors.As(err, &httpErr) || httpErr.StatusCode != status {
+				t.Fatalf("typed error lost: %v", err)
+			}
+			if !pool.selectionContext {
+				t.Fatal("proxy wait ignores operation deadline")
+			}
+			want := ""
+			if status == 429 {
+				want = "http://203.0.113.1:8080"
+			}
+			if pool.reported != want {
+				t.Fatalf("reported %s, want %s", pool.reported, want)
+			}
+		})
+	}
+}
+
+func TestYouTubeReports429EvenAlongsideOtherSubprocessErrors(t *testing.T) {
+	for _, stderr := range []string{"HTTP Error 429; connection timed out", "HTTP Error 403; HTTP Error 429"} {
+		t.Run(stderr, func(t *testing.T) {
+			fakeTools(t, "echo '"+stderr+"' >&2; exit 1")
+			p, err := NewProvider()
+			if err != nil {
+				t.Fatal(err)
+			}
+			pool := &rateLimitedProxies{}
+			p.WithProxies(pool)
+			_, err = p.Search("Song")
+			var httpErr *download.HTTPError
+			if !errors.As(err, &httpErr) || httpErr.StatusCode != 429 {
+				t.Fatalf("429 masked by other stderr: %v", err)
+			}
+			if pool.reported != "http://203.0.113.1:8080" {
+				t.Fatal("mixed error did not pause selected proxy")
+			}
+		})
+	}
+}
