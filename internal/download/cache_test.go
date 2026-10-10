@@ -72,7 +72,7 @@ func TestDownloadPersistsHashAndSkipsVerifiedFileOnNextRun(t *testing.T) {
 	if err := db.QueryRow("SELECT sha256, source, track_id, file_path FROM downloaded_tracks").Scan(&hash, &source, &trackID, &filePath); err != nil {
 		t.Fatal(err)
 	}
-	if hash != "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721" || source != "test" || trackID != "track" || filePath != filepath.Join(dir, "track.mp3") {
+	if hash != "bef57ec7f53a6d40beb640a780a639c83bc29ac8a9816f1fc6c5c6dcd93c4721" || source != "test" || trackID != "track" || filePath != filepath.Join(dir, "Artist — Title [track].mp3") {
 		t.Fatalf("incorrect downloaded-file record: hash=%s source=%s id=%s path=%s", hash, source, trackID, filePath)
 	}
 	// Reopen SQLite itself so an in-memory flag cannot satisfy this check.
@@ -106,7 +106,7 @@ func TestDownloadRedownloadsMissingChangedOrUntrackedFiles(t *testing.T) {
 			dir := t.TempDir()
 			p := &cacheProvider{body: "abcdef", length: 6}
 			runCached(t, p, dir, store, "query")
-			file := filepath.Join(dir, "track.mp3")
+			file := filepath.Join(dir, "Artist — Title [track].mp3")
 			switch state {
 			case "missing":
 				if err := os.Remove(file); err != nil {
@@ -122,7 +122,7 @@ func TestDownloadRedownloadsMissingChangedOrUntrackedFiles(t *testing.T) {
 				}
 			case "different directory":
 				dir = t.TempDir()
-				file = filepath.Join(dir, "track.mp3")
+				file = filepath.Join(dir, "Artist — Title [track].mp3")
 			}
 			p.body = "ghijkl"
 			display := runCached(t, p, dir, store, "query")
@@ -152,7 +152,7 @@ func TestDownloadRedownloadsMissingChangedOrUntrackedFiles(t *testing.T) {
 func TestIncompleteDownloadDoesNotReplaceFileOrSaveHash(t *testing.T) {
 	db, store := cacheDatabase(t)
 	dir := t.TempDir()
-	file := filepath.Join(dir, "track.mp3")
+	file := filepath.Join(dir, "Artist — Title [track].mp3")
 	if err := os.WriteFile(file, []byte("old file"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -217,7 +217,7 @@ func TestCacheWriteFailureIsNotReportedAsSuccess(t *testing.T) {
 func TestCacheReadFailureDoesNotOverwriteFile(t *testing.T) {
 	db, store := cacheDatabase(t)
 	dir := t.TempDir()
-	file := filepath.Join(dir, "track.mp3")
+	file := filepath.Join(dir, "Artist — Title [track].mp3")
 	if err := os.WriteFile(file, []byte("old file"), 0600); err != nil {
 		t.Fatal(err)
 	}

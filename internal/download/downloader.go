@@ -169,6 +169,13 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 			retryNeeded, rateLimited = true, true
 			delay, changed := gate.block(generation)
 			if changed {
+				if d.display != nil {
+					pauseStage := "download"
+					if gate == d.searchGate {
+						pauseStage = "search"
+					}
+					d.display.SetRateLimitPause(pauseStage, time.Now().Add(delay))
+				}
 				logger.Warn("rate_limit_pause", zap.String("stage", stage), zap.Duration("delay", delay), zap.Int("http_status", 429))
 			}
 			logger.Warn("retry_scheduled", append(fields, zap.Int("retry", attempt+1), zap.Duration("delay", delay))...)
@@ -194,7 +201,7 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	logger = logger.With(zap.String("track_id", track.ID), zap.String("name", name))
 	logger.Info("search_finished", zap.Duration("duration", time.Since(started)))
 	d.sendEvent(StatusChecking, jobID, name, nil)
-	filePath, err := filepath.Abs(filepath.Join(d.outputDir, track.ID+".mp3"))
+	filePath, err := filepath.Abs(filepath.Join(d.outputDir, audioFilename(track)))
 	if err != nil {
 		fail("path", err)
 		return
@@ -208,6 +215,9 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	mu.Lock()
 	defer mu.Unlock()
 	verified, err := d.alreadyDownloaded(track.ID, filePath)
+	if err == nil && !verified {
+		verified, err = d.migrateLegacyFile(track.ID, filePath, logger)
+	}
 	if err != nil {
 		fail("check_hash", fmt.Errorf("проверка скачанного файла: %w", err))
 		return

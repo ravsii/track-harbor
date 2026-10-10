@@ -61,12 +61,15 @@ type Display struct {
 	size        func() (width, height int)
 	lastFrame   []string
 	animation   int
+	rateLimits  map[string]time.Time
+	now         func() time.Time
 }
 
 func NewDisplay() *Display {
 	fd := int(os.Stdout.Fd())
 	return &Display{
 		active: make(map[string]*StatusEvent), stop: make(chan struct{}),
+		rateLimits: make(map[string]time.Time), now: time.Now,
 		out: os.Stdout, interactive: term.IsTerminal(fd),
 		size: func() (int, int) {
 			width, height, err := term.GetSize(fd)
@@ -82,6 +85,19 @@ func (d *Display) SetTotal(total int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	d.total = total
+	d.dirty = true
+	d.startUnsafe()
+}
+
+func (d *Display) SetRateLimitPause(stage string, until time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.stopped {
+		return
+	}
+	if until.After(d.rateLimits[stage]) {
+		d.rateLimits[stage] = until
+	}
 	d.dirty = true
 	d.startUnsafe()
 }
@@ -152,6 +168,9 @@ func (d *Display) refresh() {
 }
 
 func (d *Display) hasIndeterminateUnsafe() bool {
+	if len(d.rateLimits) > 0 {
+		return true
+	}
 	for _, ev := range d.active {
 		if ev.Kind != StatusDownloading || ev.TotalBytes <= 0 {
 			return true
@@ -226,6 +245,17 @@ func (d *Display) render() {
 	}
 	if waiting > 0 {
 		frame = append(frame, fmt.Sprintf("Ожидают повтора: %d", waiting))
+	}
+	for _, pause := range []struct{ stage, label string }{
+		{"search", "поиск приостановлен"}, {"download", "скачивание приостановлено"},
+	} {
+		remaining := d.rateLimits[pause.stage].Sub(d.now())
+		if remaining <= 0 {
+			delete(d.rateLimits, pause.stage)
+			continue
+		}
+		seconds := int((remaining + time.Second - 1) / time.Second)
+		frame = append(frame, "HTTP 429: "+pause.label, fmt.Sprintf("  Повтор через: %d с (автоматически)", seconds))
 	}
 	var sections []string
 	sectionCount := 0
