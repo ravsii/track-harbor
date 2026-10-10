@@ -28,6 +28,7 @@ const (
 	StatusNotFound                       // успешный поиск без результатов
 	StatusSaving                         // сохранение файла и хеша
 	StatusRetryWaiting                   // отложенный повтор в очереди
+	StatusQueued                         // ожидание разрешения на старт запроса
 )
 
 // StatusEvent — событие жизненного цикла обработки одного трека/запроса.
@@ -193,14 +194,16 @@ func (d *Display) render() {
 	waiting := 0
 	processing := active[:0:0]
 	for _, ev := range active {
-		if ev.Kind == StatusRetryWaiting {
-			waiting++
+		if ev.Kind == StatusRetryWaiting || ev.Kind == StatusQueued {
+			queued++
+			if ev.Kind == StatusRetryWaiting {
+				waiting++
+			}
 		} else {
 			processing = append(processing, ev)
 		}
 	}
 	active = processing
-	queued += waiting
 	width, height := d.size()
 	frame := []string{"Скачивание"}
 	// Wrap counters between fields, not through values, in narrow windows.

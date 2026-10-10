@@ -80,7 +80,7 @@ func TestZapFileLoggingIsParallelAndAppendsRuns(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		queries = append(queries, string(rune('a'+i)))
 	}
-	New(&cacheProvider{body: "abcdef", length: 6, distinct: true}, 10, t.TempDir()).WithLogger(logger).Run(queries)
+	fastDownloader(&cacheProvider{body: "abcdef", length: 6, distinct: true}, 10, t.TempDir()).WithLogger(logger).Run(queries)
 	if err := closeLog(); err != nil {
 		t.Fatal(err)
 	}

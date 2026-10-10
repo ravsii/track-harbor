@@ -12,6 +12,8 @@ import (
 func fastDownloader(p Provider, workers int, dir string) *Downloader {
 	d := New(p, workers, dir)
 	d.retryDelay = func(int) time.Duration { return time.Millisecond }
+	d.startInterval = 0
+	d.rateLimitDelay = func(int) time.Duration { return time.Millisecond }
 	return d
 }
 
