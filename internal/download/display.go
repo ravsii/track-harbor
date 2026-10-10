@@ -2,8 +2,16 @@ package download
 
 import (
 	"fmt"
+	"io"
+	"os"
+	"strings"
 	"sync"
 	"time"
+	"unicode"
+	"unicode/utf8"
+
+	"github.com/mattn/go-runewidth"
+	"golang.org/x/term"
 )
 
 // StatusKind — тип события для статус-дисплея.
@@ -15,6 +23,8 @@ const (
 	StatusDone                          // успешно сохранён
 	StatusFailed                        // ошибка на любом этапе
 	StatusSkipped                       // файл уже скачан и его хеш совпал
+	StatusChecking                      // проверка файла и его хеша
+	StatusPreparing                     // получение разрешений и ответа сервера
 )
 
 // StatusEvent — событие жизненного цикла обработки одного трека/запроса.
@@ -29,22 +39,56 @@ type StatusEvent struct {
 }
 
 // Display — live-статус в терминале через ANSI.
-// Выводит две секции: "Downloading" (активные) и "Completed" (завершённые).
+// Показывает счётчики и только активные треки, без списка завершённых.
 type Display struct {
-	mu      sync.Mutex
-	active  map[string]*StatusEvent // Source::JobID → событие
-	order   []string                // порядок появления запросов
-	done    []StatusEvent           // только терминальные (Done/Failed/Skipped)
-	lines   int                     // сколько строк напечатали в прошлый раз
-	started bool
-	dirty   bool
-	stopped bool
-	stop    chan struct{}
-	wg      sync.WaitGroup
+	mu          sync.Mutex
+	active      map[string]*StatusEvent // Source::JobID → событие
+	order       []string                // порядок появления запросов
+	done        []StatusEvent           // только терминальные (Done/Failed/Skipped)
+	lines       int                     // сколько строк напечатали в прошлый раз
+	started     bool
+	dirty       bool
+	stopped     bool
+	stop        chan struct{}
+	wg          sync.WaitGroup
+	total       int
+	out         io.Writer
+	interactive bool
+	size        func() (width, height int)
+	lastFrame   []string
+	animation   int
 }
 
 func NewDisplay() *Display {
-	return &Display{active: make(map[string]*StatusEvent), stop: make(chan struct{})}
+	fd := int(os.Stdout.Fd())
+	return &Display{
+		active: make(map[string]*StatusEvent), stop: make(chan struct{}),
+		out: os.Stdout, interactive: term.IsTerminal(fd),
+		size: func() (int, int) {
+			width, height, err := term.GetSize(fd)
+			if err != nil || width < 1 || height < 1 {
+				return 80, 24
+			}
+			return width, height
+		},
+	}
+}
+
+func (d *Display) SetTotal(total int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.total = total
+	d.dirty = true
+	d.startUnsafe()
+}
+
+func (d *Display) startUnsafe() {
+	if d.interactive && !d.started && !d.stopped {
+		d.render()
+		d.dirty = false
+		d.wg.Add(1)
+		go d.refresh()
+	}
 }
 
 // Update — потокобезопасный вызов из горутин-воркеров.
@@ -80,12 +124,7 @@ func (d *Display) Update(evt StatusEvent) {
 	}
 
 	d.dirty = true
-	if !d.started {
-		d.render()
-		d.dirty = false
-		d.wg.Add(1)
-		go d.refresh()
-	}
+	d.startUnsafe()
 }
 
 // refresh отделяет частоту перерисовки от скорости чтения файлов.
@@ -99,13 +138,22 @@ func (d *Display) refresh() {
 			return
 		case <-ticker.C:
 			d.mu.Lock()
-			if d.dirty && !d.stopped {
+			if !d.stopped && (d.dirty || d.hasIndeterminateUnsafe()) {
 				d.render()
 				d.dirty = false
 			}
 			d.mu.Unlock()
 		}
 	}
+}
+
+func (d *Display) hasIndeterminateUnsafe() bool {
+	for _, ev := range d.active {
+		if ev.Kind != StatusDownloading || ev.TotalBytes <= 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // Stop — финальный вывод (отключает ANSI-перерисовку).
@@ -115,7 +163,6 @@ func (d *Display) Stop() {
 		d.stopped = true
 		close(d.stop)
 		d.render()
-		d.printSummary()
 	}
 	d.mu.Unlock()
 	d.wg.Wait()
@@ -124,76 +171,6 @@ func (d *Display) Stop() {
 // render перерисовывает экран.
 // Мьютекс должен быть захвачен вызывающим.
 func (d *Display) render() {
-	if !d.started {
-		d.started = true
-	} else if d.lines > 0 {
-		fmt.Printf("\033[%dA", d.lines)
-		fmt.Print("\033[J")
-	}
-
-	// ---- Downloading ----
-	fmt.Println("━━━ Downloading ━━━━━━━━━━━━━━━━━━━━━")
-	rows := 1
-
-	active := d.activeUnsafe()
-	for _, ev := range active {
-		icon := "⋯"
-		desc := "searching..."
-		if ev.Kind == StatusDownloading {
-			icon = "⬇"
-			desc = ev.progressBar()
-		}
-		fmt.Printf("  %s [%s] %s  %s\n", icon, ev.Source, ev.Name, desc)
-		rows++
-	}
-
-	if len(active) == 0 {
-		fmt.Println("  (idle)")
-		rows++
-	}
-
-	// ---- Completed (только терминальные) ----
-	if len(d.done) > 0 {
-		fmt.Println("━━━ Completed ───────────────────────")
-		rows++
-
-		const maxDisplay = 10
-		start := 0
-		if !d.stopped && len(d.done) > maxDisplay {
-			start = len(d.done) - maxDisplay
-		}
-
-		for _, ev := range d.done[start:] {
-			icon := "✓"
-			var desc string
-			if ev.Kind == StatusFailed {
-				icon = "✗"
-				desc = ev.Err.Error()
-			}
-			if ev.Kind == StatusSkipped {
-				icon = "↷"
-				desc = "уже скачан, хеш совпадает"
-			}
-			if desc != "" {
-				fmt.Printf("  %s [%s] %s — %s\n", icon, ev.Source, ev.Name, desc)
-			} else {
-				fmt.Printf("  %s [%s] %s\n", icon, ev.Source, ev.Name)
-			}
-			rows++
-		}
-
-		if start > 0 {
-			remaining := start
-			fmt.Printf("  … and %d more\n", remaining)
-			rows++
-		}
-	}
-
-	d.lines = rows
-}
-
-// printSummary печатает итоговую статистику.
-func (d *Display) printSummary() {
 	var ok, fail, skipped int
 	for _, ev := range d.done {
 		switch ev.Kind {
@@ -205,11 +182,125 @@ func (d *Display) printSummary() {
 			skipped++
 		}
 	}
-	fmt.Printf("\nDone: %d ok, %d failed", ok, fail)
-	if skipped > 0 {
-		fmt.Printf(", %d skipped", skipped)
+	active := d.activeUnsafe()
+	total := max(d.total, len(active)+len(d.done))
+	queued := max(0, total-len(active)-len(d.done))
+	width, height := d.size()
+	frame := []string{"Скачивание"}
+	// Wrap counters between fields, not through values, in narrow windows.
+	for _, group := range [][]string{
+		{fmt.Sprintf("Всего: %d", total), fmt.Sprintf("В очереди: %d", queued), fmt.Sprintf("В работе: %d", len(active))},
+		{fmt.Sprintf("Скачано: %d", ok), fmt.Sprintf("Пропущено: %d", skipped), fmt.Sprintf("Ошибок: %d", fail)},
+	} {
+		line := ""
+		for _, counter := range group {
+			if line != "" && runewidth.StringWidth(line+"  "+counter) > width-1 {
+				frame = append(frame, line)
+				line = ""
+			}
+			if line != "" {
+				line += "  "
+			}
+			line += counter
+		}
+		frame = append(frame, line)
 	}
-	fmt.Println()
+	// Leave one column and one screen row free to avoid auto-wrap/scroll.
+	visible := len(active)
+	if d.interactive {
+		visible = min(visible, max(0, height-1-len(frame)))
+		if visible < len(active) && visible > 0 {
+			visible--
+		}
+	}
+	for _, ev := range active[:visible] {
+		status := "Ищется"
+		pct := -1.0
+		switch ev.Kind {
+		case StatusChecking:
+			status = "Проверка хеша"
+		case StatusPreparing:
+			status = "Подготовка"
+		case StatusDownloading:
+			status = "Скачивается"
+			pct = progressPercent(ev)
+			if pct >= 0 {
+				status = fmt.Sprintf("Скачивается %3.0f%%", pct)
+			}
+		}
+		// Keep the progress bar complete; shorten the name first. Narrow
+		// windows get a shorter bar rather than a clipped closing bracket.
+		available := max(0, width-1-runewidth.StringWidth("  "+status+" []  "))
+		nameReserve := min(12, max(0, available-4))
+		barCellWidth := max(runewidth.RuneWidth('█'), runewidth.RuneWidth('░'))
+		barWidth := min(20, (available-nameReserve)/max(1, barCellWidth))
+		if pct < 0 {
+			barWidth = min(10, barWidth)
+		}
+		if barWidth > 0 {
+			bar := make([]rune, barWidth)
+			filled := int(pct / 100 * float64(barWidth))
+			for i := range bar {
+				bar[i] = '░'
+				if pct >= 0 && i < filled || pct < 0 && i == d.animation%barWidth {
+					bar[i] = '█'
+				}
+			}
+			status += " [" + string(bar) + "]"
+		}
+		frame = append(frame, fmt.Sprintf("  %s  %s", status, ev.Name))
+	}
+	if visible < len(active) {
+		frame = append(frame, fmt.Sprintf("  … ещё в работе: %d", len(active)-visible))
+	}
+	if d.interactive && len(frame) >= height {
+		frame = frame[:max(1, height-1)]
+	}
+	for i, line := range frame {
+		line = strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) || unicode.IsSpace(r) {
+				return ' '
+			}
+			return r
+		}, line)
+		frame[i] = runewidth.Truncate(line, max(0, width-1), "…")
+	}
+	if d.interactive && d.started && d.lines > 0 {
+		// Recalculate physical rows if the terminal became narrower since
+		// the preceding frame and reflowed its previously printed text.
+		rows := 0
+		for _, line := range d.lastFrame {
+			rows += physicalRows(line, width)
+		}
+		rows = min(rows, max(1, height-1))
+		fmt.Fprintf(d.out, "\033[%dA\r\033[J", rows)
+	}
+	for _, line := range frame {
+		fmt.Fprintln(d.out, line)
+	}
+	d.lastFrame = frame
+	d.lines = len(frame)
+	d.started = true
+	d.animation++
+}
+
+// Wide glyphs wrap before a one-cell gap, so dividing the total width can
+// underestimate the number of physical rows after terminal reflow.
+func physicalRows(line string, width int) int {
+	width = max(1, width)
+	rows := 1
+	for runewidth.StringWidth(line) > width {
+		prefix := runewidth.Truncate(line, width, "")
+		if prefix == "" {
+			// Even a single glyph cannot fit in an extremely narrow window.
+			_, size := utf8.DecodeRuneInString(line)
+			line = line[size:]
+		} else {
+			line = line[len(prefix):]
+		}
+		rows++
+	}
+	return rows
 }
 
 // progressPercent возвращает 0..100 прогресс скачивания (или -1 если неизвестен).

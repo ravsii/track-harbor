@@ -68,6 +68,9 @@ func (d *Downloader) WithDisplay(disp *Display) *Downloader {
 
 // Run запускает worker pool для параллельной обработки поисковых запросов.
 func (d *Downloader) Run(queries []string) {
+	if d.display != nil {
+		d.display.SetTotal(len(queries))
+	}
 	sem := make(chan struct{}, d.workers)
 	var wg sync.WaitGroup
 
@@ -123,7 +126,7 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 	}
 
 	name := track.Artist + " — " + track.Title
-	d.sendEvent(StatusSearching, jobID, name, nil)
+	d.sendEvent(StatusChecking, jobID, name, nil)
 	filePath, err := filepath.Abs(filepath.Join(d.outputDir, track.ID+".mp3"))
 	if err != nil {
 		d.sendEvent(StatusFailed, jobID, name, err)
@@ -144,6 +147,7 @@ func (d *Downloader) downloadQuery(jobID, query string) {
 		d.sendEvent(StatusSkipped, jobID, name, nil)
 		return
 	}
+	d.sendEvent(StatusPreparing, jobID, name, nil)
 
 	resp, err := d.provider.Download(track)
 	if err != nil {
