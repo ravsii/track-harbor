@@ -131,8 +131,8 @@ var downloadCmd = &cobra.Command{
 		if err != nil {
 			fatal(fmt.Errorf("инициализация кеша прокси: %w", err))
 		}
-		fmt.Fprintln(out, "Прокси: загрузка свежего кеша или проверка списка ProxyScrape (до 2000 адресов, 100 проверок параллельно)…")
-		pool, err := proxy.NewManager(proxy.NewProxyScrape(), proxy.NewHTTPSChecker(), proxyStore, logger).Prepare(cmd.Context(), func(checked, total, valid int) {
+		fmt.Fprintln(out, "Прокси: загрузка кеша или списков ProxyScrape + Proxifly (1000 проверок параллельно, таймаут 1 с)…")
+		pool, err := proxy.NewManager(proxy.NewSources(logger), proxy.NewHTTPSChecker(), proxyStore, logger).Prepare(cmd.Context(), func(checked, total, valid int) {
 			if total == 0 && valid > 0 {
 				fmt.Fprintf(out, "Прокси из кеша: %d (кеш действует 1 час)\n", valid)
 			}

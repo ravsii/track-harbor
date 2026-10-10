@@ -88,7 +88,7 @@ func TestExpiredCacheRefetchesAndProbes(t *testing.T) {
 	}
 }
 
-func TestProbePoolCapsBatchAt2000AndConcurrencyAt100(t *testing.T) {
+func TestProbePoolChecksEntireBatchWithConcurrencyAt1000(t *testing.T) {
 	_, store := proxyDB(t)
 	var urls []string
 	for i := 0; i < 2100; i++ {
@@ -102,7 +102,7 @@ func TestProbePoolCapsBatchAt2000AndConcurrencyAt100(t *testing.T) {
 		active++
 		maximum = max(maximum, active)
 		checked++
-		if checked == 100 {
+		if checked == 1000 {
 			close(ready)
 		}
 		mu.Unlock()
@@ -119,8 +119,55 @@ func TestProbePoolCapsBatchAt2000AndConcurrencyAt100(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, err := NewManager(sourceFunc(func(context.Context) ([]string, error) { return urls, nil }), checker, store, nil).Prepare(ctx, nil)
-	if err == nil || checked != 2000 || maximum != 100 {
+	if err == nil || checked != 2100 || maximum != 1000 {
 		t.Fatalf("checked=%d max=%d err=%v", checked, maximum, err)
+	}
+}
+
+func TestOldPartialCacheTriggersFullDiscovery(t *testing.T) {
+	_, store := proxyDB(t)
+	if err := store.Save(context.Background(), "http://203.0.113.1:8080", time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	var fetched bool
+	pool, err := NewManager(sourceFunc(func(context.Context) ([]string, error) {
+		fetched = true
+		return []string{"socks5://203.0.113.2:8080"}, nil
+	}), checkFunc(func(context.Context, string) error { return nil }), store, nil).Prepare(context.Background(), nil)
+	if err != nil || !fetched || pool.Len() != 1 {
+		t.Fatalf("old cache prevented discovery: fetched=%v err=%v", fetched, err)
+	}
+	cached, err := NewManager(nil, nil, store, nil).Prepare(context.Background(), nil)
+	if err != nil || cached.Len() != 1 || cached.List()[0] != "socks5://203.0.113.2:8080" {
+		t.Fatalf("old failed proxy survived refresh: pool=%v err=%v", cached, err)
+	}
+}
+
+type expiryStore struct {
+	*repository.ProxyRepository
+	earliest      time.Time
+	completeUntil time.Time
+}
+
+func (s *expiryStore) Save(ctx context.Context, address string, until time.Time) error {
+	if s.earliest.IsZero() || until.Before(s.earliest) {
+		s.earliest = until
+	}
+	return s.ProxyRepository.Save(ctx, address, until)
+}
+func (s *expiryStore) Complete(ctx context.Context, until time.Time) error {
+	s.completeUntil = until
+	return s.ProxyRepository.Complete(ctx, until)
+}
+func TestFullCacheExpiresNoLaterThanFirstVerifiedProxy(t *testing.T) {
+	_, repository := proxyDB(t)
+	store := &expiryStore{ProxyRepository: repository}
+	_, err := NewManager(sourceFunc(func(context.Context) ([]string, error) { return []string{"http://203.0.113.1:80"}, nil }), checkFunc(func(context.Context, string) error { return nil }), store, nil).Prepare(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.completeUntil.After(store.earliest) {
+		t.Fatal("full cache marker outlives earliest proxy")
 	}
 }
 

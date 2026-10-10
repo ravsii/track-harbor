@@ -9,8 +9,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const MaxProxies = 2000
-const ProbeWorkers = 100
+const ProbeWorkers = 1000
 const CacheTTL = time.Hour
 
 type Source interface {
@@ -22,6 +21,9 @@ type Checker interface {
 type Store interface {
 	Valid(context.Context, time.Time) ([]string, error)
 	Save(context.Context, string, time.Time) error
+	Complete(context.Context, time.Time) error
+	Ready(context.Context, time.Time) (bool, error)
+	Reset(context.Context) error
 }
 
 type Manager struct {
@@ -48,15 +50,12 @@ func usableAddresses(input []string) []string {
 		}
 		seen[address] = true
 		addresses = append(addresses, address)
-		if len(addresses) == MaxProxies {
-			break
-		}
 	}
 	return addresses
 }
 
 // Prepare uses a fresh cache without probing. Otherwise it obtains one batch
-// and verifies it with a fixed 100-worker pool; only successful probes persist.
+// and verifies all pages with a fixed 1000-worker pool; only successful probes persist.
 func (m *Manager) Prepare(ctx context.Context, progress func(checked, total, valid int)) (*Pool, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -65,7 +64,11 @@ func (m *Manager) Prepare(ctx context.Context, progress func(checked, total, val
 	if err != nil {
 		return nil, fmt.Errorf("чтение кеша прокси: %w", err)
 	}
-	if cached = usableAddresses(cached); len(cached) > 0 {
+	ready, err := m.store.Ready(ctx, time.Now())
+	if err != nil {
+		return nil, fmt.Errorf("чтение состояния кеша прокси: %w", err)
+	}
+	if cached = usableAddresses(cached); ready && len(cached) > 0 {
 		m.logger.Info("proxy_cache_loaded", zap.Int("valid", len(cached)))
 		if progress != nil {
 			progress(0, 0, len(cached))
@@ -74,9 +77,12 @@ func (m *Manager) Prepare(ctx context.Context, progress func(checked, total, val
 	}
 	addresses, err := m.source.Fetch(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("ProxyScrape: %w", err)
+		return nil, fmt.Errorf("получение списка прокси: %w", err)
 	}
 	addresses = usableAddresses(addresses)
+	if err := m.store.Reset(ctx); err != nil {
+		return nil, fmt.Errorf("обновление кеша прокси: %w", err)
+	}
 	m.logger.Info("proxy_probe_started", zap.Int("total", len(addresses)), zap.Int("workers", ProbeWorkers))
 	if progress != nil {
 		progress(0, len(addresses), 0)
@@ -120,6 +126,7 @@ func (m *Manager) Prepare(ctx context.Context, progress func(checked, total, val
 	go func() { wg.Wait(); close(results) }()
 	defer func() { cancel(); wg.Wait() }()
 	var valid []string
+	var fullUntil time.Time
 	checked := 0
 	for result := range results {
 		if err := ctx.Err(); err != nil {
@@ -127,7 +134,11 @@ func (m *Manager) Prepare(ctx context.Context, progress func(checked, total, val
 		}
 		checked++
 		if result.valid {
-			if err := m.store.Save(ctx, result.address, result.checkedAt.Add(CacheTTL)); err != nil {
+			until := result.checkedAt.Add(CacheTTL)
+			if fullUntil.IsZero() || until.Before(fullUntil) {
+				fullUntil = until
+			}
+			if err := m.store.Save(ctx, result.address, until); err != nil {
 				return nil, fmt.Errorf("запись кеша прокси: %w", err)
 			}
 			valid = append(valid, result.address)
@@ -143,5 +154,10 @@ func (m *Manager) Prepare(ctx context.Context, progress func(checked, total, val
 		return nil, err
 	}
 	m.logger.Info("proxy_probe_finished", zap.Int("checked", checked), zap.Int("valid", len(valid)))
+	if len(valid) > 0 {
+		if err := m.store.Complete(ctx, fullUntil); err != nil {
+			return nil, fmt.Errorf("сохранение состояния кеша прокси: %w", err)
+		}
+	}
 	return NewPool(valid)
 }
