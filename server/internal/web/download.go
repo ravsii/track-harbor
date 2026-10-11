@@ -114,7 +114,15 @@ func (s *Server) startDownload(w http.ResponseWriter, r *http.Request) {
 	d.mu.Unlock()
 	d.publish(downloadState{Running: true, Total: len(tracks), Message: "Download started."})
 	go d.run(tracks)
-	http.Redirect(w, r, "/?source="+sourceName(r), http.StatusSeeOther)
+	if r.Header.Get("Accept") == "application/json" {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
+	view := r.PostForm.Get("view")
+	if view != "spotify" && view != "vk" && view != "music" {
+		view = sourceName(r)
+	}
+	http.Redirect(w, r, "/?source="+view, http.StatusSeeOther)
 }
 
 func (d *downloadJob) run(tracks []store.Track) {
@@ -200,7 +208,9 @@ func downloadFilename(t store.Track) string {
 	if len(label) > 110 {
 		var short strings.Builder
 		for _, char := range label {
-			if short.Len()+len(string(char)) > 110 { break }
+			if short.Len()+len(string(char)) > 110 {
+				break
+			}
 			short.WriteRune(char)
 		}
 		label = short.String()

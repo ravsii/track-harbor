@@ -57,9 +57,7 @@ func (r *Routes) candidates() []string {
 			addresses = append(addresses, r.Personal...)
 		case "random_proxy":
 			if len(r.Public) != 0 {
-				for i := range r.Public {
-					addresses = append(addresses, r.Public[(r.next+i)%len(r.Public)])
-				}
+				addresses = append(addresses, r.Public[r.next])
 				r.next = (r.next + 1) % len(r.Public)
 			}
 		}
@@ -109,6 +107,9 @@ func (r *Routes) try(ctx context.Context, event func(Event), stage string, reque
 				return nil
 			}
 			last = err
+			if errors.Is(err, errNoMatch) {
+				return err
+			}
 			if errors.Is(err, errRateLimit) {
 				r.mu.Lock()
 				if r.cooling == nil {
@@ -122,6 +123,9 @@ func (r *Routes) try(ctx context.Context, event func(Event), stage string, reque
 			return last
 		}
 		wait := time.Second << min(attempt, 4)
+		if errors.Is(last, errRateLimit) {
+			wait = 0
+		}
 		if !next.IsZero() && next.After(time.Now()) {
 			wait = time.Until(next)
 		}
@@ -140,6 +144,7 @@ func (r *Routes) try(ctx context.Context, event func(Event), stage string, reque
 }
 
 var errRateLimit = errors.New("download rate limited")
+var errNoMatch = errors.New("no YouTube match")
 
 // Save converts into a staged MP3 and atomically publishes it. The caller owns
 // its own file history; the returned hash describes the published bytes.
@@ -188,7 +193,7 @@ func Save(ctx context.Context, t Track, destination string, routes *Routes, even
 				return fmt.Errorf("invalid YouTube search response")
 			}
 			if len(result.Entries) == 0 {
-				return fmt.Errorf("no YouTube match")
+				return errNoMatch
 			}
 			if !videoID.MatchString(result.Entries[0].ID) {
 				return fmt.Errorf("invalid YouTube video ID")
@@ -263,8 +268,12 @@ func Save(ctx context.Context, t Track, destination string, routes *Routes, even
 	}
 	event(Event{Stage: "metadata"})
 	var image []byte
+	artworkRoutes := routes
+	if t.Source == "vk" {
+		artworkRoutes = &Routes{Order: []string{"direct"}}
+	}
 	if t.CoverURL != "" {
-		image, _ = artwork(ctx, t.CoverURL, routes, event)
+		image, _ = artwork(ctx, t.CoverURL, artworkRoutes, event)
 	}
 	if len(image) == 0 && video != "" {
 		image, _ = artwork(ctx, "https://i.ytimg.com/vi/"+video+"/hqdefault.jpg", routes, event)

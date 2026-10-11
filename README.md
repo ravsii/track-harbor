@@ -51,7 +51,7 @@ the date added to My Music). If `date` is missing, it retains the previously
 stored date or uses the first sync time for a new track. Server track lists
 show the newest dates first.
 
-The server keeps `config.json` and `library.db` beside its executable by default.
+The server keeps `config.yaml` and `library.db` beside its executable by default.
 For local development, `make run-server` builds the server in the Git-ignored
 `.local-server/` directory, where it also stores these files. Set
 `TRACKHARBOR_SERVER_CONFIG` and `TRACKHARBOR_SERVER_DB` to override either file
@@ -59,18 +59,26 @@ path independently, or `TRACKHARBOR_SERVER_DIR` to change the default directory
 for both. Relative paths are resolved from the process working directory.
 Existing data in `~/.trackharbor-server/` is not moved automatically; copy its
 files to the new location if you want to retain your connected sources and tracks.
+If the default directory contains an older `config.json` but no `config.yaml`,
+the server converts the JSON to private YAML on its next start, preserving
+the saved settings and removing the old JSON only after conversion succeeds.
 The server never reads the CLI's credentials or `~/.trackharbor/vault.db`.
 Server downloads are manual: use **Download missing tracks** or the button next
 to an individual track. Progress is pushed to the browser with SSE. The server
 keeps MP3s in its own `downloads/` directory beside `library.db`, with download
 history in that same server database. Existing files are skipped after checking
 their stored hashes. Sync VK again if its signed audio URLs expire.
+The **Music** page plays downloaded server MP3s locally with previous/next,
+pause, seek, volume, shuffle and repeat-one controls. Playback does not start
+automatically; missing files are not streamed from Spotify or VK.
 
-The server's `config.json` accepts `download_dir` (an optional MP3 directory),
+The server's `config.yaml` accepts `download_dir` (an optional MP3 directory),
 `strategy` (ordered `direct`, `personal_proxy`, `random_proxy`), `personal_proxy`
-and `public_proxy` (arrays of proxy URLs). With no strategy set, the server uses
-direct access. Unlike the CLI, this server version currently requires **explicit
-public proxy addresses**; it does not discover or check public proxy lists.
+and `public_proxy` (arrays of proxy URLs), and `vk_strategy` (currently only
+`["direct"]`). With no Spotify strategy set, the server uses direct access;
+VK audio and cover requests always use direct access. Unlike the CLI, this
+server version currently requires **explicit public proxy addresses** for
+`random_proxy`; it does not discover or check public proxy lists.
 It never copies the CLI proxy configuration or cache. `yt-dlp` and FFmpeg must
 be installed for Spotify downloads; FFmpeg is required for VK downloads.
 Its config supports a `listen` address on a loopback IP (default

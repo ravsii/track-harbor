@@ -50,6 +50,7 @@ func New(db *store.Store, configs ...config.Config) http.Handler {
 	mux.HandleFunc("POST /sync", s.syncSource)
 	mux.HandleFunc("POST /download", s.startDownload)
 	mux.HandleFunc("GET /download/events", s.downloadEvents)
+	mux.HandleFunc("GET /audio", s.playAudio)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
