@@ -31,6 +31,8 @@ playlists or YouTube video/audio without requiring a subscription.
   unless explicitly requested. Do not delete existing tests.
 - Keep changes small, simple, and focused on the task. Follow the existing code
   structure and style; avoid unnecessary abstractions and unrelated refactoring.
+- Never delete or edit existing database migrations. If a migration is wrong,
+  correct or reverse it with a new migration instead.
 - Report errors with clear explanations so problems can be fixed quickly and
   development can continue.
 - Server logs use structured JSON via zap with Info as the default minimum

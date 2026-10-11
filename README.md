@@ -38,6 +38,9 @@ Server logs are structured JSON on stderr at Info level. Downloads use
 `downloads/vk/<owner-id>_<audio-id>.mp3` for VK. Existing MP3 paths recorded in
 the server database remain playable. The browser receives download progress
 over SSE, and MP3 seeking uses HTTP range requests.
+The player remembers the last played track in this browser. On reload it shows
+that track paused if its MP3 is available, or the most recently added
+available track otherwise; playback never starts automatically.
 
 The web UI has **no login** and binds to loopback by default. Do not expose it
 to a network without access control. The old CLI is archived in

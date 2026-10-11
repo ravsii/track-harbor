@@ -68,6 +68,9 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 }
 
 .download-library { overflow-x: auto; }
+.music-library { margin-top: 0; }
+.music-library .library-heading { justify-content: flex-end; margin-bottom: 8px; }
+#content[data-source="music"] { padding-top: 16px; }
 .download-panel #download-toggle { position: relative; display: inline-flex; align-items: center; gap: 8px; margin: 12px 0; overflow: hidden; }
 .download-library .track-head, .download-library .tracks { min-width: 620px; }
 .download-library .track-head, .download-library .tracks li { grid-template-columns: minmax(160px, 1.3fr) minmax(130px, 1fr) 100px minmax(130px, 1fr); }

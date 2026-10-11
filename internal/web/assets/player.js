@@ -5,9 +5,10 @@
   const $ = id => document.getElementById(id);
   const shuffleButton = $('player-shuffle');
   const shuffleKey = 'trackharbor-shuffle';
+  const lastTrackKey = 'trackharbor-last-track';
   const stamp = track => `${track.source}\0${track.artist}\0${track.title}`;
   const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '0:00';
-  let tracks = [], current, history = [], previousVolume = 0.8;
+  let tracks = [], current, selected, candidate = false, restored = false, history = [], previousVolume = 0.8;
   audio.volume = 0.8;
 
   function setShuffle(enabled) {
@@ -41,11 +42,49 @@
       ? Math.round(audio.currentTime / audio.duration * 1000) : 0;
   }
 
+  function select(track) {
+    selected = track;
+    current = stamp(track);
+    const params = new URLSearchParams({source: track.source, artist: track.artist, title: track.title});
+    audio.src = `/audio?${params}`;
+    $('player-track').textContent = `${track.artist} — ${track.title}`;
+    $('player-error').textContent = '';
+    refresh();
+  }
+
+  function chooseCandidate() {
+    if (!tracks.length) {
+      if (candidate) {
+        candidate = false;
+        selected = current = undefined;
+        audio.removeAttribute('src');
+        audio.load();
+        $('player-track').textContent = '';
+        refresh();
+      }
+      return;
+    }
+    if (current && !candidate) return;
+    const available = tracks.find(track => stamp(track) === current);
+    if (candidate && restored && available) return;
+    let remembered;
+    if (!current) {
+      try { remembered = JSON.parse(localStorage.getItem(lastTrackKey)); } catch (_) { /* Storage may be disabled. */ }
+    }
+    const saved = remembered && tracks.find(track => stamp(track) === stamp(remembered));
+    const latest = tracks[0];
+    const choice = saved || latest;
+    restored = !!saved;
+    candidate = true;
+    if (stamp(choice) !== current) select(choice);
+  }
+
   async function loadTracks() {
     try {
       const response = await fetch('/audio/tracks');
       if (!response.ok) throw new Error('unavailable');
       tracks = await response.json();
+      chooseCandidate();
       return true;
     } catch (_) {
       tracks = [];
@@ -60,11 +99,8 @@
       return;
     }
     if (remember && current && current !== stamp(track)) history.push(current);
-    current = stamp(track);
-    const params = new URLSearchParams({source: track.source, artist: track.artist, title: track.title});
-    audio.src = `/audio?${params}`;
-    $('player-track').textContent = `${track.artist} — ${track.title}`;
-    $('player-error').textContent = '';
+    candidate = false;
+    select(track);
     try { await audio.play(); } catch (_) { $('player-error').textContent = 'Could not play this MP3. Check that it is still downloaded.'; }
     refresh();
   }
@@ -94,6 +130,13 @@
   audio.addEventListener('timeupdate', refresh);
   audio.addEventListener('durationchange', refresh);
   audio.addEventListener('play', refresh);
+  audio.addEventListener('playing', () => {
+    candidate = false;
+    if (!selected) return;
+    try {
+      localStorage.setItem(lastTrackKey, JSON.stringify({source: selected.source, artist: selected.artist, title: selected.title}));
+    } catch (_) { /* Playback still works when storage is unavailable. */ }
+  });
   audio.addEventListener('pause', refresh);
   audio.addEventListener('volumechange', updateVolume);
   audio.addEventListener('error', () => { $('player-error').textContent = 'MP3 unavailable. Download it again and refresh the page.'; });

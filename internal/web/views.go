@@ -63,9 +63,11 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     </nav>
     <div class="sidebar-bottom"><span class="dot"></span> LOCAL SERVER <p>This preview runs on your computer only. No web login is configured.</p></div>
   </aside>
-  <main id="content" data-source="{{.Source}}" hx-history-elt>
-    <div class="topline"><span>LIBRARY / {{.Name}}</span><span class="label">EARLY ACCESS</span></div>
-	    <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>{{if eq .Source "downloads"}}See what is queued, downloading, saved, or failed. Sync a source to check and download missing tracks.{{else if eq .Source "music"}}All your tracks from Spotify and VK Music, together and ordered by when they were added.{{else}}Connect your account, sync your library, and explore what you love. Each source has its own collection.{{end}}</p></header>
+	  <main id="content" data-source="{{.Source}}" hx-history-elt>
+	    {{if ne .Source "music"}}
+	    <div class="topline"><span>LIBRARY / {{.Name}}</span><span class="label">EARLY ACCESS</span></div>
+		    <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>{{if eq .Source "downloads"}}See what is queued, downloading, saved, or failed. Sync a source to check and download missing tracks.{{else}}Connect your account, sync your library, and explore what you love. Each source has its own collection.{{end}}</p></header>
+	    {{end}}
 	    {{if and (ne .Source "music") (ne .Source "downloads")}}
     <section class="grid">
         <div class="panel connect"><div class="panel-top"><span class="index">01 / CONNECTION</span><span class="pill {{if .Connected}}connected{{end}}">{{if .Connected}}{{template "icon" "checkmark-circle-02"}} Connected{{else}}{{template "icon" "circle"}} Not connected{{end}}</span></div>
@@ -105,7 +107,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	      <ol class="tracks" id="download-tracks"></ol>
 	    </section>
 	    {{else}}
-    <section class="library {{if eq .Source "music"}}music-library{{end}}"><div class="library-heading"><div><span class="index">{{if eq .Source "music"}}01 / ALL MUSIC{{else}}03 / COLLECTION{{end}}</span><h2>{{if eq .Source "music"}}All tracks{{else}}Your tracks{{end}}</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>
+	    <section class="library {{if eq .Source "music"}}music-library{{end}}"><div class="library-heading">{{if ne .Source "music"}}<div><span class="index">03 / COLLECTION</span><h2>Your tracks</h2></div>{{end}}<span class="count">{{len .Tracks}} TRACKS</span></div>
       {{if .Tracks}}
 	        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span>PLAY</span></div>
 	        <ol class="tracks">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<div class="track-actions"><button type="button" class="play-track secondary" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button></div></li>{{end}}</ol>

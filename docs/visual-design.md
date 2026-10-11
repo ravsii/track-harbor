@@ -18,8 +18,9 @@ the full viewport: logo on the left, current track above the seek bar, and
 the theme button on the far right. The shuffle button toggles between sequential
 and random playback. The volume icon toggles mute without losing the
 previous level. The theme button cycles through System, Light, and Dark.
-The top bar has no track dropdown: Play starts the first saved track, and
-individual tracks are selected from their Play actions in the library.
+The top bar has no track dropdown: on load it shows the last played available
+track, or the most recently added available one, without autoplay. Play starts the
+shown track; individual tracks are selected from their Play actions in the library.
 
 ## Color palette
 
