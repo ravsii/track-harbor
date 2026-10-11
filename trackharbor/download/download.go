@@ -149,8 +149,9 @@ var errRateLimit = errors.New("download rate limited")
 var errNoMatch = errors.New("no YouTube match")
 
 // Save converts into a staged MP3 and publishes it under the audio source ID.
-// The caller owns its file history; existing ID-named files are not overwritten.
-func Save(ctx context.Context, t Track, directory string, routes *Routes, event func(Event)) (string, string, error) {
+// The caller owns its file history. Shared ID-named files are not overwritten;
+// an invalid file already tracked at the same destination may be replaced.
+func Save(ctx context.Context, t Track, directory, trackedPath string, routes *Routes, event func(Event)) (string, string, error) {
 	if event == nil {
 		event = func(Event) {}
 	}
@@ -309,6 +310,12 @@ func Save(ctx context.Context, t Track, directory string, routes *Routes, event 
 	if err := os.Link(stage.Name(), destination); err != nil {
 		if !errors.Is(err, os.ErrExist) {
 			return "", "", err
+		}
+		if trackedPath == destination {
+			if err := os.Rename(stage.Name(), destination); err != nil {
+				return "", "", err
+			}
+			return destination, hex.EncodeToString(h.Sum(nil)), nil
 		}
 		// Another track may have resolved to this ID concurrently. Keep the
 		// first file and record its actual checksum for this track as well.

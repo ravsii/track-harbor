@@ -51,7 +51,7 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("POST /connect", s.connect)
 	mux.HandleFunc("POST /ping", s.pingSource)
 	mux.HandleFunc("POST /sync", s.syncSource)
-	mux.HandleFunc("POST /download", s.startDownload)
+	mux.HandleFunc("GET /download/status", s.downloadStatus)
 	mux.HandleFunc("GET /download/events", s.downloadEvents)
 	mux.HandleFunc("GET /audio", s.playAudio)
 	mux.HandleFunc("GET /audio/tracks", s.playableTracks)
@@ -112,6 +112,9 @@ func sourceName(r *http.Request) string {
 	if r.FormValue("source") == "spotify" {
 		return "spotify"
 	}
+	if r.FormValue("source") == "downloads" {
+		return "downloads"
+	}
 	return "music"
 }
 
@@ -134,7 +137,9 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	source := sourceName(r)
 	data := pageData{Source: source, Name: "Music"}
 	var err error
-	if source == "music" {
+	if source == "downloads" {
+		data.Name = "Downloads"
+	} else if source == "music" {
 		data.Tracks, err = s.store.ListAll()
 	} else {
 		data.Connected, err = s.store.Connected(source)
@@ -348,7 +353,7 @@ func (s *Server) syncSource(w http.ResponseWriter, r *http.Request) {
 		} else {
 			count, err = library.SyncVK(ctx, s.store)
 		}
-		message := fmt.Sprintf("Synced %d tracks. Refresh this view to see them.", count)
+		message := fmt.Sprintf("Synced %d tracks. Checking downloads in the background.", count)
 		if err != nil {
 			// Provider errors may include remote URLs or credentials: never echo them.
 			message = "Sync failed. Previous tracks were kept. Check credentials and try again."
@@ -358,6 +363,15 @@ func (s *Server) syncSource(w http.ResponseWriter, r *http.Request) {
 			s.logger.Error("library sync failed", zap.String("source", source), zap.Bool("timed_out", errors.Is(err, context.DeadlineExceeded)))
 		} else {
 			s.logger.Info("library sync finished", zap.String("source", source), zap.Int("tracks", count))
+			if s.downloads != nil {
+				tracks, listErr := s.store.List(source)
+				if listErr != nil {
+					message = "Library synced, but downloads could not be queued. Try syncing again."
+					s.logger.Error("queue synced tracks failed", zap.String("source", source))
+				} else {
+					s.downloads.enqueue(tracks)
+				}
+			}
 		}
 		s.mu.Lock()
 		s.status[source] = message

@@ -46,7 +46,10 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
         <button type="button" id="player-mute" aria-label="Mute" title="Mute">{{template "icon" "volume-high"}}</button>
         <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume">
       </div>
-      <button type="button" id="theme-choice" class="theme-toggle" aria-label="Theme: system" title="Theme: system">{{template "icon" "computer"}}</button>
+	      <div class="topbar-actions">
+	        <a id="system-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" title="Open Downloads"><span class="system-dot" aria-hidden="true"></span><span id="system-status-text">Checking downloads…</span></a>
+	        <button type="button" id="theme-choice" class="theme-toggle" aria-label="Theme: system" title="Theme: system">{{template "icon" "computer"}}</button>
+	      </div>
       <div id="player-error" role="status" aria-live="polite"></div>
     </div>
   </header>
@@ -55,14 +58,15 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     <nav aria-label="Sources">
       <a class="{{if eq .Source "music"}}active{{end}}" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "music-note-01"}}</span> Music <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
       <a class="{{if eq .Source "spotify"}}active{{end}}" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "spotify"}}</span> Spotify <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
-      <a class="{{if eq .Source "vk"}}active{{end}}" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "vk"}}</span> VK Music <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
+	      <a class="{{if eq .Source "vk"}}active{{end}}" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "vk"}}</span> VK Music <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
+	      <a class="{{if eq .Source "downloads"}}active{{end}}" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "download-01"}}</span> Downloads <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
     </nav>
     <div class="sidebar-bottom"><span class="dot"></span> LOCAL SERVER <p>This preview runs on your computer only. No web login is configured.</p></div>
   </aside>
   <main id="content" data-source="{{.Source}}" hx-history-elt>
     <div class="topline"><span>LIBRARY / {{.Name}}</span><span class="label">EARLY ACCESS</span></div>
-    <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>{{if eq .Source "music"}}All your tracks from Spotify and VK Music, together and ordered by when they were added.{{else}}Connect your account, sync your library, and explore what you love. Each source has its own collection.{{end}}</p></header>
-    {{if ne .Source "music"}}
+	    <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>{{if eq .Source "downloads"}}See what is queued, downloading, saved, or failed. Sync a source to check and download missing tracks.{{else if eq .Source "music"}}All your tracks from Spotify and VK Music, together and ordered by when they were added.{{else}}Connect your account, sync your library, and explore what you love. Each source has its own collection.{{end}}</p></header>
+	    {{if and (ne .Source "music") (ne .Source "downloads")}}
     <section class="grid">
         <div class="panel connect"><div class="panel-top"><span class="index">01 / CONNECTION</span><span class="pill {{if .Connected}}connected{{end}}">{{if .Connected}}{{template "icon" "checkmark-circle-02"}} Connected{{else}}{{template "icon" "circle"}} Not connected{{end}}</span></div>
         <h2>Connect {{.Name}}</h2>
@@ -84,26 +88,31 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
       </div>
       <div class="panel sync"><div class="panel-top"><span class="index">02 / SYNC</span><span class="mini-mark">{{template "icon" "reload"}}</span></div>
         <h2>Bring your tracks in</h2>
-        <p>Fetch your latest liked tracks. Your current list stays available if a sync fails.</p>
+	        <p>Fetch your latest liked tracks, then check and download missing audio in the background. Your current list stays available if a sync fails.</p>
         <form action="/sync" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Sync library <span>{{template "icon" "arrow-right-01"}}</span></button></form>
         <div class="status" aria-live="polite">STATUS <span id="sync-state" hx-get="/status?source={{.Source}}" hx-trigger="every 10s" hx-swap="innerHTML">{{if .Status}}{{.Status}}{{else}}Ready to sync.{{end}}</span></div>
       </div>
     </section>
     {{end}}
-    <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOADS / MANUAL START</span></div>
-      <h2>Save tracks locally</h2><p>Downloads start only when you press a button. Existing MP3s are skipped.</p>
-      <form action="/download" method="post"><input type="hidden" name="mode" value="all"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" {{if not .Tracks}}disabled{{end}}>Download missing tracks <span>{{template "icon" "download-01"}}</span></button></form>
-      <div id="download-state" class="status" role="status" aria-live="polite">Ready to download.</div>
-    </section>
-    <dialog id="download-dialog" aria-labelledby="download-dialog-message"><p id="download-dialog-message"></p><button type="button" id="download-dialog-close">OK</button></dialog>
+	    {{if eq .Source "downloads"}}
+	    <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOAD STATUS</span></div>
+	      <h2>Downloads</h2><p>Synced tracks are checked and saved automatically. Statuses update while this page is open.</p>
+	      <div id="download-state" class="status" role="status" aria-live="polite">Loading download status…</div>
+	    </section>
+	    <section class="library download-library"><div class="library-heading"><div><span class="index">TRACKS</span><h2>Download queue</h2></div><span class="count" id="download-count"></span></div>
+	      <div class="track-head"><span>TRACK</span><span>ARTIST</span><span>SOURCE</span><span>STATUS</span></div>
+	      <ol class="tracks" id="download-tracks"></ol>
+	    </section>
+	    {{else}}
     <section class="library {{if eq .Source "music"}}music-library{{end}}"><div class="library-heading"><div><span class="index">{{if eq .Source "music"}}01 / ALL MUSIC{{else}}03 / COLLECTION{{end}}</span><h2>{{if eq .Source "music"}}All tracks{{else}}Your tracks{{end}}</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>
       {{if .Tracks}}
-        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span>FILE</span></div>
-        <ol class="tracks">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<div class="track-actions"><button type="button" class="play-track secondary" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button><form action="/download" method="post"><input type="hidden" name="mode" value="one"><input type="hidden" name="view" value="{{$.Source}}"><input type="hidden" name="source" value="{{$t.Source}}"><input type="hidden" name="artist" value="{{$t.Artist}}"><input type="hidden" name="title" value="{{$t.Title}}"><button class="secondary" type="submit">{{if $t.FilePath}}Saved{{else}}Download{{end}}</button></form></div></li>{{end}}</ol>
+	        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span>PLAY</span></div>
+	        <ol class="tracks">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<div class="track-actions"><button type="button" class="play-track secondary" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button></div></li>{{end}}</ol>
       {{else}}
         <div class="empty"><span>{{template "icon" "disc"}}</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
       {{end}}
-    </section>
+	    </section>
+	    {{end}}
     <footer>LOCAL DOWNLOADS · TRACKHARBOR</footer>
   </main>
 </div>

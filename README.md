@@ -68,11 +68,14 @@ If the default directory contains an older `config.json` but no `config.yaml`,
 the server converts the JSON to private YAML on its next start, preserving
 the saved settings and removing the old JSON only after conversion succeeds.
 The server never reads the CLI's credentials or `~/.trackharbor/vault.db`.
-Server downloads are manual: use **Download missing tracks** or the button next
-to an individual track. Progress is pushed to the browser with SSE. The server
+Syncing Spotify or VK updates that library, checks its saved MP3s, and downloads
+missing tracks in the background. The **Downloads** tab shows per-track status;
+progress is pushed to the browser with SSE. The server
 keeps MP3s in its own `downloads/` directory beside `library.db`, with download
 history in that same server database. Existing files are skipped after checking
 their stored hashes. Sync VK again if its signed audio URLs expire.
+The top bar shows whether sync or downloads are active, whether tracks need
+attention, or whether all checked tracks are ready; click it to open Downloads.
 New files are named by their actual audio source ID: `downloads/youtube/<video-id>.mp3`
 for Spotify library tracks and `downloads/vk/<owner-id>_<audio-id>.mp3` for VK.
 Already downloaded files retain their recorded paths and remain playable.
@@ -80,7 +83,7 @@ Server logs are JSON on stderr at Info level by default. They record significant
 HTTP requests and SSE stream lifetimes with event counts, not event payloads;
 routine polling, audio requests, and static assets are omitted on success.
 The **Music** page plays downloaded server MP3s locally with previous/next,
-pause, seek, volume, shuffle and repeat-one controls. Playback does not start
+pause, seek, volume and shuffle controls. Playback does not start
 automatically; missing files are not streamed from Spotify or VK.
 
 The server's `config.yaml` accepts `download_dir` (an optional MP3 directory),

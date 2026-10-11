@@ -83,7 +83,7 @@ func logRequests(logger *zap.Logger, mux *http.ServeMux, next http.Handler) http
 
 func routineRequest(route string) bool {
 	switch route {
-	case "GET /assets/", "GET /status", "GET /ping-status", "GET /audio", "GET /audio/tracks":
+	case "GET /assets/", "GET /status", "GET /ping-status", "GET /download/status", "GET /audio", "GET /audio/tracks":
 		return true
 	}
 	return false
