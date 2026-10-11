@@ -163,6 +163,9 @@ var downloadCmd = &cobra.Command{
 		logger.Info("queries_prepared", zap.Int("total", len(queries)), zap.Int("skipped", skipped), zap.Int("pending", len(pending)))
 		if len(pending) == 0 {
 			fmt.Fprintln(out, "Все треки уже скачаны: поиск и подключения не нужны.")
+			disp.SetInitialSkipped(skipped)
+			disp.SetTotal(len(queries))
+			disp.Stop()
 			return
 		}
 		provider, err := youtube.NewProvider()
@@ -260,7 +263,7 @@ var downloadCmd = &cobra.Command{
 		provider.WithStrategy(connection)
 		fmt.Fprintf(out, "Параллельность поиска и скачивания: %d (лимит --workers: %d).\n", workers, workerLimit)
 		logger.Info("workers_configured", zap.String("strategy", strategyName), zap.Int("workers", workers), zap.Int("proxy_count", proxyCount), zap.Int("workers_limit", workerLimit))
-		downloader := download.New(provider, workers, cfg.DownloadDir).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
+		downloader := download.New(provider, workers, cfg.DownloadDir).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp).WithInitialSkipped(skipped)
 
 		downloader.Run(pending)
 	},

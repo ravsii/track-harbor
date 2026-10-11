@@ -62,6 +62,7 @@ type Downloader struct {
 	searchGate     *requestGate
 	downloadGate   *requestGate
 	fileLocks      sync.Map // absolute file path → *sync.Mutex
+	initialSkipped int
 }
 
 // New создаёт Downloader.
@@ -79,14 +80,21 @@ func (d *Downloader) WithDisplay(disp *Display) *Downloader {
 	return d
 }
 
+func (d *Downloader) WithInitialSkipped(count int) *Downloader {
+	d.initialSkipped = max(0, count)
+	return d
+}
+
 // Run запускает worker pool для параллельной обработки поисковых запросов.
 func (d *Downloader) Run(queries []string) {
 	d.searchGate = &requestGate{delay: d.rateLimitDelay}
 	d.downloadGate = &requestGate{interval: d.startInterval, delay: d.rateLimitDelay}
 	started := time.Now()
-	d.logger.Info("run_started", zap.Int("total", len(queries)), zap.Int("workers", d.workers), zap.String("output_dir", d.outputDir))
+	total := len(queries) + d.initialSkipped
+	d.logger.Info("run_started", zap.Int("total", total), zap.Int("initial_skipped", d.initialSkipped), zap.Int("pending", len(queries)), zap.Int("workers", d.workers), zap.String("output_dir", d.outputDir))
 	if d.display != nil {
-		d.display.SetTotal(len(queries))
+		d.display.SetInitialSkipped(d.initialSkipped)
+		d.display.SetTotal(total)
 	}
 	type job struct {
 		id, query      string
@@ -123,7 +131,7 @@ func (d *Downloader) Run(queries []string) {
 	jobs.Wait()
 	close(queue)
 	workers.Wait()
-	d.logger.Info("run_finished", zap.Int("total", len(queries)), zap.Duration("duration", time.Since(started)))
+	d.logger.Info("run_finished", zap.Int("total", total), zap.Int("initial_skipped", d.initialSkipped), zap.Duration("duration", time.Since(started)))
 
 	if d.display != nil {
 		d.display.Stop()

@@ -49,24 +49,25 @@ type StatusEvent struct {
 // Display — live-статус в терминале через ANSI.
 // Показывает счётчики и только активные треки, без списка завершённых.
 type Display struct {
-	mu          sync.Mutex
-	active      map[string]*StatusEvent // Source::JobID → событие
-	order       []string                // порядок появления запросов
-	done        []StatusEvent           // только терминальные (Done/Failed/Skipped)
-	lines       int                     // сколько строк напечатали в прошлый раз
-	started     bool
-	dirty       bool
-	stopped     bool
-	stop        chan struct{}
-	wg          sync.WaitGroup
-	total       int
-	out         io.Writer
-	interactive bool
-	size        func() (width, height int)
-	lastFrame   []string
-	animation   int
-	rateLimits  map[string]time.Time
-	now         func() time.Time
+	mu             sync.Mutex
+	active         map[string]*StatusEvent // Source::JobID → событие
+	order          []string                // порядок появления запросов
+	done           []StatusEvent           // только терминальные (Done/Failed/Skipped)
+	lines          int                     // сколько строк напечатали в прошлый раз
+	started        bool
+	dirty          bool
+	stopped        bool
+	stop           chan struct{}
+	wg             sync.WaitGroup
+	total          int
+	initialSkipped int
+	out            io.Writer
+	interactive    bool
+	size           func() (width, height int)
+	lastFrame      []string
+	animation      int
+	rateLimits     map[string]time.Time
+	now            func() time.Time
 }
 
 func NewDisplay() *Display {
@@ -91,6 +92,15 @@ func (d *Display) SetTotal(total int) {
 	d.total = total
 	d.dirty = true
 	d.startUnsafe()
+}
+
+// SetInitialSkipped seeds statistics without starting terminal redraws while
+// the CLI is still printing startup diagnostics and preparing connections.
+func (d *Display) SetInitialSkipped(count int) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.initialSkipped = max(0, count)
+	d.dirty = true
 }
 
 func (d *Display) SetRateLimitPause(stage string, until time.Time) {
@@ -215,6 +225,7 @@ func (d *Display) Stop() {
 // Мьютекс должен быть захвачен вызывающим.
 func (d *Display) render() {
 	var ok, fail, skipped, notFound int
+	skipped = d.initialSkipped
 	for _, ev := range d.done {
 		switch ev.Kind {
 		case StatusDone:
@@ -228,8 +239,9 @@ func (d *Display) render() {
 		}
 	}
 	active := d.activeUnsafe()
-	total := max(d.total, len(active)+len(d.done))
-	queued := max(0, total-len(active)-len(d.done))
+	completed := len(d.done) + d.initialSkipped
+	total := max(d.total, len(active)+completed)
+	queued := max(0, total-len(active)-completed)
 	waiting := 0
 	processing := active[:0:0]
 	for _, ev := range active {
