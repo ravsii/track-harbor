@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"trackharbor/server/internal/config"
 	"trackharbor/server/internal/library"
 	"trackharbor/server/internal/store"
 	"trackharbor/spotify"
@@ -30,10 +31,14 @@ type Server struct {
 	mu         sync.Mutex
 	status     map[string]string
 	pingStatus map[string]string
+	downloads  *downloadJob
 }
 
-func New(db *store.Store) http.Handler {
+func New(db *store.Store, configs ...config.Config) http.Handler {
 	s := &Server{store: db, status: map[string]string{}, pingStatus: map[string]string{}}
+	if len(configs) != 0 {
+		s.downloads = newDownloadJob(db, configs[0])
+	}
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(assets, "assets")
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(static)))
@@ -43,6 +48,8 @@ func New(db *store.Store) http.Handler {
 	mux.HandleFunc("POST /connect", s.connect)
 	mux.HandleFunc("POST /ping", s.pingSource)
 	mux.HandleFunc("POST /sync", s.syncSource)
+	mux.HandleFunc("POST /download", s.startDownload)
+	mux.HandleFunc("GET /download/events", s.downloadEvents)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
@@ -63,7 +70,7 @@ func New(db *store.Store) http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; form-action 'self'; base-uri 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'")
 		mux.ServeHTTP(w, r)
 	})
 }

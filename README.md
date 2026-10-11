@@ -43,8 +43,7 @@ download connection strategy (direct, personal, or public proxy), including
 the public pool's per-proxy 429 cooldown. VK MP3 downloads use only artwork
 returned by VK; without it, they are saved without a cover. New MP3s from both
 sources use the saved library title and artist as ID3 tags, even when artwork
-is unavailable. Already downloaded MP3s are not modified; server downloads
-are not implemented yet.
+is unavailable. Already downloaded CLI MP3s are not modified.
 
 Spotify sync saves the date supplied for each liked track. VK sync uses the
 optional `date` field (VK describes it as the audio upload date, not necessarily
@@ -61,6 +60,19 @@ for both. Relative paths are resolved from the process working directory.
 Existing data in `~/.trackharbor-server/` is not moved automatically; copy its
 files to the new location if you want to retain your connected sources and tracks.
 The server never reads the CLI's credentials or `~/.trackharbor/vault.db`.
+Server downloads are manual: use **Download missing tracks** or the button next
+to an individual track. Progress is pushed to the browser with SSE. The server
+keeps MP3s in its own `downloads/` directory beside `library.db`, with download
+history in that same server database. Existing files are skipped after checking
+their stored hashes. Sync VK again if its signed audio URLs expire.
+
+The server's `config.json` accepts `download_dir` (an optional MP3 directory),
+`strategy` (ordered `direct`, `personal_proxy`, `random_proxy`), `personal_proxy`
+and `public_proxy` (arrays of proxy URLs). With no strategy set, the server uses
+direct access. Unlike the CLI, this server version currently requires **explicit
+public proxy addresses**; it does not discover or check public proxy lists.
+It never copies the CLI proxy configuration or cache. `yt-dlp` and FFmpeg must
+be installed for Spotify downloads; FFmpeg is required for VK downloads.
 Its config supports a `listen` address on a loopback IP (default
 `127.0.0.1:8787`). There is **no login**: do not expose
 this preview to other devices or the public internet without access control.

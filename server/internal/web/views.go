@@ -19,7 +19,8 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TrackHarbor · {{.Name}}</title>
   <link rel="stylesheet" href="/assets/app.css">
-  <script src="/assets/htmx.min.js" defer></script>
+	  <script src="/assets/htmx.min.js" defer></script>
+	  <script src="/assets/download.js" defer></script>
 </head>
 <body>
 <div class="shell">
@@ -64,15 +65,20 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
       </div>
     </section>
     {{end}}
+    <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOADS / MANUAL START</span></div>
+      <h2>Save tracks locally</h2><p>Downloads start only when you press a button. Existing MP3s are skipped.</p>
+      <form action="/download" method="post"><input type="hidden" name="mode" value="all"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" {{if not .Tracks}}disabled{{end}}>Download missing tracks <span>→</span></button></form>
+      <div id="download-state" class="status" role="status" aria-live="polite">Ready to download.</div>
+    </section>
     <section class="library {{if eq .Source "music"}}music-library{{end}}"><div class="library-heading"><div><span class="index">{{if eq .Source "music"}}01 / ALL MUSIC{{else}}03 / COLLECTION{{end}}</span><h2>{{if eq .Source "music"}}All tracks{{else}}Your tracks{{end}}</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>
       {{if .Tracks}}
-        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}</div>
-        <ol class="tracks">{{range $i, $t := .Tracks}}<li><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}</li>{{end}}</ol>
+        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span>FILE</span></div>
+        <ol class="tracks">{{range $i, $t := .Tracks}}<li><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<form action="/download" method="post"><input type="hidden" name="mode" value="one"><input type="hidden" name="source" value="{{$t.Source}}"><input type="hidden" name="artist" value="{{$t.Artist}}"><input type="hidden" name="title" value="{{$t.Title}}"><button class="secondary" type="submit">{{if $t.FilePath}}Saved{{else}}Download{{end}}</button></form></li>{{end}}</ol>
       {{else}}
         <div class="empty"><span>◌</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
       {{end}}
     </section>
-    <footer>PLAYBACK AND DOWNLOADS ARE COMING LATER · TRACKHARBOR</footer>
+    <footer>LOCAL DOWNLOADS · TRACKHARBOR</footer>
   </main>
 </div>
 </body></html>`))

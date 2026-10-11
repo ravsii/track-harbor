@@ -21,9 +21,9 @@ func main() {
 	}
 	defer db.Close()
 	srv := &http.Server{
-		Addr: cfg.Listen, Handler: web.New(db),
+		Addr: cfg.Listen, Handler: web.New(db, cfg),
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second,
-		WriteTimeout: 30 * time.Second, IdleTimeout: time.Minute,
+		WriteTimeout: 0, IdleTimeout: time.Minute, // SSE stays open while downloads run.
 	}
 	log.Printf("TrackHarbor web preview: http://%s (local access only)", cfg.Listen)
 	log.Fatal(srv.ListenAndServe())

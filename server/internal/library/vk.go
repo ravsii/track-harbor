@@ -28,7 +28,11 @@ func SyncVK(ctx context.Context, db *store.Store) (int, error) {
 			if addedAt < 0 {
 				addedAt = 0
 			}
-			tracks = append(tracks, store.Track{Artist: artist, Title: title, AddedAt: addedAt})
+			cover := song.Album.Thumb.Photo600
+			if cover == "" {
+				cover = song.Album.Thumb.Photo300
+			}
+			tracks = append(tracks, store.Track{Artist: artist, Title: title, AddedAt: addedAt, OwnerID: song.OwnerID, AudioID: song.ID, AudioURL: song.URL, CoverURL: cover})
 		}
 	}
 	if err := ctx.Err(); err != nil {

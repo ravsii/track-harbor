@@ -66,7 +66,20 @@ func SyncSpotify(ctx context.Context, db *store.Store) (int, error) {
 			} else {
 				timestamp = addedAt.Unix()
 			}
-			tracks = append(tracks, store.Track{Artist: strings.Join(artists, ", "), Title: title, AddedAt: timestamp})
+			cover := ""
+			for _, image := range item.ItemV2.Data.AlbumOfTrack.CoverArt.Sources {
+				if image.URL != "" && (cover == "" || image.Width >= 300) {
+					cover = image.URL
+				}
+			}
+			if cover == "" {
+				for _, image := range item.ItemV3.Data.VisualIdentityTrait.SquareCoverImage.Image.Data.Sources {
+					if image.URL != "" && (cover == "" || image.MaxWidth >= 300) {
+						cover = image.URL
+					}
+				}
+			}
+			tracks = append(tracks, store.Track{Artist: strings.Join(artists, ", "), Title: title, AddedAt: timestamp, CoverURL: cover})
 		}
 	}
 	if err := ctx.Err(); err != nil {

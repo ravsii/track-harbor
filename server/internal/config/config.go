@@ -9,7 +9,11 @@ import (
 )
 
 type Config struct {
-	Listen string `json:"listen"`
+	Listen        string   `json:"listen"`
+	DownloadDir   string   `json:"download_dir"`
+	Strategy      []string `json:"strategy"`
+	PersonalProxy []string `json:"personal_proxy"`
+	PublicProxy   []string `json:"public_proxy"`
 }
 
 func Load() (Config, string, error) {
@@ -62,6 +66,17 @@ func Load() (Config, string, error) {
 	var cfg Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return Config{}, "", fmt.Errorf("server config: %w", err)
+	}
+	if cfg.DownloadDir == "" {
+		cfg.DownloadDir = filepath.Join(filepath.Dir(dbPath), "downloads")
+	}
+	if len(cfg.Strategy) == 0 {
+		cfg.Strategy = []string{"direct"}
+	}
+	for _, route := range cfg.Strategy {
+		if route != "direct" && route != "personal_proxy" && route != "random_proxy" {
+			return Config{}, "", fmt.Errorf("server config: unknown download strategy %q", route)
+		}
 	}
 	host, _, err := net.SplitHostPort(cfg.Listen)
 	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
