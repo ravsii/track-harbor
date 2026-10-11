@@ -45,7 +45,10 @@ development workflows unless explicitly updated by the user.
 
 ## Commits
 
-- Use Conventional Commits for every commit: `type(optional-scope): description`
-  (for example, `fix(vk): skip tracks without audio URLs`). See `CONTRIBUTING.md`.
+- Use Conventional Commits with a required component scope for every commit:
+  `type(component): message`. Choose the component affected by the change,
+  such as `server`, `cli`, or `common` for shared code. Examples:
+  `feat(server): add top-bar`, `feat(common): better proxy logic`,
+  `fix(vk): skip tracks without audio URLs`. See `CONTRIBUTING.md`.
 - When asked to create a commit, keep the human as the primary author and add
   the assistant as a co-author using a `Co-authored-by:` commit-message trailer.
