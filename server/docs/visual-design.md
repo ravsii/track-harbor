@@ -14,7 +14,7 @@ action on any page must use the same player. The top bar and player must work
 on narrow screens and in both color themes.
 
 The top bar spans the viewport, with playback controls centered relative to
-the full viewport: logo on the left, current track beside the controls, and
+the full viewport: logo on the left, current track above the seek bar, and
 the theme button on the far right. A single playback-mode button cycles through
 in order, shuffle, and repeat one. The volume icon toggles mute without losing the
 previous level. The theme button cycles through System, Light, and Dark.

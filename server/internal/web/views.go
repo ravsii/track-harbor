@@ -30,17 +30,19 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
   <header id="music-player" class="topbar" aria-label="Music player">
     <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home"><span class="mark">{{template "icon" "disc-album"}}</span><strong>TrackHarbor</strong></a>
     <div class="topbar-content">
-      <div class="topbar-track">
-        <strong id="player-track" aria-live="polite"></strong>
-      </div>
       <audio id="player-audio" preload="none"></audio>
       <div class="player-controls">
         <button type="button" id="player-mode" aria-label="Playback mode: in order" title="Playback mode: in order">{{template "icon" "list-ordered"}}</button>
         <button type="button" id="player-prev" aria-label="Previous track">{{template "icon" "previous"}}</button>
         <button type="button" id="player-toggle" class="primary" aria-label="Play">{{template "icon" "play"}}</button>
         <button type="button" id="player-next" aria-label="Next track">{{template "icon" "next"}}</button>
-        <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek">
-        <span id="player-time">0:00 / 0:00</span>
+        <div class="player-progress">
+          <strong id="player-track" aria-live="polite"></strong>
+          <div class="player-progress-row">
+            <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek">
+            <span id="player-time">0:00 / 0:00</span>
+          </div>
+        </div>
         <button type="button" id="player-mute" aria-label="Mute" title="Mute">{{template "icon" "volume-high"}}</button>
         <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume">
       </div>
