@@ -67,7 +67,10 @@ func sourceName(r *http.Request) string {
 	if r.FormValue("source") == "vk" {
 		return "vk"
 	}
-	return "spotify"
+	if r.FormValue("source") == "spotify" {
+		return "spotify"
+	}
+	return "music"
 }
 
 func selectedSource(r *http.Request) (string, bool) {
@@ -87,24 +90,29 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	source := sourceName(r)
-	connected, err := s.store.Connected(source)
+	data := pageData{Source: source, Name: "Music"}
+	var err error
+	if source == "music" {
+		data.Tracks, err = s.store.ListAll()
+	} else {
+		data.Connected, err = s.store.Connected(source)
+		if err == nil {
+			data.Tracks, err = s.store.List(source)
+		}
+		if source == "vk" {
+			data.Name = "VK Music"
+		} else {
+			data.Name = "Spotify"
+		}
+		s.mu.Lock()
+		data.Status = s.status[source]
+		s.mu.Unlock()
+		data.AuthURL = vk.AuthorizationURL()
+	}
 	if err != nil {
 		http.Error(w, "unable to read library", 500)
 		return
 	}
-	tracks, err := s.store.List(source)
-	if err != nil {
-		http.Error(w, "unable to read library", 500)
-		return
-	}
-	name := "Spotify"
-	if source == "vk" {
-		name = "VK Music"
-	}
-	s.mu.Lock()
-	status := s.status[source]
-	s.mu.Unlock()
-	data := pageData{Source: source, Name: name, Connected: connected, Tracks: tracks, Status: status, AuthURL: vk.AuthorizationURL()}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := pageTemplate.Execute(w, data); err != nil {
 		log.Print("render web page failed")

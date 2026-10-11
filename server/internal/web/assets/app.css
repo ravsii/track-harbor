@@ -2,3 +2,6 @@
 body:has(#content[data-source="vk"]) .sidebar nav a[href="/?source=spotify"],body:has(#content[data-source="spotify"]) .sidebar nav a[href="/?source=vk"]{background:transparent;color:#b8c4bb}
 body:has(#content[data-source="vk"]) .sidebar nav a[href="/?source=vk"],body:has(#content[data-source="spotify"]) .sidebar nav a[href="/?source=spotify"]{background:#28392e;color:var(--accent)}
 .panel textarea{width:100%;min-height:150px;resize:vertical;background:#111a19;color:var(--ink);border:1px solid #3c4a44;border-radius:8px;padding:11px 12px;outline:none;letter-spacing:normal;font:inherit}.panel textarea:focus{border-color:var(--accent)}
+body:has(#content[data-source="music"]) .sidebar nav a[href^="/?source="],body:has(#content[data-source="spotify"]) .sidebar nav a[href="/"],body:has(#content[data-source="vk"]) .sidebar nav a[href="/"]{background:transparent;color:#b8c4bb}
+body:has(#content[data-source="music"]) .sidebar nav a[href="/"]{background:#28392e;color:var(--accent)}
+.music-library{overflow-x:auto}.music-library .track-head,.music-library .tracks li{grid-template-columns:40px minmax(150px,1.3fr) minmax(130px,1fr) 94px 156px}.music-library .track-head,.music-library .tracks{min-width:660px}.source-tag{color:var(--accent);font-size:12px}.source-tag.vk{color:#b1c8ed}.added-date{color:var(--muted);font-size:12px;white-space:nowrap}

@@ -1,8 +1,19 @@
 package web
 
-import "html/template"
+import (
+	"html/template"
+	"time"
+)
 
-var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{"add": func(a, b int) int { return a + b }}).Parse(`<!doctype html>
+var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
+	"add": func(a, b int) int { return a + b },
+	"addedDate": func(timestamp int64) string {
+		if timestamp == 0 {
+			return "—"
+		}
+		return time.Unix(timestamp, 0).UTC().Format("02 Jan 2006, 15:04 UTC")
+	},
+}).Parse(`<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -16,6 +27,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{"ad
     <div class="brand"><span class="mark">◉</span><div><strong>TrackHarbor</strong><small>Your music, your harbor.</small></div></div>
     <div class="nav-label">YOUR LIBRARY</div>
     <nav aria-label="Sources">
+      <a class="{{if eq .Source "music"}}active{{end}}" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>◉</span> Music <span class="arrow">↗</span></a>
       <a class="{{if eq .Source "spotify"}}active{{end}}" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>◈</span> Spotify <span class="arrow">↗</span></a>
       <a class="{{if eq .Source "vk"}}active{{end}}" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>♫</span> VK Music <span class="arrow">↗</span></a>
     </nav>
@@ -23,7 +35,8 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{"ad
   </aside>
   <main id="content" data-source="{{.Source}}" hx-history-elt>
     <div class="topline"><span>LIBRARY / {{.Name}}</span><span class="label">EARLY ACCESS</span></div>
-    <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>Connect your account, sync your library, and explore what you love. Each source has its own collection.</p></header>
+    <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>{{if eq .Source "music"}}All your tracks from Spotify and VK Music, together and ordered by when they were added.{{else}}Connect your account, sync your library, and explore what you love. Each source has its own collection.{{end}}</p></header>
+    {{if ne .Source "music"}}
     <section class="grid">
       <div class="panel connect"><div class="panel-top"><span class="index">01 / CONNECTION</span><span class="pill {{if .Connected}}connected{{end}}">{{if .Connected}}● Connected{{else}}○ Not connected{{end}}</span></div>
         <h2>Connect {{.Name}}</h2>
@@ -48,12 +61,13 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{"ad
         <div class="status" aria-live="polite">STATUS <span id="sync-state" hx-get="/status?source={{.Source}}" hx-trigger="every 3s" hx-swap="innerHTML">{{if .Status}}{{.Status}}{{else}}Ready to sync.{{end}}</span></div>
       </div>
     </section>
-    <section class="library"><div class="library-heading"><div><span class="index">03 / COLLECTION</span><h2>Your tracks</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>
+    {{end}}
+    <section class="library {{if eq .Source "music"}}music-library{{end}}"><div class="library-heading"><div><span class="index">{{if eq .Source "music"}}01 / ALL MUSIC{{else}}03 / COLLECTION{{end}}</span><h2>{{if eq .Source "music"}}All tracks{{else}}Your tracks{{end}}</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>
       {{if .Tracks}}
-        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span></div>
-        <ol class="tracks">{{range $i, $t := .Tracks}}<li><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span></li>{{end}}</ol>
+        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}</div>
+        <ol class="tracks">{{range $i, $t := .Tracks}}<li><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}</li>{{end}}</ol>
       {{else}}
-        <div class="empty"><span>◌</span><h3>Nothing here yet</h3><p>{{if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
+        <div class="empty"><span>◌</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
       {{end}}
     </section>
     <footer>PLAYBACK AND DOWNLOADS ARE COMING LATER · TRACKHARBOR</footer>

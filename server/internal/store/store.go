@@ -9,8 +9,8 @@ import (
 )
 
 type Track struct {
-	Artist, Title string
-	AddedAt       int64 // Unix seconds; zero means the source did not provide a date.
+	Source, Artist, Title string
+	AddedAt               int64 // Unix seconds; zero means the source did not provide a date.
 }
 type Store struct{ db *sql.DB }
 
@@ -94,15 +94,27 @@ func (s *Store) Connected(source string) (bool, error) {
 }
 
 func (s *Store) List(source string) ([]Track, error) {
-	rows, err := s.db.Query(`SELECT artist, title, added_at FROM tracks WHERE source=? ORDER BY added_at DESC, artist, title`, source)
+	rows, err := s.db.Query(`SELECT source, artist, title, added_at FROM tracks WHERE source=? ORDER BY added_at DESC, artist, title`, source)
 	if err != nil {
 		return nil, err
 	}
+	return scanTracks(rows)
+}
+
+func (s *Store) ListAll() ([]Track, error) {
+	rows, err := s.db.Query(`SELECT source, artist, title, added_at FROM tracks ORDER BY added_at DESC, source, artist, title`)
+	if err != nil {
+		return nil, err
+	}
+	return scanTracks(rows)
+}
+
+func scanTracks(rows *sql.Rows) ([]Track, error) {
 	defer rows.Close()
 	var tracks []Track
 	for rows.Next() {
 		var track Track
-		if err := rows.Scan(&track.Artist, &track.Title, &track.AddedAt); err != nil {
+		if err := rows.Scan(&track.Source, &track.Artist, &track.Title, &track.AddedAt); err != nil {
 			return nil, err
 		}
 		tracks = append(tracks, track)
