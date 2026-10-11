@@ -19,6 +19,8 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TrackHarbor · {{.Name}}</title>
   <link rel="stylesheet" href="/assets/app.css">
+	  <link rel="stylesheet" href="/assets/theme.css">
+	  <script src="/assets/theme.js"></script>
 	  <script src="/assets/htmx.min.js" defer></script>
 	  <script src="/assets/download.js" defer></script>
 	  <script src="/assets/player.js" defer></script>
@@ -33,6 +35,13 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
       <a class="{{if eq .Source "spotify"}}active{{end}}" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>◈</span> Spotify <span class="arrow">↗</span></a>
       <a class="{{if eq .Source "vk"}}active{{end}}" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>♫</span> VK Music <span class="arrow">↗</span></a>
     </nav>
+    <label class="theme-control" for="theme-choice">THEME
+      <select id="theme-choice" aria-label="Color theme">
+        <option value="system">As in system</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </label>
     <div class="sidebar-bottom"><span class="dot"></span> LOCAL SERVER <p>This preview runs on your computer only. No web login is configured.</p></div>
   </aside>
   <main id="content" data-source="{{.Source}}" hx-history-elt>

@@ -1,0 +1,92 @@
+/* System preference is the default; explicit choices override it on <html>. */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#f4f2ed, #0b1522);
+  --sidebar: light-dark(#e9e8e5, #101e2d);
+  --panel: light-dark(#ffffff, #172638);
+  --ink: light-dark(#202633, #edf6f7);
+  --muted: light-dark(#596376, #aec3cb);
+  --edge: light-dark(#d4d8df, #315063);
+  --accent: #5dd6d0;
+  --accent-ink: #08292c;
+  --accent-label: light-dark(#202633, #5dd6d0);
+  --selected: light-dark(#dcf3f1, #193d47);
+  --field: light-dark(#ffffff, #0b1522);
+  --row-hover: light-dark(#e8f3f2, #203448);
+  --button-hover: #85e4df;
+  --vk: light-dark(#3156a5, #b1c8ed);
+  --error: light-dark(#9b3927, #edb7aa);
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+.mark, .panel button { color: var(--accent-ink); }
+a { color: var(--accent-label); text-decoration-color: var(--accent); }
+.label, .eyebrow, .index, .sidebar-bottom, .source-tag { color: var(--accent-label); }
+.nav-label, .topline, .status, .count, .track-head, .number, footer { color: var(--muted); }
+.sidebar nav a { color: var(--ink); }
+.sidebar nav a:hover, .sidebar nav a.active { background: var(--selected); color: var(--accent-label); }
+.pill.connected { border-color: var(--accent); color: var(--accent-label); }
+.panel label { color: var(--muted); }
+.panel input, .panel textarea { background: var(--field); color: var(--ink); border-color: var(--edge); }
+.panel button:hover:not(:disabled) { background: var(--button-hover); }
+.panel button.secondary { color: var(--accent-label); }
+.panel button.secondary:hover:not(:disabled) { color: var(--accent-ink); }
+.tracks li { border-bottom-color: var(--edge); }
+.tracks li:hover { background: var(--row-hover); }
+.empty { background: var(--panel); }
+.source-tag.vk { color: var(--vk); }
+.player #player-error { color: var(--error); }
+#download-dialog button { padding: 9px 16px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent); color: var(--accent-ink); font: 700 13px system-ui, sans-serif; cursor: pointer; }
+#download-dialog button:hover { background: var(--button-hover); }
+
+body:has(#content[data-source="vk"]) .sidebar nav a[href="/?source=spotify"],
+body:has(#content[data-source="spotify"]) .sidebar nav a[href="/?source=vk"],
+body:has(#content[data-source="music"]) .sidebar nav a[href^="/?source="],
+body:has(#content[data-source="spotify"]) .sidebar nav a[href="/"],
+body:has(#content[data-source="vk"]) .sidebar nav a[href="/"] {
+  background: transparent;
+  color: var(--ink);
+}
+body:has(#content[data-source="vk"]) .sidebar nav a[href="/?source=vk"],
+body:has(#content[data-source="spotify"]) .sidebar nav a[href="/?source=spotify"],
+body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
+  background: var(--selected);
+  color: var(--accent-label);
+}
+
+.theme-control {
+  display: grid;
+  gap: 8px;
+  margin: 32px 12px 20px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .17em;
+}
+.theme-control select {
+  width: 100%;
+  padding: 9px 30px 9px 10px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font: 600 13px system-ui, sans-serif;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+.theme-control select:hover { border-color: var(--accent); }
+.theme-control select:focus-visible, .sidebar nav a:focus-visible,
+.panel button:focus-visible, .tracks button:focus-visible,
+.panel input:focus-visible, .panel textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 950px) {
+  .theme-control { display: flex; align-items: center; gap: 10px; margin: 15px 0 0; }
+  .theme-control select { width: auto; min-width: 150px; }
+  .sidebar nav { overflow-x: auto; }
+  .sidebar nav a { min-width: 0; white-space: nowrap; }
+}

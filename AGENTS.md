@@ -21,6 +21,9 @@ playlists or YouTube video/audio without requiring a subscription.
 
 ## Development
 
+- Before changing the server web UI's visual elements, read
+  `server/docs/visual-design.md` and follow its palette and light/dark theme
+  requirements for every new or changed element.
 - Prioritize the core workflow over speculative features, but keep application
   boundaries explicit and deployment/security constraints visible.
 - When a request is clear, proceed directly to implementation. Do not create
