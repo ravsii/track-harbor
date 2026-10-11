@@ -259,6 +259,15 @@ func (p *Provider) convertSource(ctx context.Context, source string, onProgress 
 		}
 		return download.DownloadResponse{}, err
 	}
+	// Keep originals only for failed conversions. Check the MP3 before removing
+	// the source, and never recursively delete the cache or unrelated files.
+	if err := os.Remove(source); err != nil && !errors.Is(err, os.ErrNotExist) {
+		f.Close()
+		return download.DownloadResponse{}, fmt.Errorf("remove source after MP3 conversion: %w", err)
+	}
+	// Removing the now-empty per-track directory is best-effort; concurrent
+	// workers may already have removed it or added another file.
+	_ = os.Remove(filepath.Dir(source))
 	keep = true
 	return download.DownloadResponse{Body: &temporaryAudio{File: f, dir: dir}, ContentLength: info.Size()}, nil
 }
