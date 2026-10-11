@@ -1,5 +1,8 @@
 # TrackHarbor
 
+> **MVP status:** This project is heavily vibe-coded. The priority right now is
+> getting the core workflow working; cleaning up the slop comes later.
+
 Sync Spotify tracks to SQLite and download music to `~/.trackharbor/downloaded`.
 
 ```sh
