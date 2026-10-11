@@ -81,8 +81,8 @@ type RandomProxy struct{ ProxyOnly }
 
 func (RandomProxy) Name() string { return "random_proxy" }
 
-// ConfigProxy tries personal proxies in configuration order. These addresses
-// are trusted user input and are neither publicly discovered nor pre-probed.
+// ConfigProxy tries available personal proxies in configuration order.
+// The caller supplies the addresses that passed startup HTTPS verification.
 type ConfigProxy struct{ Addresses []string }
 
 func (ConfigProxy) Name() string { return "config_proxy" }

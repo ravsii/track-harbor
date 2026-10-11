@@ -24,6 +24,12 @@ func NewHTTPSChecker() *HTTPSChecker {
 	return &HTTPSChecker{target: "https://www.youtube.com/robots.txt", timeout: time.Second}
 }
 
+// Personal proxies are few and may require DNS and authenticated handshakes.
+// Keep the stricter one-second policy unchanged for bulk public discovery.
+func NewPersonalHTTPSChecker() *HTTPSChecker {
+	return &HTTPSChecker{target: "https://www.youtube.com/robots.txt", timeout: 5 * time.Second}
+}
+
 func (c *HTTPSChecker) Check(ctx context.Context, address string) error {
 	u, err := url.Parse(address)
 	if err != nil {

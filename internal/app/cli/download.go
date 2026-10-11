@@ -2,12 +2,15 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime/pprof"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -154,8 +157,36 @@ var downloadCmd = &cobra.Command{
 			usesConfigProxy = usesConfigProxy || name == "config_proxy"
 		}
 		if usesConfigProxy {
-			proxyCount = len(cfg.MyProxy)
-			fmt.Fprintf(out, "Личные прокси из конфигурации: %d (без предварительной проверки).\n", proxyCount)
+			fmt.Fprintf(out, "Проверка личных прокси: %d (HTTPS к YouTube, таймаут 5 с на адрес)…\n", len(cfg.MyProxy))
+			checker := proxy.NewPersonalHTTPSChecker()
+			available := make([]string, 0, len(cfg.MyProxy))
+			for _, address := range cfg.MyProxy {
+				started := time.Now()
+				err := checker.Check(cmd.Context(), address)
+				if cmd.Context().Err() != nil {
+					fatal(cmd.Context().Err())
+				}
+				label := download.ProxyLabel(address)
+				fields := []zap.Field{zap.String("proxy", label), zap.Duration("duration", time.Since(started)), zap.Bool("available", err == nil)}
+				if err != nil {
+					// Network errors can embed the full authenticated proxy URL.
+					// Report only a safe diagnosis, never persist raw errors here.
+					reason := "нет подтверждённого HTTPS-доступа к YouTube"
+					var networkErr net.Error
+					if errors.As(err, &networkErr) && networkErr.Timeout() {
+						reason = "таймаут проверки"
+					}
+					fmt.Fprintf(out, "  %s: недоступен (%s); исключён на текущий запуск.\n", label, reason)
+					logger.Warn("personal_proxy_checked", append(fields, zap.String("reason", reason))...)
+					continue
+				}
+				available = append(available, address)
+				fmt.Fprintf(out, "  %s: доступен (%s).\n", label, time.Since(started).Round(time.Millisecond))
+				logger.Info("personal_proxy_checked", fields...)
+			}
+			cfg.MyProxy = available // Do not change the user's YAML; recheck on every run.
+			proxyCount = len(available)
+			fmt.Fprintf(out, "Доступных личных прокси: %d.\n", proxyCount)
 		}
 		if usesProxy {
 			var pool *proxy.Pool
@@ -172,7 +203,7 @@ var downloadCmd = &cobra.Command{
 				})
 			}
 			if poolErr != nil {
-				if !usesDirect && !usesConfigProxy {
+				if !usesDirect && proxyCount == 0 {
 					fatal(fmt.Errorf("подготовка прокси: %w", poolErr))
 				}
 				logger.Warn("proxy_reserve_unavailable", zap.Error(poolErr))
@@ -182,6 +213,9 @@ var downloadCmd = &cobra.Command{
 				fmt.Fprintf(out, "Публичный пул прокси готов: %d. Выбор LRU с учётом пауз HTTP 429.\n", pool.Len())
 			}
 			proxyStrategy = youtube.ProxyOnly{Pool: pool, Unavailable: poolErr}
+		}
+		if !usesDirect && proxyCount == 0 {
+			fatal(fmt.Errorf("нет доступных прокси для настроенных стратегий; прямое соединение не разрешено"))
 		}
 		if proxyCount > 0 {
 			workers = effectiveDownloadWorkers(proxyCount, workerLimit)
