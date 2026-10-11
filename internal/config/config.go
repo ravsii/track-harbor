@@ -14,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const defaultYAML = "version: 1\nstrategy:\n  - direct\npersonal_proxy: []\ndownload_dir: ~/.meshvault/downloaded\n"
+const defaultYAML = "version: 1\n\ndownload_dir: ~/.meshvault/downloaded\npersonal_proxy: []\nstrategy:\n  - direct\n"
 
 type Config struct {
 	Version       int      `yaml:"version"`
