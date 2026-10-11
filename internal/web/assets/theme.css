@@ -38,6 +38,16 @@ a { color: var(--accent-label); text-decoration-color: var(--accent); }
 .panel button.secondary:hover:not(:disabled) { color: var(--accent-ink); }
 .tracks li { border-bottom-color: var(--edge); }
 .tracks li:hover { background: var(--row-hover); }
+.library:not(.download-library) .tracks li.current-track .track-title { background: var(--accent); color: var(--accent-ink); padding: 2px 4px; border-radius: 4px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.playing-indicator { display: none; align-items: flex-end; gap: 2px; width: 14px; height: 13px; }
+.is-playing .track-number .number { display: none; }
+.is-playing .track-number .play-track { opacity: 0; }
+.is-playing .track-number .playing-indicator { display: inline-flex; }
+.is-playing .track-number:has(.play-track:focus-visible) .playing-indicator { visibility: hidden; }
+.playing-indicator span { width: 3px; height: 100%; border-radius: 2px; background: var(--accent); transform-origin: bottom; animation: playing-bars .8s ease-in-out infinite alternate; }
+.playing-indicator span:nth-child(2) { animation-delay: -.5s; }
+.playing-indicator span:nth-child(3) { animation-delay: -.25s; }
+@keyframes playing-bars { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
 .empty { background: var(--panel); }
 .source-tag.vk { color: var(--vk); }
 .player #player-error { color: var(--error); }
@@ -81,6 +91,7 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 .library.music-library .track-head, .library.music-library .tracks li { grid-template-columns: 32px minmax(150px, 1.3fr) minmax(130px, 1fr) 88px 150px 52px 34px; }
 .library:not(.download-library) .tracks li { padding: 3.5px 5px; }
 .library:not(.download-library) .track-head { padding: 0 5px 3.5px; }
+.library:not(.download-library) .track-head > :first-child { text-align: center; }
 .music-library .track-head, .music-library .tracks { min-width: 700px; }
 .track-number { position: relative; display: grid; place-items: center; width: 32px; height: 28px; }
 .track-number .play-track { position: absolute; inset: 0; display: grid; place-items: center; width: 32px; height: 28px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--ink); cursor: pointer; }
@@ -88,9 +99,12 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 .track-number .play-track .icon, .download-track .icon { width: 17px; height: 17px; }
 @media (hover: hover) {
   .track-number .play-track { opacity: 0; }
-  .tracks li:hover .track-number .play-track:not(:disabled), .track-number:focus-within .play-track { opacity: 1; }
-  .tracks li:hover .track-number:has(.play-track:not(:disabled)) .number, .track-number:focus-within .number { visibility: hidden; }
+  .tracks li:hover .track-number .play-track:not(:disabled) { opacity: 1; }
+  .tracks li:hover .track-number:has(.play-track:not(:disabled)) .number { visibility: hidden; }
+  .tracks li.is-playing:hover .track-number .playing-indicator { visibility: hidden; }
 }
+.track-number .play-track:focus-visible { opacity: 1; }
+.track-number:has(.play-track:focus-visible) .number { visibility: hidden; }
 @media (hover: none) { .track-number:has(.play-track:not(:disabled)) .number { visibility: hidden; } }
 .track-number .play-track:hover, .download-track:hover { background: var(--selected); color: var(--accent-label); }
 .track-duration { color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -199,6 +213,9 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 #system-status[data-syncing="true"] .system-sync-icon { display: inline-flex; align-items: center; justify-content: center; animation: system-sync-spin 1.4s linear infinite; }
 @keyframes system-sync-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
+  .playing-indicator span { animation: none; }
+  .playing-indicator span:nth-child(2) { height: 60%; }
+  .playing-indicator span:nth-child(3) { height: 80%; }
   #system-status[data-syncing="true"] .system-sync-icon { animation: none; }
   #system-status[data-active="true"] .system-waves::before, #system-status[data-active="true"] .system-waves::after { animation: none; }
   .system-indicator.rippling::after, #download-toggle.rippling::after { animation: none; }

@@ -8,7 +8,7 @@
   const lastTrackKey = 'trackharbor-last-track';
   const stamp = track => `${track.source}\0${track.artist}\0${track.title}`;
   const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '0:00';
-  let tracks = [], current, selected, candidate = false, restored = false, history = [], previousVolume = 0.8;
+  let tracks = [], current, selected, playingTrack, candidate = false, restored = false, history = [], previousVolume = 0.8;
   audio.volume = 0.8;
 
   function setShuffle(enabled) {
@@ -42,9 +42,25 @@
       ? Math.round(audio.currentTime / audio.duration * 1000) : 0;
   }
 
+  function highlightCurrent() {
+    document.querySelectorAll('.library:not(.download-library) .tracks li[data-source]').forEach(row => {
+      const active = playingTrack === stamp(row.dataset);
+      const playing = active && !audio.paused && !audio.ended;
+      row.classList.toggle('current-track', active);
+      row.classList.toggle('is-playing', playing);
+      const button = row.querySelector('.play-track');
+      button.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${playing ? 'pause' : 'play'}`);
+      button.setAttribute('aria-label', `${playing ? 'Pause' : 'Play'} ${row.dataset.title}`);
+      if (active) row.setAttribute('aria-current', 'true');
+      else row.removeAttribute('aria-current');
+    });
+  }
+
   function select(track) {
     selected = track;
     current = stamp(track);
+    playingTrack = undefined;
+    highlightCurrent();
     const params = new URLSearchParams({source: track.source, artist: track.artist, title: track.title});
     audio.src = `/audio?${params}`;
     $('player-track').textContent = `${track.artist} — ${track.title}`;
@@ -129,25 +145,38 @@
 
   audio.addEventListener('timeupdate', refresh);
   audio.addEventListener('durationchange', refresh);
-  audio.addEventListener('play', refresh);
+  audio.addEventListener('play', () => { refresh(); highlightCurrent(); });
   audio.addEventListener('playing', () => {
     candidate = false;
     if (!selected) return;
+    playingTrack = current;
+    highlightCurrent();
     try {
       localStorage.setItem(lastTrackKey, JSON.stringify({source: selected.source, artist: selected.artist, title: selected.title}));
     } catch (_) { /* Playback still works when storage is unavailable. */ }
   });
-  audio.addEventListener('pause', refresh);
+  audio.addEventListener('pause', () => { refresh(); highlightCurrent(); });
   audio.addEventListener('volumechange', updateVolume);
-  audio.addEventListener('error', () => { $('player-error').textContent = 'MP3 unavailable. Download it again and refresh the page.'; });
-  audio.addEventListener('ended', next);
+  audio.addEventListener('error', () => {
+    playingTrack = undefined;
+    highlightCurrent();
+    $('player-error').textContent = 'MP3 unavailable. Download it again and refresh the page.';
+  });
+  audio.addEventListener('ended', () => { highlightCurrent(); next(); });
 
   document.addEventListener('click', event => {
     const button = event.target.closest('button');
     if (!button) return;
     if (button.classList.contains('play-track')) {
       const row = button.closest('li');
-      if (row?.dataset.playable === 'true') play({source: row.dataset.source, artist: row.dataset.artist, title: row.dataset.title});
+      if (row?.dataset.playable === 'true') {
+        if (playingTrack === stamp(row.dataset)) {
+          if (audio.paused) audio.play().catch(() => { $('player-error').textContent = 'Could not play this MP3.'; });
+          else audio.pause();
+        } else {
+          play({source: row.dataset.source, artist: row.dataset.artist, title: row.dataset.title});
+        }
+      }
     }
     if (button.id === 'player-prev') previous();
     if (button.id === 'player-next') next();
@@ -190,7 +219,10 @@
   document.addEventListener('download:done', loadTracks);
   document.addEventListener('download:missing', loadTracks);
   document.addEventListener('htmx:afterSwap', event => {
-    if (event.detail.target.id === 'content') loadTracks();
+    if (event.detail.target.id === 'content') {
+      highlightCurrent();
+      loadTracks();
+    }
   });
   loadTracks();
   updateVolume();

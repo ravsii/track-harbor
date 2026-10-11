@@ -173,7 +173,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	source := sourceName(r)
-	data := pageData{Source: source, Name: "Music"}
+	data := pageData{Source: source, Name: "Tracks"}
 	var err error
 	if source == "downloads" {
 		data.Name = "Downloads"

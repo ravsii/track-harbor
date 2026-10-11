@@ -32,16 +32,16 @@ and gaps, not text, icons or player control sizes:
 | --- | --- | --- |
 | Sidebar padding | `8px 6px`; nav link `4px 5px`, gap `2px` | `4px 6px` at 950px; `4px 5px` at 700px |
 | Top bar content padding | `6px clamp(12px, 2.5vw, 41px)` | `4px 10px 6px` at 950px |
-| Music content padding | `4px 6px 8px` | `4px 5px 8px` at 700px |
+| Tracks content padding | `4px 6px 8px` | `4px 5px 8px` at 700px |
 | Spotify, VK, Downloads, Settings content padding | `7px clamp(8px, 1.5vw, 19px) 12px` | `6px 8px 10px` at 950px |
-| Non-Music header / panel / list spacing | Header-to-panel `6px`; panel padding `9px`; panel-to-list `10px` | Same values |
-| Track header / row padding (Music, Spotify, VK) | `0 5px 3.5px` / `3.5px 5px`; grid gap `4px` | Same compact spacing; tracks scroll horizontally if columns do not fit |
+| Non-Tracks header / panel / list spacing | Header-to-panel `6px`; panel padding `9px`; panel-to-list `10px` | Same values |
+| Track header / row padding (Tracks, Spotify, VK) | `0 5px 3.5px` / `3.5px 5px`; grid gap `4px` | Same compact spacing; tracks scroll horizontally if columns do not fit |
 | Panel internals | Paragraph bottom `7px`; form gap `5px`; status top `8px` and padding top `5px` | Same values |
 | Form controls | Input and textarea padding `5.5px 6px`; button padding `5.5px 8px`, with a `32px` minimum button height | Same values |
 | Proxy list | Panel-to-panel `10px`; list top `6px`; row padding `5px 0`, row gap `4px 6px` | Same values |
 | Download rows | Header padding `0 8px 5px`; row padding `6px 8px`, grid gap `6px` | Same values |
 
-Music has no fixed content-width or track-list-height cap: its tracks fill the
+Tracks has no fixed content-width or track-list-height cap: its tracks fill the
 space beside the sidebar and scroll with the page. Keep horizontal scrolling
 only when the track columns cannot fit on a narrow screen. Preserve the top
 player and source navigation rather than spending their space on decoration.
@@ -50,7 +50,16 @@ exceeds the available viewport height, scroll inside the sidebar. On narrow
 screens, keep the source links in a horizontally scrollable row. Do not place
 decorative or informational copy at the bottom of the sidebar.
 The row number becomes Play on hover or keyboard focus; on touch, Play remains
-visible. Show the duration of the local MP3 when available and put its download
+visible. Center the number column heading over the numbers; leave the download
+action column without a heading. Highlight the current track's title with an
+accent background and dark text in both themes, including after navigation;
+do not rely on the row background, which resembles hover. While it plays,
+show a small accent-colored equalizer instead of its Play button in the number
+column. Hover or visible keyboard focus reveals Pause in its place; without
+hover, keep the equalizer visible. On pause, restore Play and hide the equalizer;
+resuming the same track keeps its position. Do not highlight the
+initial unplayed candidate. Show the duration of the local MP3 when available
+and put its download
 action at the right edge of each row. Missing files have neither action active.
 Spotify, VK, and Downloads start with a compact page title rather than a large
 decorative hero. Put connection, sync, and download controls directly beneath it.
