@@ -55,7 +55,8 @@ response must have `format: liked-songs`; the collection URI is never passed to
 
 ## VK My Music (experimental)
 
-The simplest VK integration uses a manually obtained user access token:
+The simplest VK integration opens browser authorization and accepts a user
+access token:
 
 ```sh
 go run ./cmd/cli vk auth
@@ -63,12 +64,20 @@ go run ./cmd/cli vk sync
 go run ./cmd/cli download
 ```
 
-1. Open [vkhost.github.io](https://vkhost.github.io/) and select **VFeed**
-   (application ID `4083558`). Review the requested permissions before granting
-   access; enter your password only on VK's login page. This is a third-party
-   application authorization, not an application owned by TrackHarbor.
-2. Copy the `access_token` value from the final redirect URL. Paste the token
-   or the complete redirect URL into `vk auth`. Terminal input is hidden.
+1. Run `vk auth`. On macOS it uses `open` to launch VK's authorization page
+   directly for **vk.com** (application ID `6287487`, as listed on
+   [vkhost.github.io](https://vkhost.github.io/)), requesting `audio` and `offline`
+   permissions. If opening the browser fails, the command prints the URL.
+   Review the permissions before granting access; enter your password only on
+   VK's login page. This uses an existing application's authorization, not an
+   application owned by TrackHarbor.
+2. Copy the final redirect URL or its `access_token` value and paste it into
+   `vk auth`. Input is visible and remains in terminal scrollback; do not share
+   screenshots containing the token. This flow returns to VK's
+   `https://oauth.vk.com/blank.html`, with the token in the URL fragment (`#`).
+   Fragments are not sent to HTTP servers. A supported localhost redirect for
+   this application has not been established, so token capture is not automatic and no
+   local callback server is started.
 3. Run `vk sync` to import only your own **My Music** library through `audio.get`.
 
 The token is stored in `vk_credentials` in `~/.trackharbor/vault.db`; it is not
@@ -85,7 +94,7 @@ continues downloading from YouTube using the shared download history. It does
 not download audio files from VK. Diagnostics: `logs/vk-sync.jsonl`.
 
 **Audio access is not guaranteed.** VK restricts audio methods by application
-and token permissions. VFeed token issuance and audio access have not been
+and token permissions. Token issuance and audio access for the vk.com application have not been
 verified live for this integration. If VK rejects the request, the command
 reports the API error code without logging the token or raw response. No
 automatic fallback to web cookies or another application is attempted.

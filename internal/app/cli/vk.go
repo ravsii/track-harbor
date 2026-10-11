@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"io"
 	"net/url"
-	"os"
+	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"golang.org/x/term"
 	"trackharbor/internal/db"
 	"trackharbor/internal/download"
 	"trackharbor/internal/repository"
@@ -27,13 +26,28 @@ func init() {
 }
 
 var vkAuthCmd = &cobra.Command{
-	Use: "auth", Short: "Save a manually obtained VK user access token (VFeed)",
+	Use: "auth", Short: "Open vk.com application authorization in a browser and save a VK user token",
 	Args: cobra.NoArgs, SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Fprintln(cmd.OutOrStdout(), "Obtain a user token using VFeed at https://vkhost.github.io/ (application ID 4083558).")
+		authURL := "https://oauth.vk.com/authorize?" + (url.Values{
+			"client_id":     {"6287487"},
+			"scope":         {"audio,offline"},
+			"redirect_uri":  {"https://oauth.vk.com/blank.html"},
+			"display":       {"page"},
+			"response_type": {"token"},
+		}).Encode()
+		fmt.Fprintln(cmd.OutOrStdout(), "Opening VK authorization for vk.com (application ID 6287487; audio and offline permissions)…")
+		if err := exec.CommandContext(cmd.Context(), "open", authURL).Run(); err != nil {
+			if cmd.Context().Err() != nil {
+				return cmd.Context().Err()
+			}
+			fmt.Fprintln(cmd.ErrOrStderr(), "Could not open the browser automatically. Open this URL manually:")
+			fmt.Fprintln(cmd.ErrOrStderr(), authURL)
+		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Review the requested permissions and enter your password only on VK's login page.")
+		fmt.Fprintln(cmd.OutOrStdout(), "This flow returns to VK's blank.html, not a local callback. Copy the final address after authorization.")
 		fmt.Fprintln(cmd.OutOrStdout(), "Paste the access token or final redirect URL. Do not share it; audio access is checked by vk sync.")
-		token, err := readVKToken(cmd.InOrStdin(), cmd.OutOrStdout())
+		token, err := readVKToken(cmd.InOrStdin())
 		if err != nil {
 			return err
 		}
@@ -54,23 +68,12 @@ var vkAuthCmd = &cobra.Command{
 	},
 }
 
-func readVKToken(input io.Reader, out io.Writer) (string, error) {
-	var text string
-	if f, ok := input.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		value, err := term.ReadPassword(int(f.Fd()))
-		fmt.Fprintln(out)
-		if err != nil {
-			return "", fmt.Errorf("read VK token: input failed")
-		}
-		text = string(value)
-	} else {
-		scanner := bufio.NewScanner(input)
-		if !scanner.Scan() {
-			return "", fmt.Errorf("read VK token: no input or input too large")
-		}
-		text = scanner.Text()
+func readVKToken(input io.Reader) (string, error) {
+	scanner := bufio.NewScanner(input)
+	if !scanner.Scan() {
+		return "", fmt.Errorf("read VK token: no input or input too large")
 	}
-	text = strings.TrimSpace(text)
+	text := strings.TrimSpace(scanner.Text())
 	if strings.Contains(text, "access_token=") {
 		fragment := text
 		if i := strings.IndexByte(fragment, '#'); i >= 0 {

@@ -13,7 +13,10 @@ import (
 )
 
 const apiVersion = "5.131"
-const pageSize = 100
+const pageSize = 50
+
+// Match vkpymusic's VkMobileClient request header without changing token auth.
+const userAgent = "VKAndroidApp/4.13.1-1206 (Android 4.4.3; SDK 19; armeabi; ; ru)"
 
 type Track struct {
 	ID      int64  `json:"id"`
@@ -50,6 +53,7 @@ func (c *Client) request(ctx context.Context, method string, params url.Values, 
 		return fmt.Errorf("VK %s: cannot create request", method)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("User-Agent", userAgent)
 	response, err := c.http.Do(req)
 	if err != nil {
 		if ctx.Err() != nil {
@@ -146,10 +150,13 @@ func (c *Client) MyMusic(ctx context.Context, progress func(int, int)) ([]Track,
 		if len(*page.Items) > total-len(tracks) || len(*page.Items) == 0 && len(tracks) < total {
 			return nil, fmt.Errorf("VK audio.get: incomplete or invalid page; previous library preserved")
 		}
-		for _, track := range *page.Items {
+		for index, track := range *page.Items {
 			key := [2]int64{track.OwnerID, track.ID}
-			if track.ID <= 0 || track.OwnerID == 0 || seen[key] {
-				return nil, fmt.Errorf("VK audio.get: invalid or repeated track; run sync again")
+			if track.ID <= 0 || track.OwnerID == 0 {
+				return nil, fmt.Errorf("VK audio.get: invalid track ID (offset=%s, page_index=%d, owner_id=%d, id=%d)", params.Get("offset"), index, track.OwnerID, track.ID)
+			}
+			if seen[key] {
+				return nil, fmt.Errorf("VK audio.get: repeated track (offset=%s, requested=%d, returned=%d, page_index=%d, owner_id=%d, id=%d); pages may overlap", params.Get("offset"), pageSize, len(*page.Items), index, track.OwnerID, track.ID)
 			}
 			seen[key] = true
 			tracks = append(tracks, track)
