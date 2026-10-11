@@ -31,6 +31,7 @@
     }
     label.textContent = text;
     link.dataset.state = kind;
+    link.dataset.syncing = snapshot.syncing ? 'true' : 'false';
     link.title = `${text} · Open Downloads`;
   }
 

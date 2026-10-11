@@ -112,6 +112,13 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 #system-status:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #system-status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .system-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--edge); }
+.system-sync-icon { display: none; flex: none; width: 16px; height: 16px; color: var(--accent-label); font-size: 16px; line-height: 1; }
+#system-status[data-syncing="true"] .system-dot { display: none; }
+#system-status[data-syncing="true"] .system-sync-icon { display: inline-flex; align-items: center; justify-content: center; animation: system-sync-spin 1.4s linear infinite; }
+@keyframes system-sync-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  #system-status[data-syncing="true"] .system-sync-icon { animation: none; }
+}
 #system-status[data-state="active"] .system-dot { background: var(--accent); }
 #system-status[data-state="ready"] .system-dot { background: var(--accent); }
 #system-status[data-state="attention"] .system-dot { background: var(--error); }
