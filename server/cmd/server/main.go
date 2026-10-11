@@ -1,9 +1,14 @@
 package main
 
 import (
-	"log"
+	"errors"
+	"fmt"
 	"net/http"
+	"os"
 	"time"
+
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 
 	"trackharbor/server/internal/config"
 	"trackharbor/server/internal/store"
@@ -11,20 +16,44 @@ import (
 )
 
 func main() {
+	logging := zap.NewProductionConfig()
+	logging.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
+	logging.Sampling = nil
+	logging.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
+	logger, err := logging.Build()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "initialize server logger:", err)
+		os.Exit(1)
+	}
+	if err := run(logger); err != nil {
+		logger.Error("server stopped", zap.Error(err))
+		_ = logger.Sync()
+		os.Exit(1)
+	}
+	_ = logger.Sync()
+}
+
+func run(logger *zap.Logger) error {
 	cfg, dbPath, err := config.Load()
 	if err != nil {
-		log.Fatal(err)
+		// Config parsing may echo proxy URLs or credentials in an error.
+		return errors.New("load server configuration failed; check config.yaml, the listen address and file permissions")
 	}
 	db, err := store.Open(dbPath)
 	if err != nil {
-		log.Fatal("open server database: ", err)
+		return fmt.Errorf("open server database: %w", err)
 	}
 	defer db.Close()
+	httpLog, err := zap.NewStdLogAt(logger, zap.ErrorLevel)
+	if err != nil {
+		return fmt.Errorf("configure HTTP error logging: %w", err)
+	}
 	srv := &http.Server{
-		Addr: cfg.Listen, Handler: web.New(db, cfg),
+		Addr: cfg.Listen, Handler: web.New(db, logger, cfg),
+		ErrorLog:          httpLog,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second,
 		WriteTimeout: 0, IdleTimeout: time.Minute, // SSE stays open while downloads run.
 	}
-	log.Printf("TrackHarbor web preview: http://%s (local access only)", cfg.Listen)
-	log.Fatal(srv.ListenAndServe())
+	logger.Info("starting local server", zap.String("address", cfg.Listen))
+	return srv.ListenAndServe()
 }

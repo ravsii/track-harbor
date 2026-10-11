@@ -73,6 +73,9 @@ to an individual track. Progress is pushed to the browser with SSE. The server
 keeps MP3s in its own `downloads/` directory beside `library.db`, with download
 history in that same server database. Existing files are skipped after checking
 their stored hashes. Sync VK again if its signed audio URLs expire.
+Server logs are JSON on stderr at Info level by default. They record significant
+HTTP requests and SSE stream lifetimes with event counts, not event payloads;
+routine polling, audio requests, and static assets are omitted on success.
 The **Music** page plays downloaded server MP3s locally with previous/next,
 pause, seek, volume, shuffle and repeat-one controls. Playback does not start
 automatically; missing files are not streamed from Spotify or VK.

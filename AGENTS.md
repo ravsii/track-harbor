@@ -37,6 +37,11 @@ playlists or YouTube video/audio without requiring a subscription.
   structure and style; avoid unnecessary abstractions and unrelated refactoring.
 - Report errors with clear explanations so problems can be fixed quickly and
   development can continue.
+- Server logs use structured JSON via zap with Info as the default minimum
+  level. Never add Debug log statements: if an event does not belong in Info
+  (or Warn/Error), do not log it. Keep polling, transfer progress, and other
+  noisy events out of logs. Never log credentials, tokens, proxy URLs, request
+  or response bodies, or upstream errors that may contain secrets.
 - Keep final responses concise and describe what changed. Do not claim that code
   was verified or tests passed when those checks were not performed.
 

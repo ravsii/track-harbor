@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -17,6 +16,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"go.uber.org/zap"
 
 	"trackharbor/download"
 	"trackharbor/server/internal/config"
@@ -39,13 +40,14 @@ type downloadState struct {
 type downloadJob struct {
 	store     *store.Store
 	config    config.Config
+	logger    *zap.Logger
 	mu        sync.Mutex
 	state     downloadState
 	listeners map[chan []byte]struct{}
 }
 
-func newDownloadJob(db *store.Store, cfg config.Config) *downloadJob {
-	return &downloadJob{store: db, config: cfg, listeners: make(map[chan []byte]struct{}), state: downloadState{Message: "Ready to download."}}
+func newDownloadJob(db *store.Store, cfg config.Config, logger *zap.Logger) *downloadJob {
+	return &downloadJob{store: db, config: cfg, logger: logger, listeners: make(map[chan []byte]struct{}), state: downloadState{Message: "Ready to download."}}
 }
 
 func (d *downloadJob) publish(update downloadState) {
@@ -116,6 +118,7 @@ func (s *Server) startDownload(w http.ResponseWriter, r *http.Request) {
 	d.state = downloadState{Running: true, Total: len(tracks), Message: "Download started."}
 	d.mu.Unlock()
 	d.publish(downloadState{Running: true, Total: len(tracks), Message: "Download started."})
+	d.logger.Info("download started", zap.String("selection", mode), zap.Int("tracks", len(tracks)))
 	go d.run(tracks)
 	if r.Header.Get("Accept") == "application/json" {
 		w.WriteHeader(http.StatusAccepted)
@@ -162,7 +165,6 @@ func (d *downloadJob) run(tracks []store.Track) {
 					state.Message = "VK download failed: refresh VK sync to renew audio URLs; check FFmpeg."
 				}
 				// Signed VK URLs and proxy passwords must never reach logs or browser.
-				log.Printf("download failed: source=%s (details withheld)", t.Source)
 			} else {
 				state.Stage = "done"
 				state.Message = "Saved MP3"
@@ -198,6 +200,11 @@ func (d *downloadJob) run(tracks []store.Track) {
 	}
 	wg.Wait()
 	d.publish(downloadState{Running: false, Total: len(tracks), Finished: int(finished.Load()), Stage: "finished", Message: fmt.Sprintf("Finished %d tracks; %d failed.", finished.Load(), failed.Load())})
+	if failed.Load() > 0 {
+		d.logger.Warn("download finished with failures", zap.Int("total", len(tracks)), zap.Int32("failed", failed.Load()))
+	} else {
+		d.logger.Info("download finished", zap.Int("total", len(tracks)))
+	}
 }
 
 func downloadFilename(t store.Track) string {

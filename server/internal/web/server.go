@@ -9,13 +9,14 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 
 	"trackharbor/server/internal/config"
 	"trackharbor/server/internal/library"
@@ -29,16 +30,17 @@ var assets embed.FS
 
 type Server struct {
 	store      *store.Store
+	logger     *zap.Logger
 	mu         sync.Mutex
 	status     map[string]string
 	pingStatus map[string]string
 	downloads  *downloadJob
 }
 
-func New(db *store.Store, configs ...config.Config) http.Handler {
-	s := &Server{store: db, status: map[string]string{}, pingStatus: map[string]string{}}
+func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Handler {
+	s := &Server{store: db, logger: logger, status: map[string]string{}, pingStatus: map[string]string{}}
 	if len(configs) != 0 {
-		s.downloads = newDownloadJob(db, configs[0])
+		s.downloads = newDownloadJob(db, configs[0], logger)
 	}
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(assets, "assets")
@@ -53,7 +55,7 @@ func New(db *store.Store, configs ...config.Config) http.Handler {
 	mux.HandleFunc("GET /download/events", s.downloadEvents)
 	mux.HandleFunc("GET /audio", s.playAudio)
 	mux.HandleFunc("GET /audio/tracks", s.playableTracks)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return logRequests(logger, mux, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
 			host = r.Host
@@ -75,7 +77,7 @@ func New(db *store.Store, configs ...config.Config) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'")
 		mux.ServeHTTP(w, r)
-	})
+	}))
 }
 
 func (s *Server) playableTracks(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +101,7 @@ func (s *Server) playableTracks(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(items); err != nil {
-		log.Print("write saved tracks failed")
+		s.logger.Error("write saved tracks failed")
 	}
 }
 
@@ -156,7 +158,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := pageTemplate.Execute(w, data); err != nil {
-		log.Print("render web page failed")
+		s.logger.Error("render web page failed")
 	}
 }
 
@@ -222,6 +224,7 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	s.status[source] = "Credentials saved. Click Sync library to import tracks."
 	s.pingStatus[source] = "Not checked yet."
+	s.logger.Info("source credentials saved", zap.String("source", source))
 	http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
 }
 
@@ -276,6 +279,13 @@ func (s *Server) pingSource(w http.ResponseWriter, r *http.Request) {
 			s.pingStatus[source] = message
 		}
 		s.mu.Unlock()
+		result := "verified"
+		if errors.Is(pingErr, spotify.ErrUnauthorized) || errors.Is(pingErr, vk.ErrUnauthorized) {
+			result = "rejected"
+		} else if pingErr != nil {
+			result = "unavailable"
+		}
+		s.logger.Info("source connection checked", zap.String("source", source), zap.String("result", result))
 	}()
 	http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
 }
@@ -327,6 +337,7 @@ func (s *Server) syncSource(w http.ResponseWriter, r *http.Request) {
 	}
 	s.status[source] = "Syncing…"
 	s.mu.Unlock()
+	s.logger.Info("library sync started", zap.String("source", source))
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
@@ -344,7 +355,9 @@ func (s *Server) syncSource(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(err, context.DeadlineExceeded) {
 				message = "Sync timed out. Previous tracks were kept."
 			}
-			log.Printf("%s sync failed (details withheld to protect credentials)", source)
+			s.logger.Error("library sync failed", zap.String("source", source), zap.Bool("timed_out", errors.Is(err, context.DeadlineExceeded)))
+		} else {
+			s.logger.Info("library sync finished", zap.String("source", source), zap.Int("tracks", count))
 		}
 		s.mu.Lock()
 		s.status[source] = message
