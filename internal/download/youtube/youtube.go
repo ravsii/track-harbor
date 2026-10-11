@@ -26,6 +26,12 @@ type ProxySelector interface{ Next() (string, error) }
 type Provider struct {
 	executable string
 	strategy   DownloadStrategy
+	sourceDir  string
+}
+
+func (p *Provider) WithSourceDirectory(directory string) *Provider {
+	p.sourceDir = directory
+	return p
 }
 
 func (p *Provider) WithProxies(proxies ProxySelector) *Provider {
@@ -210,16 +216,17 @@ func (p *Provider) DownloadWithProgress(track download.Track, onProxy func(strin
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
-	var response download.DownloadResponse
-	err := p.connectionStrategy().Execute(ctx, func(address string) error {
-		var err error
-		response, err = p.downloadConnection(ctx, track, onProxy, address, onProgress)
-		return err
-	})
-	return response, err
+	source, err := p.prepareSource(ctx, track, onProxy, onProgress)
+	if err != nil {
+		return download.DownloadResponse{}, err
+	}
+	// Conversion is local: errors must not switch routes or download again.
+	conversionCtx, conversionCancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer conversionCancel()
+	return p.convertSource(conversionCtx, source, onProgress)
 }
 
-func (p *Provider) downloadConnection(ctx context.Context, track download.Track, onProxy func(string), address string, onProgress func(download.DownloadProgress)) (download.DownloadResponse, error) {
+func (p *Provider) convertSource(ctx context.Context, source string, onProgress func(download.DownloadProgress)) (download.DownloadResponse, error) {
 	dir, err := os.MkdirTemp("", "meshvault-youtube-*")
 	if err != nil {
 		return download.DownloadResponse{}, err
@@ -230,13 +237,19 @@ func (p *Provider) downloadConnection(ctx context.Context, track download.Track,
 			os.RemoveAll(dir)
 		}
 	}()
-	_, err = p.runConnectionWithProgress(ctx, "download", onProxy, address, onProgress, "--no-playlist", "--concurrent-fragments", "5", "--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K", "--output", filepath.Join(dir, "audio.%(ext)s"), "--", "https://www.youtube.com/watch?v="+track.ID)
+	if onProgress != nil {
+		onProgress(download.DownloadProgress{Converting: true})
+	}
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", source, "-map", "0:a:0", "-vn", "-c:a", "libmp3lame", "-b:a", "192k", filepath.Join(dir, "audio.mp3"))
+	cmd.WaitDelay = time.Second
+	configureCancellation(cmd)
+	err = cmd.Run()
 	if err != nil {
-		return download.DownloadResponse{}, err
+		return download.DownloadResponse{}, fmt.Errorf("FFmpeg: конвертация в MP3 не удалась (исходник сохранён в %q): %w", source, err)
 	}
 	f, err := os.Open(filepath.Join(dir, "audio.mp3"))
 	if err != nil {
-		return download.DownloadResponse{}, fmt.Errorf("yt-dlp MP3 output: %w", err)
+		return download.DownloadResponse{}, fmt.Errorf("FFmpeg MP3 output: %w", err)
 	}
 	info, err := f.Stat()
 	if err != nil || info.Size() == 0 {

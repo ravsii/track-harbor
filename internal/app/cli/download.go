@@ -172,6 +172,7 @@ var downloadCmd = &cobra.Command{
 		if err != nil {
 			fatal(err)
 		}
+		provider.WithSourceDirectory(filepath.Join(cfg.DownloadDir, ".sources"))
 		fmt.Fprintf(out, "Источник: %s\n", provider.Name())
 		strategyName := strings.Join(cfg.Strategy, " -> ")
 		fmt.Fprintf(out, "Стратегии: %s\n", strategyName)

@@ -58,6 +58,7 @@ func (w *progressWriter) flush() {
 	w.onProgress(download.DownloadProgress{
 		DownloadedBytes: max(0, event.Downloaded), TotalBytes: event.Total,
 		BytesPerSecond: max(0, event.Speed), ETA: time.Duration(max(0, event.ETA) * float64(time.Second)),
-		Converting: event.Status == "finished",
+		// Conversion is reported by the separate local FFmpeg invocation.
+		Converting: false,
 	})
 }
