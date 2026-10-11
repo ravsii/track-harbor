@@ -112,8 +112,16 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 .settings-panel .settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .settings-panel .clear-option { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 12px/1.5 'DM Sans', sans-serif; letter-spacing: 0; }
 .settings-panel .clear-option input { width: auto; accent-color: var(--accent); }
-.settings-panel #settings-feedback:empty { display: none; }
-.settings-panel #settings-feedback[data-error="true"] { color: var(--error); }
+.settings-panel .status:empty { display: none; }
+.settings-panel .status[data-error="true"] { color: var(--error); }
+.personal-proxies { margin-top: 20px; }
+.personal-proxy-list { list-style: none; margin: 12px 0 0; padding: 0; }
+.personal-proxy-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 10px 0; border-top: 1px solid var(--edge); }
+.personal-proxy-list .proxy-address { color: var(--ink); overflow-wrap: anywhere; margin-right: auto; }
+.personal-proxy-list .proxy-credentials { width: 100%; color: var(--muted); overflow-wrap: anywhere; }
+.personal-proxy-list .proxy-credentials[hidden] { display: none; }
+.personal-proxy-list form { margin: 0; }
+.personal-proxy-list button { white-space: nowrap; }
 #content .library:not(.music-library) { margin-top: 20px; }
 #content .library-heading { margin-bottom: 12px; }
 #content:not([data-source="music"]) footer { margin-top: 24px; }

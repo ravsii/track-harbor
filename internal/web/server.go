@@ -76,6 +76,9 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("POST /download/stop", s.stopDownloads)
 	mux.HandleFunc("GET /download/events", s.downloadEvents)
 	mux.HandleFunc("POST /settings", s.saveSettings)
+	mux.HandleFunc("POST /settings/personal", s.addPersonalProxy)
+	mux.HandleFunc("POST /settings/personal/{id}/delete", s.deletePersonalProxy)
+	mux.HandleFunc("GET /settings/personal/{id}/credentials", s.personalProxyCredentials)
 	mux.HandleFunc("GET /audio", s.playAudio)
 	mux.HandleFunc("GET /audio/tracks", s.playableTracks)
 	return logRequests(logger, mux, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +157,8 @@ type pageData struct {
 	Connected                                 bool
 	Tracks                                    []store.Track
 	SettingsStrategy                          string
-	PersonalProxyCount, PublicProxyCount      int
+	PersonalProxies                           []personalProxyView
+	PublicProxyCount                          int
 	SettingsSaved                             bool
 }
 
@@ -176,8 +180,19 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		data.SettingsStrategy = strings.Join(settings.Strategy, "\n")
-		data.PersonalProxyCount = len(settings.PersonalProxy)
 		data.PublicProxyCount = len(settings.PublicProxy)
+		proxies, proxyErr := s.store.PersonalProxies()
+		if proxyErr != nil {
+			http.Error(w, "unable to read personal proxies", http.StatusInternalServerError)
+			return
+		}
+		for _, proxy := range proxies {
+			parsed, err := url.Parse(proxy.Address)
+			if err != nil {
+				continue
+			}
+			data.PersonalProxies = append(data.PersonalProxies, personalProxyView{ID: proxy.ID, Host: parsed.Host, Scheme: parsed.Scheme, HasCredentials: parsed.User != nil})
+		}
 		data.SettingsSaved = r.URL.Query().Get("saved") == "1"
 	} else if source == "music" {
 		data.Tracks, err = s.store.ListAll()

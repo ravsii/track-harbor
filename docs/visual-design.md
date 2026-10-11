@@ -52,9 +52,12 @@ When a source is connected, tuck the credential replacement form into a collapse
 disclosure so Sync and the track list remain close to the top. Keep that form
 visible by default until the source is connected.
 Settings uses the same compact panel and theme colors as the source pages.
-Keep proxy addresses out of rendered HTML; show counts, empty replacement
-fields, and explicit controls for clearing saved lists. Saving settings must
-not interrupt the persistent player.
+Show personal proxy scheme, host and port in compact rows with individual
+removal controls. Never render proxy usernames or passwords in the initial
+HTML: fetch them only after an explicit Show credentials action, and hide them
+again on request. Public proxies retain an empty replacement field, saved
+count and explicit clearing control. Saving settings must not interrupt the
+persistent player.
 
 ## Color palette
 

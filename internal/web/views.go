@@ -105,14 +105,30 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	      <form id="settings-form" action="/settings" method="post">
 	        <label>SPOTIFY / YOUTUBE ROUTE ORDER<textarea name="strategy" required spellcheck="false">{{.SettingsStrategy}}</textarea></label>
 	        <p>One per line, in priority order: <code>direct</code>, <code>personal_proxy</code>, <code>random_proxy</code>.</p>
-	        <div class="settings-fields">
-	          <div class="proxy-field"><label>PERSONAL PROXIES<textarea name="personal_proxy" spellcheck="false" autocomplete="off" placeholder="One proxy URL per line. Leave empty to keep saved values."></textarea></label><p>{{.PersonalProxyCount}} saved. Addresses are never shown again; enter new URLs to replace the entire list.</p><label class="clear-option"><input type="checkbox" name="clear_personal_proxy"> Remove saved personal proxies</label></div>
-	          <div class="proxy-field"><label>PUBLIC PROXIES<textarea name="public_proxy" spellcheck="false" autocomplete="off" placeholder="One proxy URL per line. Leave empty to keep saved values."></textarea></label><p>{{.PublicProxyCount}} saved. Addresses are never shown again; enter new URLs to replace the entire list.</p><label class="clear-option"><input type="checkbox" name="clear_public_proxy"> Remove saved public proxies</label></div>
-	        </div>
+	        <label>PUBLIC PROXIES<textarea name="public_proxy" spellcheck="false" autocomplete="off" placeholder="One proxy URL per line. Leave empty to keep saved values."></textarea></label><p>{{.PublicProxyCount}} saved. Addresses are never shown again; enter new URLs to replace the entire list.</p><label class="clear-option"><input type="checkbox" name="clear_public_proxy"> Remove saved public proxies</label>
 	        <p>VK always uses <code>direct</code> (the only supported route). Set <code>listen</code> and <code>download_dir</code> in <code>config.yaml</code>; changing either requires a restart.</p>
 	        <button type="submit">Save settings <span>{{template "icon" "arrow-right-01"}}</span></button>
 	      </form>
 	      <div id="settings-feedback" class="status" role="status" aria-live="polite">{{if .SettingsSaved}}Settings saved. New download batches will use them.{{end}}</div>
+	    </section>
+	    <section class="panel settings-panel personal-proxies">
+	      <h2>Personal proxies</h2>
+	      <p>Each new proxy must reach YouTube over HTTPS before it is saved. Downloads already running keep their current routes.</p>
+	      <form id="personal-proxy-form" action="/settings/personal" method="post" autocomplete="off">
+	        <label>PROXY URL<input name="address" type="text" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="http://login:password@host:port"></label>
+	        <button type="submit">Check and add proxy <span>{{template "icon" "arrow-right-01"}}</span></button>
+	      </form>
+	      <div id="personal-proxy-feedback" class="status" role="status" aria-live="polite"></div>
+	      {{if .PersonalProxies}}
+	      <ul class="personal-proxy-list">
+	        {{range .PersonalProxies}}
+	        <li data-proxy-id="{{.ID}}"><span class="proxy-address">{{.Scheme}}://{{.Host}}</span>
+	          {{if .HasCredentials}}<button type="button" class="secondary proxy-reveal" aria-expanded="false" aria-label="Show credentials for {{.Host}}">Show credentials</button><span class="proxy-credentials" hidden></span>{{end}}
+	          <form class="proxy-delete" method="post" action="/settings/personal/{{.ID}}/delete"><button type="submit" class="secondary" aria-label="Remove proxy {{.Host}}">Remove</button></form>
+	        </li>
+	        {{end}}
+	      </ul>
+	      {{else}}<p>No personal proxies saved yet.</p>{{end}}
 	    </section>
 	    {{else if eq .Source "downloads"}}
 	    <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOAD CONTROL</span></div>

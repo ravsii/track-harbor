@@ -35,8 +35,11 @@ is not moved automatically; keep using the same data directory when upgrading.
 Server database migrations in `internal/store/migrations/` run on startup.
 Configure download route order and personal/public proxy lists on the local
 **Settings** page. Changes affect new download batches; running transfers keep
-their routes. Saved proxy URLs are not shown again: a blank list leaves its
-current values unchanged, and the removal checkbox clears them. On upgrade,
+their routes. Add personal proxies one at a time: each must reach YouTube over
+HTTPS through that proxy before it is saved. The list shows host and port;
+credentials are fetched only when explicitly revealed, and entries can be
+removed individually. Public proxy URLs are not shown again: a blank list
+leaves its current values unchanged, and the removal checkbox clears them. On upgrade,
 the server imports existing `strategy`, `personal_proxy`, and `public_proxy`
 values from `config.yaml` into `library.db` and removes those keys from YAML.
 `vk_strategy` is fixed to `direct`. Keep `listen` and optional `download_dir`
