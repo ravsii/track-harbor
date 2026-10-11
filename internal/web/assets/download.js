@@ -74,7 +74,7 @@
   }
 
   function status(row, track) {
-    const labels = {waiting: 'Waiting for sync', queued: 'Queued', checking: 'Checking', searching: 'Searching', downloading: 'Downloading', converting: 'Converting', metadata: 'Saving', retrying: 'Retrying', skipped: 'Saved', done: 'Saved', saved: 'Saved', failed: 'Failed'};
+    const labels = {waiting: 'Waiting for sync', queued: 'Queued', checking: 'Checking', missing: 'Missing · downloading again', searching: 'Searching', downloading: 'Downloading', converting: 'Converting', metadata: 'Saving', retrying: 'Retrying', skipped: 'Saved', done: 'Saved', saved: 'Saved', failed: 'Failed'};
     const progress = track.total_bytes > 0 && !['stopped', 'failed'].includes(track.stage) ? ` · ${Math.round(track.bytes / track.total_bytes * 100)}%` : '';
     const field = row.querySelector('.download-stage');
     field.textContent = (labels[track.stage] || track.stage || 'Waiting') + progress;
@@ -150,6 +150,16 @@
             row.dataset.playable = 'true';
             const button = row.querySelector('.play-track');
             if (button) button.disabled = false;
+          }
+        }
+      }
+      if (state.stage === 'missing') {
+        document.dispatchEvent(new Event('download:missing'));
+        for (const row of document.querySelectorAll('.library .tracks li[data-source]')) {
+          if (row.dataset.source === state.source && row.dataset.artist === state.artist && row.dataset.title === state.title) {
+            row.dataset.playable = 'false';
+            const button = row.querySelector('.play-track');
+            if (button) button.disabled = true;
           }
         }
       }

@@ -188,8 +188,20 @@ func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 		state.Message = "Checking saved file"
 		d.publish(state)
 		valid, err := d.saved(t)
+		var invalidateErr error
+		if err == nil && !valid && t.FilePath != "" && ctx.Err() == nil {
+			invalidateErr = d.store.InvalidateDownload(t)
+			if invalidateErr == nil {
+				state.Stage = "missing"
+				state.Message = "Saved file unavailable; downloading again"
+				d.publish(state)
+			}
+		}
 		if ctx.Err() != nil {
 			state.Stage, state.Message = "stopped", "Stopped"
+		} else if invalidateErr != nil {
+			state.Stage, state.Message = "failed", "Could not update missing track status"
+			d.logger.Warn("invalidate missing track failed", zap.String("source", t.Source), zap.String("artist", t.Artist), zap.String("title", t.Title))
 		} else if err == nil && valid {
 			state.Stage = "skipped"
 			state.Message = "Already downloaded"
@@ -291,6 +303,11 @@ func (s *Server) startDownloads(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "downloads are already running or stopping", http.StatusConflict)
 		return
 	}
+	if err := d.store.SetDownloadsStopped(false); err != nil {
+		d.mu.Unlock()
+		http.Error(w, "unable to save download setting", http.StatusInternalServerError)
+		return
+	}
 	d.stopped = false
 	d.mu.Unlock()
 	d.enqueue(tracks)
@@ -304,6 +321,11 @@ func (s *Server) stopDownloads(w http.ResponseWriter, r *http.Request) {
 	}
 	d := s.downloads
 	d.mu.Lock()
+	if err := d.store.SetDownloadsStopped(true); err != nil {
+		d.mu.Unlock()
+		http.Error(w, "unable to save download setting", http.StatusInternalServerError)
+		return
+	}
 	d.stopped = true
 	if d.cancel != nil {
 		d.cancel()

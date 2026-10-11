@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -41,14 +42,24 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	s := &Server{store: db, logger: logger, status: map[string]string{}, pingStatus: map[string]string{}}
 	if len(configs) != 0 {
 		s.downloads = newDownloadJob(db, configs[0], logger)
-		go func() {
-			tracks, err := db.ListAll()
-			if err != nil {
-				logger.Error("load library for startup download check failed")
-				return
-			}
-			s.downloads.enqueue(tracks)
-		}()
+		stopped, err := db.DownloadsStopped()
+		if err != nil {
+			logger.Error("read saved download setting failed")
+			stopped = true
+		}
+		if stopped {
+			s.downloads.stopped = true
+			s.downloads.state = downloadState{Stopped: true, Stage: "stopped", Message: "Downloads stopped."}
+		} else {
+			go func() {
+				tracks, err := db.ListAll()
+				if err != nil {
+					logger.Error("load library for startup download check failed")
+					return
+				}
+				s.downloads.enqueue(tracks)
+			}()
+		}
 	}
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(assets, "assets")
@@ -170,6 +181,15 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		http.Error(w, "unable to read library", 500)
 		return
+	}
+	for i := range data.Tracks {
+		if data.Tracks[i].FilePath == "" {
+			continue
+		}
+		info, err := os.Stat(data.Tracks[i].FilePath)
+		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+			data.Tracks[i].FilePath = ""
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := pageTemplate.Execute(w, data); err != nil {

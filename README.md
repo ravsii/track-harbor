@@ -21,8 +21,9 @@ are retried every second without stopping the previous server.
 The global **Stop downloads** button on Downloads cancels ongoing transfers and
 blocks automatic downloads after further syncs. **Start downloads** checks the
 entire current library and resumes downloading missing tracks.
-On server startup, downloads are enabled and the saved library is checked in
-the background for missing MP3s. Restarting the server resets a previous stop.
+On first startup, downloads are enabled and the saved library is checked in
+the background for missing MP3s. Manual Stop/Start choices persist across
+server restarts.
 
 The server writes `config.yaml`, `library.db`, and `downloads/` beside its
 executable. `make run` builds the executable in the Git-ignored `.local-server/`

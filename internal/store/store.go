@@ -43,6 +43,17 @@ func Open(path string) (*Store, error) {
 
 func (s *Store) Close() error { return s.db.Close() }
 
+func (s *Store) DownloadsStopped() (bool, error) {
+	var stopped bool
+	err := s.db.QueryRow(`SELECT stopped FROM download_control WHERE id=1`).Scan(&stopped)
+	return stopped, err
+}
+
+func (s *Store) SetDownloadsStopped(stopped bool) error {
+	_, err := s.db.Exec(`UPDATE download_control SET stopped=? WHERE id=1`, stopped)
+	return err
+}
+
 func (s *Store) SaveCredentials(source, first, second string) error {
 	if source != "spotify" && source != "vk" {
 		return fmt.Errorf("unknown source")
@@ -80,9 +91,9 @@ func (s *Store) ListAll() ([]Track, error) {
 	return scanTracks(rows)
 }
 
-// ListPlayable returns only tracks recorded in this server's download history.
+// ListPlayable returns tracks whose downloaded MP3 is still present on disk.
 func (s *Store) ListPlayable() ([]Track, error) {
-	rows, err := s.db.Query(`SELECT t.source, t.artist, t.title FROM tracks t JOIN downloads d ON (t.source=d.source AND t.artist=d.artist AND t.title=d.title) WHERE d.file_path<>'' ORDER BY t.added_at DESC, t.source, t.artist, t.title`)
+	rows, err := s.db.Query(`SELECT t.source, t.artist, t.title, d.file_path FROM tracks t JOIN downloads d ON (t.source=d.source AND t.artist=d.artist AND t.title=d.title) WHERE d.file_path<>'' ORDER BY t.added_at DESC, t.source, t.artist, t.title`)
 	if err != nil {
 		return nil, err
 	}
@@ -90,8 +101,12 @@ func (s *Store) ListPlayable() ([]Track, error) {
 	var tracks []Track
 	for rows.Next() {
 		var track Track
-		if err := rows.Scan(&track.Source, &track.Artist, &track.Title); err != nil {
+		if err := rows.Scan(&track.Source, &track.Artist, &track.Title, &track.FilePath); err != nil {
 			return nil, err
+		}
+		info, err := os.Stat(track.FilePath)
+		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
+			continue
 		}
 		tracks = append(tracks, track)
 	}
@@ -109,6 +124,12 @@ func (s *Store) Track(source, artist, title string) (Track, error) {
 
 func (s *Store) SaveDownload(t Track, path, hash string) error {
 	_, err := s.db.Exec(`INSERT INTO downloads(source,artist,title,file_path,sha256) VALUES(?,?,?,?,?) ON CONFLICT(source,artist,title) DO UPDATE SET file_path=excluded.file_path,sha256=excluded.sha256`, t.Source, t.Artist, t.Title, path, hash)
+	return err
+}
+
+// InvalidateDownload removes an outdated download without removing the library track.
+func (s *Store) InvalidateDownload(t Track) error {
+	_, err := s.db.Exec(`DELETE FROM downloads WHERE source=? AND artist=? AND title=? AND file_path=?`, t.Source, t.Artist, t.Title, t.FilePath)
 	return err
 }
 

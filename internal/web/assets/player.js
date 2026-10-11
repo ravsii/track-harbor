@@ -46,8 +46,11 @@
       const response = await fetch('/audio/tracks');
       if (!response.ok) throw new Error('unavailable');
       tracks = await response.json();
+      return true;
     } catch (_) {
+      tracks = [];
       $('player-error').textContent = 'Could not load saved tracks. Refresh the page to retry.';
+      return false;
     }
   }
 
@@ -67,7 +70,7 @@
   }
 
   async function next() {
-    if (!tracks.length) await loadTracks();
+    if (!await loadTracks()) return;
     if (!tracks.length) { await play(null); return; }
     const index = tracks.findIndex(track => stamp(track) === current);
     if (shuffleButton.getAttribute('aria-pressed') === 'true' && tracks.length > 1) {
@@ -80,7 +83,7 @@
 
   async function previous() {
     if (audio.currentTime > 3) { audio.currentTime = 0; return; }
-    if (!tracks.length) await loadTracks();
+    if (!await loadTracks()) return;
     if (!tracks.length) { await play(null); return; }
     const prior = history.pop();
     const index = tracks.findIndex(track => stamp(track) === current);
@@ -142,6 +145,7 @@
       audio.currentTime = audio.duration * event.target.value / 1000;
   });
   document.addEventListener('download:done', loadTracks);
+  document.addEventListener('download:missing', loadTracks);
   document.addEventListener('htmx:afterSwap', event => {
     if (event.detail.target.id === 'content') loadTracks();
   });
