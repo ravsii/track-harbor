@@ -50,6 +50,9 @@ func newDownloadJob(db *store.Store, cfg config.Config) *downloadJob {
 
 func (d *downloadJob) publish(update downloadState) {
 	d.mu.Lock()
+	if update.Running && update.Finished < d.state.Finished {
+		update.Finished = d.state.Finished
+	}
 	d.state = update
 	data, _ := json.Marshal(update)
 	for ch := range d.listeners {
