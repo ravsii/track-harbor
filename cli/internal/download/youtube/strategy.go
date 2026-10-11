@@ -66,6 +66,7 @@ func (s ProxyOnly) Execute(ctx context.Context, request func(string) error) erro
 	if errors.As(err, &httpErr) && httpErr.StatusCode == 429 {
 		if pool, ok := s.Pool.(interface{ ReportRateLimit(string) }); ok {
 			pool.ReportRateLimit(address)
+			return &download.HTTPError{Stage: httpErr.Stage, StatusCode: 429, ProxyCooldown: true}
 		}
 	}
 	return err

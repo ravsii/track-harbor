@@ -218,18 +218,22 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 			d.sendEvent(StatusNotFound, jobID, name, err)
 		} else if httpErr != nil && httpErr.StatusCode == 429 {
 			retryNeeded, rateLimited = true, true
-			delay, changed := gate.block(generation)
-			if changed {
-				if d.display != nil {
-					pauseStage := "download"
-					if gate == d.searchGate {
-						pauseStage = "search"
+			if httpErr.ProxyCooldown {
+				logger.Warn("proxy_rate_limit", append(fields, zap.Int("retry", attempt+1))...)
+			} else {
+				delay, changed := gate.block(generation)
+				if changed {
+					if d.display != nil {
+						pauseStage := "download"
+						if gate == d.searchGate {
+							pauseStage = "search"
+						}
+						d.display.SetRateLimitPause(pauseStage, time.Now().Add(delay))
 					}
-					d.display.SetRateLimitPause(pauseStage, time.Now().Add(delay))
+					logger.Warn("rate_limit_pause", zap.String("stage", stage), zap.Duration("delay", delay), zap.Int("http_status", 429))
 				}
-				logger.Warn("rate_limit_pause", zap.String("stage", stage), zap.Duration("delay", delay), zap.Int("http_status", 429))
+				logger.Warn("retry_scheduled", append(fields, zap.Int("retry", attempt+1), zap.Duration("delay", delay))...)
 			}
-			logger.Warn("retry_scheduled", append(fields, zap.Int("retry", attempt+1), zap.Duration("delay", delay))...)
 			d.sendEvent(StatusRetryWaiting, jobID, name, err)
 		} else if retry < maxRetries {
 			retryNeeded = true

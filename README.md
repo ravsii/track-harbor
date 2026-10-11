@@ -352,20 +352,21 @@ the hash is registered for the new path. Untracked old files are left untouched.
   The selected worker count is displayed at startup and logged. Searches run
   concurrently without a one-second delay; only audio download starts are
   spaced at least one second apart.
-- The first HTTP 429 pauses new requests for the affected stage across all
-  workers. Download errors do not pause searches, and vice versa. Cooldowns
-  increase in waves: 5, 10, 15, 20, 25, then 30 seconds maximum. Multiple 429s
-  from already running requests count as one wave. Running operations are not
-  interrupted. After a download pause, starts resume at one-second intervals;
-  searches remain concurrent.
+- HTTP 429 through the public proxy pool cools down only that address. Retries
+  select another available proxy immediately; if all are cooling down, selection
+  waits for the first to recover. Without a pool-managed proxy, the first 429
+  pauses new requests for the affected stage across all workers. Search and
+  download pauses are independent and increase in waves: 5, 10, 15, 20, 25,
+  then 30 seconds maximum. Running operations are not interrupted. Download
+  starts remain spaced at least one second apart.
 - Tracks receiving HTTP 429 stay queued with unlimited retries until processed
   or the application is stopped.
 - Other technical errors receive five retries after 1, 2, 4, 8, and 16 seconds.
 - Successful searches with no results are not retried and are displayed
   separately.
 - Structured `zap` log: `logs/download.jsonl`.
-- The terminal displays HTTP 429 as a search or download pause with a countdown
-  to the automatic retry.
+- The terminal shows a pause countdown for stage-wide HTTP 429 cooldowns;
+  proxy-local cooldowns do not pause the entire stage.
 - Download history and query-to-file mappings are stored in
   `~/.trackharbor/vault.db`, independently of Spotify synchronization.
 

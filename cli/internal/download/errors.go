@@ -14,6 +14,9 @@ import (
 type HTTPError struct {
 	Stage      string
 	StatusCode int
+	// ProxyCooldown means the failed proxy was paused in the shared pool.
+	// Other proxies may still accept requests; do not pause all workers.
+	ProxyCooldown bool
 }
 
 func (e *HTTPError) Error() string { return fmt.Sprintf("%s: HTTP %d", e.Stage, e.StatusCode) }
