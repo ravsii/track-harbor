@@ -23,6 +23,7 @@ type Track struct {
 	OwnerID int64  `json:"owner_id"`
 	Artist  string `json:"artist"`
 	Title   string `json:"title"`
+	URL     string `json:"url"`
 }
 
 type Client struct {

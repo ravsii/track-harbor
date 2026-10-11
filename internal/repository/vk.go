@@ -3,6 +3,8 @@ package repository
 import (
 	"database/sql"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -10,6 +12,13 @@ import (
 // VK keeps its credentials and library separate from Spotify's tables.
 type VKRepository struct {
 	db *sqlx.DB
+}
+
+type VKSong struct {
+	Song
+	OwnerID int64  `db:"owner_id"`
+	AudioID int64  `db:"audio_id"`
+	URL     string `db:"audio_url"`
 }
 
 func NewVKRepository(db *sqlx.DB) (*VKRepository, error) {
@@ -24,6 +33,39 @@ func NewVKRepository(db *sqlx.DB) (*VKRepository, error) {
 	)`)
 	if err != nil {
 		return nil, err
+	}
+	// Existing VK libraries predate audio URLs. Keep their tracks and request a
+	// fresh sync before attempting direct downloads.
+	for _, column := range []string{"owner_id INTEGER NOT NULL DEFAULT 0", "audio_id INTEGER NOT NULL DEFAULT 0", "audio_url TEXT NOT NULL DEFAULT ''"} {
+		name := strings.Fields(column)[0]
+		var present int
+		rows, err := db.Queryx("PRAGMA table_info(vk_songs)")
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var cid, notNull, pk int
+			var field, kind string
+			var defaultValue sql.NullString
+			if err = rows.Scan(&cid, &field, &kind, &notNull, &defaultValue, &pk); err != nil {
+				break
+			}
+			if field == name {
+				present = 1
+			}
+		}
+		if err == nil {
+			err = rows.Err()
+		}
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+		if present == 0 {
+			if _, err := db.Exec("ALTER TABLE vk_songs ADD COLUMN " + column); err != nil {
+				return nil, fmt.Errorf("extend VK songs: %w", err)
+			}
+		}
 	}
 	return &VKRepository{db: db}, nil
 }
@@ -45,11 +87,17 @@ func (r *VKRepository) LoadToken() (string, error) {
 
 func (r *VKRepository) GetAll() ([]Song, error) {
 	var songs []Song
-	err := r.db.Select(&songs, "SELECT * FROM vk_songs ORDER BY id")
+	err := r.db.Select(&songs, "SELECT id, artists, title, created_at FROM vk_songs ORDER BY id")
 	return songs, err
 }
 
-func (r *VKRepository) ReplaceAll(songs []Song) (int, error) {
+func (r *VKRepository) GetAudio() ([]VKSong, error) {
+	var songs []VKSong
+	err := r.db.Select(&songs, "SELECT id, artists, title, created_at, owner_id, audio_id, audio_url FROM vk_songs ORDER BY id")
+	return songs, err
+}
+
+func (r *VKRepository) ReplaceAll(songs []VKSong) (int, error) {
 	tx, err := r.db.Beginx()
 	if err != nil {
 		return 0, err
@@ -60,8 +108,8 @@ func (r *VKRepository) ReplaceAll(songs []Song) (int, error) {
 	}
 	saved := 0
 	for _, song := range songs {
-		result, err := tx.Exec(`INSERT INTO vk_songs (artists, title, created_at)
-			VALUES (?, ?, ?) ON CONFLICT (artists, title) DO NOTHING`, song.Artists, song.Title, song.CreatedAt)
+		result, err := tx.Exec(`INSERT INTO vk_songs (artists, title, created_at, owner_id, audio_id, audio_url)
+			VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (artists, title) DO NOTHING`, song.Artists, song.Title, song.CreatedAt, song.OwnerID, song.AudioID, song.URL)
 		if err != nil {
 			return 0, err
 		}

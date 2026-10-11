@@ -139,7 +139,7 @@ var vkSyncCmd = &cobra.Command{
 		if err != nil {
 			return fmt.Errorf("fetch VK My Music (previous libraries preserved): %w", err)
 		}
-		songs := make([]repository.Song, 0, len(tracks))
+		songs := make([]repository.VKSong, 0, len(tracks))
 		skipped := 0
 		for _, track := range tracks {
 			artist, title := strings.TrimSpace(track.Artist), strings.TrimSpace(track.Title)
@@ -151,7 +151,10 @@ var vkSyncCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("encode VK artist: %w", err)
 			}
-			songs = append(songs, repository.Song{Artists: string(artists), Title: title, CreatedAt: time.Now()})
+			songs = append(songs, repository.VKSong{
+				Song:    repository.Song{Artists: string(artists), Title: title, CreatedAt: time.Now()},
+				OwnerID: track.OwnerID, AudioID: track.ID, URL: track.URL,
+			})
 		}
 		if err := cmd.Context().Err(); err != nil {
 			return err

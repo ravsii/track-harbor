@@ -70,6 +70,12 @@ func New(provider Provider, workers int, outputDir string) *Downloader {
 	return &Downloader{provider: provider, workers: max(1, workers), outputDir: outputDir, logger: zap.NewNop(), retryDelay: retryDelay, startInterval: time.Second, rateLimitDelay: rateLimitDelay}
 }
 
+// WithStartInterval disables YouTube's audio spacing for direct VK transfers.
+func (d *Downloader) WithStartInterval(interval time.Duration) *Downloader {
+	d.startInterval = interval
+	return d
+}
+
 const maxRetries = 5
 
 func retryDelay(retry int) time.Duration { return time.Second << retry }

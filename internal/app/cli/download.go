@@ -30,7 +30,7 @@ const (
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Download all tracks from the database",
-	Long:  "Download tracks from both the Spotify and VK libraries in ~/.trackharbor/vault.db using YouTube. Set download_dir in ~/.trackharbor/config.yaml to choose the output directory (default: ~/.trackharbor/downloaded). The strategy list controls connection priority. Use --workers to set concurrency (default: 50), capped by the available proxy pool size when using proxies.",
+	Long:  "Download Spotify tracks from YouTube and VK tracks directly through FFmpeg into the configured download_dir. YouTube strategy priority applies only to Spotify. Use --workers to set YouTube concurrency (default: 50).",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if _, err := downloadWorkerLimit(cmd); err != nil {
 			return err
@@ -130,16 +130,15 @@ var downloadCmd = &cobra.Command{
 		if err != nil {
 			fatal(err)
 		}
-		songList = append(songList, vkSongs...)
 		databasePath, err := config.DatabasePath()
 		if err != nil {
 			fatal(err)
 		}
 		out := cmd.OutOrStdout()
-		fmt.Fprintf(out, "Database: %s\nTracks in database: %d\n", databasePath, len(songList))
+		fmt.Fprintf(out, "Database: %s\nTracks in database: %d (Spotify: %d; VK: %d)\n", databasePath, len(songList)+len(vkSongs), len(songList), len(vkSongs))
 		fmt.Fprintln(out, "Log: logs/download.jsonl")
 		logger.Info("database_loaded", zap.String("database", databasePath), zap.Int("total", len(songList)))
-		if len(songList) == 0 {
+		if len(songList)+len(vkSongs) == 0 {
 			fmt.Fprintln(out, "No tracks in the database. Run trackharbor spotify sync or trackharbor vk sync first.")
 			return
 		}
@@ -157,6 +156,14 @@ var downloadCmd = &cobra.Command{
 		}
 		if err := restoreDownloadQueries(store); err != nil {
 			fatal(err)
+		}
+		if len(vkSongs) > 0 {
+			if err := downloadVKTracks(vkRepo, store, cfg.DownloadDir, logger, out); err != nil {
+				fatal(err)
+			}
+		}
+		if len(songList) == 0 {
+			return // VK-only downloads do not initialize YouTube or its proxies.
 		}
 		queries := buildQueriesLogged(songList, logger)
 		pending := make([]string, 0, len(queries))

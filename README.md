@@ -12,7 +12,8 @@ go run ./cmd/cli spotify sync
 go run ./cmd/cli download
 ```
 
-Downloads always use YouTube; there is no provider selection.
+Spotify tracks use YouTube. VK tracks download directly from VK through FFmpeg;
+there is no provider selection or YouTube fallback for VK.
 Running the CLI without a subcommand displays help and does not start downloads.
 
 ## Spotify
@@ -89,9 +90,15 @@ direct connection, not the download proxies.
 VK tracks are stored separately in `vk_songs`. A successful `vk sync` atomically
 replaces only this table; Spotify's `songs` table and credentials are untouched.
 Failed requests or incomplete pagination preserve the previous library.
-`download` reads both libraries, deduplicates identical search queries, and
-continues downloading from YouTube using the shared download history. It does
-not download audio files from VK. Diagnostics: `logs/vk-sync.jsonl`.
+`vk sync` saves track IDs and audio URLs alongside titles; older VK libraries
+must be synced again before direct downloading. `download` processes the VK
+library directly with FFmpeg (up to ten concurrent conversions, no YouTube
+search), then processes Spotify tracks through YouTube. VK audio URLs can
+expire; run `vk sync` again if FFmpeg cannot fetch a track. Entries for which
+VK returns no audio URL are skipped with a warning, without blocking other
+tracks or falling back to YouTube. URLs are not
+included in diagnostics. Completed files are skipped using the same download
+history tables, under the separate `vk` source. Diagnostics: `logs/vk-sync.jsonl`.
 
 **Audio access is not guaranteed.** VK restricts audio methods by application
 and token permissions. Token issuance and audio access for the vk.com application have not been
@@ -225,7 +232,8 @@ is loaded. This command does not download tracks and does not require
 
 ## YouTube dependencies
 
-**Install `yt-dlp` and `ffmpeg` separately and make them available in `PATH`.**
+**Install `ffmpeg` for VK; Spotify downloads also require `yt-dlp`.**
+Make them available in `PATH`.
 TrackHarbor does not install them automatically. Check your installation with:
 
 ```sh
