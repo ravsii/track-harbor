@@ -10,6 +10,9 @@ func ProxyLabel(address string) string {
 	if address == "" {
 		return ""
 	}
+	if address == "direct" {
+		return address
+	}
 	if !strings.Contains(address, "://") {
 		address = "http://" + address
 	}

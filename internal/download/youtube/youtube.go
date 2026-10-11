@@ -25,10 +25,24 @@ type ProxySelector interface{ Next() (string, error) }
 
 type Provider struct {
 	executable string
-	proxies    ProxySelector
+	strategy   DownloadStrategy
 }
 
-func (p *Provider) WithProxies(proxies ProxySelector) *Provider { p.proxies = proxies; return p }
+func (p *Provider) WithProxies(proxies ProxySelector) *Provider {
+	return p.WithStrategy(ProxyOnly{Pool: proxies})
+}
+
+func (p *Provider) WithStrategy(strategy DownloadStrategy) *Provider {
+	p.strategy = strategy
+	return p
+}
+
+func (p *Provider) connectionStrategy() DownloadStrategy {
+	if p.strategy == nil {
+		return Direct{}
+	}
+	return p.strategy
+}
 
 func NewProvider() (*Provider, error) {
 	path, err := exec.LookPath("yt-dlp")
@@ -50,42 +64,38 @@ func (p *Provider) run(stage string, timeout time.Duration, args ...string) ([]b
 func (p *Provider) runWithProxy(stage string, timeout time.Duration, onProxy func(string), args ...string) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	var output []byte
+	err := p.connectionStrategy().Execute(ctx, func(address string) error {
+		var err error
+		output, err = p.runConnection(ctx, stage, onProxy, address, args...)
+		return err
+	})
+	return output, err
+}
+
+func (p *Provider) runConnection(ctx context.Context, stage string, onProxy func(string), proxyAddress string, args ...string) ([]byte, error) {
 	// Never invoke a shell; query strings are a single argument, not commands.
 	options := []string{"--ignore-config", "--no-progress", "--no-cache-dir", "--socket-timeout", "15", "--retries", "0", "--fragment-retries", "0", "--extractor-retries", "0", "--file-access-retries", "0"}
-	var proxyAddress string
-	if p.proxies != nil {
-		var err error
-		if pool, ok := p.proxies.(interface {
-			NextContext(context.Context) (string, error)
-		}); ok {
-			proxyAddress, err = pool.NextContext(ctx)
-		} else {
-			proxyAddress, err = p.proxies.Next()
+	// --proxy "" explicitly disables environment proxies for direct requests.
+	options = append(options, "--proxy", proxyAddress)
+	if onProxy != nil {
+		label := "direct"
+		if proxyAddress != "" {
+			label = download.ProxyLabel(proxyAddress)
 		}
-		if err != nil {
-			return nil, fmt.Errorf("yt-dlp %s proxy: %w", stage, err)
-		}
-		if proxyAddress == "" {
-			return nil, fmt.Errorf("yt-dlp %s: empty proxy; direct connection forbidden", stage)
-		}
-		options = append(options, "--proxy", proxyAddress)
-		if onProxy != nil {
-			onProxy(download.ProxyLabel(proxyAddress))
-		}
+		onProxy(label)
 	}
 	cmd := exec.CommandContext(ctx, p.executable, append(options, args...)...)
-	if p.proxies != nil {
-		// Explicit routing must not be bypassed by inherited NO_PROXY or a
-		// conflicting global HTTP_PROXY; never change the parent environment.
-		cmd.Env = make([]string, 0, len(os.Environ()))
-		for _, env := range os.Environ() {
-			key, _, _ := strings.Cut(env, "=")
-			switch strings.ToUpper(key) {
-			case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY":
-				continue
-			}
-			cmd.Env = append(cmd.Env, env)
+	// Explicit routing must not be bypassed by inherited NO_PROXY or a
+	// conflicting global HTTP_PROXY; never change the parent environment.
+	cmd.Env = make([]string, 0, len(os.Environ()))
+	for _, env := range os.Environ() {
+		key, _, _ := strings.Cut(env, "=")
+		switch strings.ToUpper(key) {
+		case "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY":
+			continue
 		}
+		cmd.Env = append(cmd.Env, env)
 	}
 	cmd.WaitDelay = time.Second
 	configureCancellation(cmd)
@@ -98,11 +108,6 @@ func (p *Provider) runWithProxy(stage string, timeout time.Duration, onProxy fun
 			if match[1] == "429" {
 				rateLimited = true
 				break
-			}
-		}
-		if rateLimited && proxyAddress != "" {
-			if pool, ok := p.proxies.(interface{ ReportRateLimit(string) }); ok {
-				pool.ReportRateLimit(proxyAddress)
 			}
 		}
 	}
@@ -171,6 +176,18 @@ func (p *Provider) DownloadWithProxy(track download.Track, onProxy func(string))
 	if !videoID.MatchString(track.ID) {
 		return download.DownloadResponse{}, fmt.Errorf("YouTube: invalid video ID")
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	var response download.DownloadResponse
+	err := p.connectionStrategy().Execute(ctx, func(address string) error {
+		var err error
+		response, err = p.downloadConnection(ctx, track, onProxy, address)
+		return err
+	})
+	return response, err
+}
+
+func (p *Provider) downloadConnection(ctx context.Context, track download.Track, onProxy func(string), address string) (download.DownloadResponse, error) {
 	dir, err := os.MkdirTemp("", "meshvault-youtube-*")
 	if err != nil {
 		return download.DownloadResponse{}, err
@@ -181,7 +198,7 @@ func (p *Provider) DownloadWithProxy(track download.Track, onProxy func(string))
 			os.RemoveAll(dir)
 		}
 	}()
-	_, err = p.runWithProxy("download", 5*time.Minute, onProxy, "--no-playlist", "--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K", "--output", filepath.Join(dir, "audio.%(ext)s"), "--", "https://www.youtube.com/watch?v="+track.ID)
+	_, err = p.runConnection(ctx, "download", onProxy, address, "--no-playlist", "--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K", "--output", filepath.Join(dir, "audio.%(ext)s"), "--", "https://www.youtube.com/watch?v="+track.ID)
 	if err != nil {
 		return download.DownloadResponse{}, err
 	}

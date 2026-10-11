@@ -158,13 +158,28 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	gate := d.searchGate
 	var proxyAddress string
 	onProxy := func(stage string, kind StatusKind) func(string) {
+		connectionAttempt := 0
 		return func(address string) {
+			connectionAttempt++
+			// Fallback is another network request, so it must pass the same
+			// stage gate rather than bypass audio spacing or shared cooldowns.
+			if connectionAttempt > 1 {
+				generation = d.waitForRequest(gate, jobID, name, kind)
+			}
 			proxyAddress = ProxyLabel(address)
-			logger.Info("request_started", zap.String("stage", stage), zap.String("proxy", proxyAddress))
+			connection := "proxy"
+			if proxyAddress == "direct" {
+				connection = "direct"
+			}
+			logger.Info("request_started", zap.String("stage", stage), zap.String("proxy", proxyAddress), zap.String("connection", connection), zap.Int("connection_attempt", connectionAttempt))
 			if d.display != nil {
 				d.display.Update(StatusEvent{JobID: jobID, Source: d.provider.Name(), Kind: kind, Name: name, Proxy: proxyAddress, TotalBytes: -1})
 			} else {
-				fmt.Printf("%s: %s · прокси: %s\n", stage, name, proxyAddress)
+				if connection == "direct" {
+					fmt.Printf("%s: %s · напрямую\n", stage, name)
+				} else {
+					fmt.Printf("%s: %s · прокси: %s\n", stage, name, proxyAddress)
+				}
 			}
 		}
 	}

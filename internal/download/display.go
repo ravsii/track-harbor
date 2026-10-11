@@ -322,7 +322,9 @@ func (d *Display) render() {
 				status = fmt.Sprintf("Скачивается %3.0f%%", pct)
 			}
 		}
-		if ev.Proxy != "" {
+		if ev.Proxy == "direct" {
+			status += " · напрямую"
+		} else if ev.Proxy != "" {
 			status += " · прокси: " + ev.Proxy
 		}
 		// Keep the progress bar complete; shorten the name first. Narrow
