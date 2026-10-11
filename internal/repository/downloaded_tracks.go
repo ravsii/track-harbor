@@ -28,7 +28,35 @@ func NewDownloadedTracksRepository(db *sqlx.DB) (*DownloadedTracksRepository, er
 	if err != nil {
 		return nil, err
 	}
+	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS downloaded_queries (
+		source TEXT NOT NULL,
+		query TEXT NOT NULL,
+		track_id TEXT NOT NULL,
+		file_path TEXT NOT NULL,
+		PRIMARY KEY (source, query, file_path)
+	)`)
+	if err != nil {
+		return nil, err
+	}
 	return &DownloadedTracksRepository{db: db}, nil
+}
+
+func (r *DownloadedTracksRepository) LookupQueryPaths(source, query string) ([]string, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var paths []string
+	err := r.db.Select(&paths, `SELECT file_path FROM downloaded_queries
+		WHERE source=? AND query=? ORDER BY file_path`, source, query)
+	return paths, err
+}
+
+func (r *DownloadedTracksRepository) SaveQuery(source, query, trackID, filePath string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	_, err := r.db.Exec(`INSERT INTO downloaded_queries (source,query,track_id,file_path)
+		VALUES (?,?,?,?) ON CONFLICT (source,query,file_path) DO UPDATE SET track_id=excluded.track_id`,
+		source, query, trackID, filePath)
+	return err
 }
 
 func (r *DownloadedTracksRepository) LookupHash(source, trackID, filePath string) (string, error) {

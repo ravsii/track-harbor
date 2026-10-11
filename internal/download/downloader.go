@@ -219,6 +219,16 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 			d.sendEvent(StatusFailed, jobID, name, err)
 		}
 	}
+	d.sendEvent(StatusChecking, jobID, query, nil)
+	logger.Info("checking_download_history")
+	if path, err := d.downloadedQuery(query); err != nil {
+		fail("check_history", err)
+		return
+	} else if path != "" {
+		logger.Info("skipped", zap.String("file_path", path), zap.String("reason", "file_exists_nonempty"), zap.Duration("duration", time.Since(started)))
+		d.sendEvent(StatusSkipped, jobID, query, nil)
+		return
+	}
 	logger.Info("searching")
 	generation = d.waitForRequest(gate, jobID, query, StatusSearching)
 	var track Track
@@ -243,7 +253,7 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 		return
 	}
 	logger = logger.With(zap.String("file_path", filePath))
-	logger.Info("checking_hash")
+	logger.Info("checking_file")
 	// Different playlist entries can resolve to the same provider track.
 	// Check and download under one lock so they cannot overwrite each other.
 	lock, _ := d.fileLocks.LoadOrStore(filePath, &sync.Mutex{})
@@ -255,10 +265,14 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 		verified, err = d.migrateLegacyFile(track.ID, filePath, logger)
 	}
 	if err != nil {
-		fail("check_hash", fmt.Errorf("проверка скачанного файла: %w", err))
+		fail("check_file", fmt.Errorf("проверка скачанного файла: %w", err))
 		return
 	}
 	if verified {
+		if err := d.saveQuery(query, track.ID, filePath); err != nil {
+			fail("save_query", err)
+			return
+		}
 		logger.Info("skipped", zap.Duration("duration", time.Since(started)))
 		d.sendEvent(StatusSkipped, jobID, name, nil)
 		return
@@ -330,6 +344,9 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	if err == nil && resp.ContentLength >= 0 && written != resp.ContentLength {
 		err = fmt.Errorf("неполный файл: получено %d из %d байт", written, resp.ContentLength)
 	}
+	if err == nil && written == 0 {
+		err = fmt.Errorf("пустой скачанный файл")
+	}
 	if err == nil {
 		failureStage = "saving"
 		logger.Info("saving", zap.Int64("bytes", written))
@@ -338,6 +355,9 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	}
 	if err == nil && d.store != nil {
 		err = d.store.SaveHash(d.provider.Name(), track.ID, filePath, fmt.Sprintf("%x", hash.Sum(nil)))
+	}
+	if err == nil {
+		err = d.saveQuery(query, track.ID, filePath)
 	}
 
 	if err != nil {

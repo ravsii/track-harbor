@@ -1,10 +1,7 @@
 package download
 
 import (
-	"crypto/sha256"
 	"errors"
-	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,35 +16,75 @@ type DownloadStore interface {
 	SaveHash(source, trackID, filePath, hash string) error
 }
 
+// QueryDownloadStore links playlist queries to successful downloads so repeat
+// runs can skip both provider search and transfer. Older stores stay compatible.
+type QueryDownloadStore interface {
+	LookupQueryPaths(source, query string) ([]string, error)
+	SaveQuery(source, query, trackID, filePath string) error
+}
+
+func (d *Downloader) downloadedQuery(query string) (string, error) {
+	store, ok := d.store.(QueryDownloadStore)
+	if !ok {
+		return "", nil
+	}
+	return DownloadedQueryPath(store, d.provider.Name(), query, d.outputDir)
+}
+
+// DownloadedQueryPath checks history locally without initializing a provider.
+func DownloadedQueryPath(store QueryDownloadStore, source, query, outputDir string) (string, error) {
+	paths, err := store.LookupQueryPaths(source, query)
+	if err != nil {
+		return "", err
+	}
+	directory, err := filepath.Abs(outputDir)
+	if err != nil {
+		return "", err
+	}
+	for _, path := range paths {
+		// History from another output directory must not suppress this download.
+		if filepath.Dir(path) != directory {
+			continue
+		}
+		present, err := nonemptyFile(path)
+		if err != nil {
+			return "", err
+		}
+		if present {
+			return path, nil
+		}
+	}
+	return "", nil
+}
+
+func (d *Downloader) saveQuery(query, trackID, filePath string) error {
+	if store, ok := d.store.(QueryDownloadStore); ok {
+		return store.SaveQuery(d.provider.Name(), query, trackID, filePath)
+	}
+	return nil
+}
+
 func (d *Downloader) WithDownloadStore(store DownloadStore) *Downloader {
 	d.store = store
 	return d
 }
 
 func (d *Downloader) alreadyDownloaded(trackID, filePath string) (bool, error) {
-	if d.store == nil {
-		return false, nil
-	}
-	expected, err := d.store.LookupHash(d.provider.Name(), trackID, filePath)
-	if err != nil || expected == "" {
-		return false, err
-	}
-	f, err := os.Open(filePath)
+	return nonemptyFile(filePath)
+}
+
+func nonemptyFile(filePath string) (bool, error) {
+	info, err := os.Stat(filePath)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
-	hash := sha256.New()
-	if _, err := io.Copy(hash, f); err != nil {
-		return false, err
-	}
-	return fmt.Sprintf("%x", hash.Sum(nil)) == expected, nil
+	return info.Mode().IsRegular() && info.Size() > 0, nil
 }
 
-// Adopt only previously tracked, hash-verified ID-named files. Never overwrite
+// Adopt only previously tracked, non-empty ID-named files. Never overwrite
 // a target while migrating, and retain the legacy file if saving history fails.
 func (d *Downloader) migrateLegacyFile(trackID, target string, logger *zap.Logger) (bool, error) {
 	if d.store == nil || trackID == "" || strings.ContainsAny(trackID, `/\`) {
@@ -73,6 +110,9 @@ func (d *Downloader) migrateLegacyFile(trackID, target string, logger *zap.Logge
 	hash, err := d.store.LookupHash(d.provider.Name(), trackID, legacy)
 	if err != nil {
 		return false, err
+	}
+	if hash == "" {
+		return false, nil
 	}
 	// Link+unlink is a same-directory move that cannot clobber an existing file.
 	if err := os.Link(legacy, target); err != nil {

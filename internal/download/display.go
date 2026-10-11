@@ -328,7 +328,7 @@ func (d *Display) render() {
 		pct := -1.0
 		switch ev.Kind {
 		case StatusChecking:
-			status = "Проверка хеша"
+			status = "Проверка файла"
 		case StatusPreparing:
 			status = "Подготовка"
 		case StatusSaving:

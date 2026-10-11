@@ -141,6 +141,30 @@ var downloadCmd = &cobra.Command{
 		if err != nil {
 			fatal(fmt.Errorf("инициализация истории скачиваний: %w", err))
 		}
+		if err := restoreDownloadQueries(store); err != nil {
+			fatal(err)
+		}
+		queries := buildQueriesLogged(songList, logger)
+		pending := make([]string, 0, len(queries))
+		skipped := 0
+		for _, query := range queries {
+			path, err := download.DownloadedQueryPath(store, "youtube", query, testFolder)
+			if err != nil {
+				fatal(fmt.Errorf("проверка истории скачиваний: %w", err))
+			}
+			if path == "" {
+				pending = append(pending, query)
+				continue
+			}
+			skipped++
+			logger.Info("skipped", zap.String("source", "youtube"), zap.String("query", query), zap.String("file_path", path), zap.String("reason", "file_exists_nonempty"))
+		}
+		fmt.Fprintf(out, "Уже скачано: %d. Осталось обработать: %d.\n", skipped, len(pending))
+		logger.Info("queries_prepared", zap.Int("total", len(queries)), zap.Int("skipped", skipped), zap.Int("pending", len(pending)))
+		if len(pending) == 0 {
+			fmt.Fprintln(out, "Все треки уже скачаны: поиск и подключения не нужны.")
+			return
+		}
 		provider, err := youtube.NewProvider()
 		if err != nil {
 			fatal(err)
@@ -238,9 +262,7 @@ var downloadCmd = &cobra.Command{
 		logger.Info("workers_configured", zap.String("strategy", strategyName), zap.Int("workers", workers), zap.Int("proxy_count", proxyCount), zap.Int("workers_limit", workerLimit))
 		downloader := download.New(provider, workers, testFolder).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
 
-		queries := buildQueriesLogged(songList, logger)
-		logger.Info("queries_prepared", zap.Int("total", len(queries)))
-		downloader.Run(queries)
+		downloader.Run(pending)
 	},
 }
 
