@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/zstd"
+	"go.uber.org/zap"
 )
 
 const playlistQueryHash = "8964e8eafb21aa992a7d951d256d83285c04be2105d209262901de70cb97584a"
@@ -32,11 +33,11 @@ func GetSongInfoPage(bearer, clientToken string, offset int) (*PlaylistResponse,
 	return GetPlaylistPage(bearer, clientToken, info.Data.PlaylistV2.URI, offset)
 }
 
-func GetPlaylistPage(bearer, clientToken, uri string, offset int) (*PlaylistResponse, error) {
-	return fetchPlaylist(bearer, clientToken, uri, offset, "fetchPlaylistContents")
+func GetPlaylistPage(bearer, clientToken, uri string, offset int, loggers ...*zap.Logger) (*PlaylistResponse, error) {
+	return fetchPlaylist(bearer, clientToken, uri, offset, "fetchPlaylistContents", loggers...)
 }
 
-func fetchPlaylist(bearer, clientToken, uri string, offset int, operation string) (*PlaylistResponse, error) {
+func fetchPlaylist(bearer, clientToken, uri string, offset int, operation string, loggers ...*zap.Logger) (*PlaylistResponse, error) {
 	var response struct {
 		Data struct {
 			PlaylistV2 json.RawMessage `json:"playlistV2"`
@@ -46,7 +47,7 @@ func fetchPlaylist(bearer, clientToken, uri string, offset int, operation string
 	if operation == "fetchPlaylist" {
 		variables["enableWatchFeedEntrypoint"] = true
 	}
-	if err := query(bearer, clientToken, operation, playlistQueryHash, variables, &response); err != nil {
+	if err := query(bearer, clientToken, operation, playlistQueryHash, variables, &response, loggers...); err != nil {
 		return nil, err
 	}
 	if len(response.Data.PlaylistV2) == 0 || string(response.Data.PlaylistV2) == "null" {
@@ -78,10 +79,32 @@ func fetchPlaylist(bearer, clientToken, uri string, offset int, operation string
 	if responseFull.Data.PlaylistV2.Content.PagingInfo.Offset != offset {
 		return nil, fmt.Errorf("Spotify returned an unexpected playlist offset")
 	}
+	playlist := responseFull.Data.PlaylistV2
+	spotifyLogger(loggers).Info("spotify_playlist_page", zap.String("uri", diagnosticText(playlist.URI, bearer, clientToken)), zap.String("format", diagnosticText(playlist.Format, bearer, clientToken)), zap.String("typename", diagnosticText(playlist.Typename, bearer, clientToken)), zap.Int("offset", offset), zap.Int("items", len(playlist.Content.Items)), zap.Int("total", playlist.Content.TotalCount))
 	return &responseFull, nil
 }
 
-func query(bearer, clientToken, operation, hash string, variables any, result any) error {
+func query(bearer, clientToken, operation, hash string, variables any, result any, loggers ...*zap.Logger) (queryErr error) {
+	logger := spotifyLogger(loggers).With(zap.String("operation", operation), zap.String("query_hash", hash))
+	if values, ok := variables.(map[string]any); ok {
+		for _, key := range []string{"uri", "offset", "limit", "features", "flatten"} {
+			if value, exists := values[key]; exists {
+				if text, ok := value.(string); ok {
+					value = diagnosticText(text, bearer, clientToken)
+				}
+				logger = logger.With(zap.Any(key, value))
+			}
+		}
+	}
+	started := time.Now()
+	logger.Info("spotify_request_started")
+	defer func() {
+		if queryErr != nil {
+			logger.Error("spotify_request_failed", zap.String("error", diagnosticText(queryErr.Error(), bearer, clientToken)), zap.Duration("duration", time.Since(started)))
+		} else {
+			logger.Info("spotify_request_finished", zap.Duration("duration", time.Since(started)))
+		}
+	}()
 	payload, err := json.Marshal(map[string]any{
 		"operationName": operation, "variables": variables,
 		"extensions": map[string]any{"persistedQuery": map[string]any{"version": 1, "sha256Hash": hash}},
@@ -119,6 +142,7 @@ func query(bearer, clientToken, operation, hash string, variables any, result an
 	}
 
 	defer resp.Body.Close()
+	logger.Info("spotify_http_response", zap.Int("status", resp.StatusCode), zap.String("encoding", diagnosticText(resp.Header.Get("Content-Encoding"), bearer, clientToken)), zap.Int64("content_length", resp.ContentLength))
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
@@ -151,13 +175,29 @@ func query(bearer, clientToken, operation, hash string, variables any, result an
 		return fmt.Errorf("Spotify response exceeds size limit")
 	}
 	var envelope struct {
-		Errors []json.RawMessage `json:"errors"`
+		Errors []struct {
+			Message    string `json:"message"`
+			Path       []any  `json:"path"`
+			Extensions struct {
+				Code json.RawMessage `json:"code"`
+			} `json:"extensions"`
+		} `json:"errors"`
 	}
 	if err := json.Unmarshal(data, &envelope); err != nil {
 		return fmt.Errorf("read Spotify response: %w", err)
 	}
-	// Never expose raw API error messages, which may include session details.
+	// Log only selected, sanitized error fields; never headers or response bodies.
 	if len(envelope.Errors) > 0 {
+		for i, apiErr := range envelope.Errors {
+			if i >= 10 {
+				break
+			}
+			path := make([]string, 0, len(apiErr.Path))
+			for _, part := range apiErr.Path {
+				path = append(path, diagnosticText(fmt.Sprint(part), bearer, clientToken))
+			}
+			logger.Error("spotify_api_error", zap.String("message", diagnosticText(apiErr.Message, bearer, clientToken)), zap.String("code", diagnosticText(string(apiErr.Extensions.Code), bearer, clientToken)), zap.Strings("path", path))
+		}
 		return fmt.Errorf("Spotify returned a request error for %s", operation)
 	}
 	return json.Unmarshal(data, result)

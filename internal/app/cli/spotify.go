@@ -10,7 +10,9 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 	"meshvault/internal/db"
+	"meshvault/internal/download"
 	"meshvault/internal/repository"
 	"meshvault/internal/source/spotify"
 )
@@ -58,9 +60,25 @@ var syncCmd = &cobra.Command{
 	Short:        "Discover and sync Spotify Liked Songs using saved tokens",
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) (runErr error) {
 		started := time.Now()
 		out := cmd.OutOrStdout()
+		logger, closeLog, err := download.NewFileLogger("logs/spotify-sync.jsonl")
+		if err != nil {
+			return fmt.Errorf("create Spotify sync log: %w", err)
+		}
+		fmt.Fprintln(out, "Log: logs/spotify-sync.jsonl")
+		logger.Info("spotify_sync_started")
+		defer func() {
+			if runErr != nil {
+				logger.Error("spotify_sync_failed", zap.Error(runErr), zap.Duration("duration", time.Since(started)))
+			} else {
+				logger.Info("spotify_sync_finished", zap.Duration("duration", time.Since(started)))
+			}
+			if err := closeLog(); err != nil {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Spotify sync log error: %v\n", err)
+			}
+		}()
 		fmt.Fprintln(out, "[1/4] Checking saved headers in ~/.meshvault/vault.db…")
 		database, err := db.New()
 		if err != nil {
@@ -79,10 +97,11 @@ var syncCmd = &cobra.Command{
 		if headers == nil {
 			return fmt.Errorf("no saved Spotify tokens; run meshvault spotify auth first")
 		}
+		logger.Info("spotify_saved_headers_loaded", zap.Bool("authorization_present", headers.Authorization != ""), zap.Bool("client_token_present", headers.ClientToken != ""))
 		fmt.Fprintln(out, "[2/4] Discovering Liked Songs in your Spotify library…")
-		info, err := spotify.FindLikedSongs(headers.Authorization, headers.ClientToken)
+		info, err := spotify.FindLikedSongs(headers.Authorization, headers.ClientToken, logger)
 		if err != nil {
-			return fmt.Errorf("[2/4] discover Liked Songs: %w (if tokens expired, run meshvault spotify auth)", err)
+			return fmt.Errorf("[2/4] discover Liked Songs: %w; see logs/spotify-sync.jsonl", err)
 		}
 		playlistURI := info.Data.PlaylistV2.URI
 
@@ -96,7 +115,7 @@ var syncCmd = &cobra.Command{
 		for pageNumber := 2; len(playlist.Content.Items) < total; pageNumber++ {
 			offset := len(playlist.Content.Items)
 			fmt.Fprintf(out, "      Fetching page %d (offset=%d)…\n", pageNumber, offset)
-			next, err := spotify.GetPlaylistPage(headers.Authorization, headers.ClientToken, playlistURI, offset)
+			next, err := spotify.GetPlaylistPage(headers.Authorization, headers.ClientToken, playlistURI, offset, logger)
 			if err != nil {
 				return fmt.Errorf("[2/4] page %d (offset=%d): %w", pageNumber, offset, err)
 			}
@@ -161,12 +180,14 @@ var syncCmd = &cobra.Command{
 		}
 
 		fmt.Fprintln(out, "[3/4] Replacing the track list in ~/.meshvault/vault.db…")
+		logger.Info("spotify_tracks_prepared", zap.Int("tracks", len(ss)), zap.Int("unavailable", unavailable))
 		repo := repository.NewSongRepository(database)
 		saved, err := repo.ReplaceAll(ss)
 		if err != nil {
 			return fmt.Errorf("[3/4] save tracks (previous list preserved): %w", err)
 		}
 		fmt.Fprintf(out, "[4/4] Done. Saved %d tracks in %.1f s.\n", saved, time.Since(started).Seconds())
+		logger.Info("spotify_tracks_saved", zap.Int("saved", saved), zap.Int("duplicates", len(ss)-saved), zap.Int("unavailable", unavailable))
 		if repeats := len(ss) - saved; repeats > 0 {
 			fmt.Fprintf(out, "      Duplicates: %d (one copy kept per track).\n", repeats)
 		}
