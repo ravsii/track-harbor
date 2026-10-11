@@ -15,7 +15,9 @@ run: clean
 	go run ./cmd/cli/
 
 run-server:
-	go run ./server/cmd/server/
+	mkdir -p .local-server
+	go build -o .local-server/trackharbor-server ./server/cmd/server/
+	./.local-server/trackharbor-server
 
 migrate-up:
 	$(GOOSE) up

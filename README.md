@@ -21,7 +21,7 @@ Running the CLI without a subcommand displays help and does not start downloads.
 ## Web preview
 
 ```sh
-go run ./server/cmd/server
+make run-server
 ```
 
 Visit `http://127.0.0.1:8787` to connect Spotify (paste Web Player
@@ -31,11 +31,17 @@ own Sync button and track list. Sync runs in the background and does not erase
 the previous library on failure. Playback and downloads in the web app are not
 implemented yet; the CLI still supports downloading.
 
-The server has its **own** `~/.trackharbor-server/config.json` and
-`~/.trackharbor-server/library.db`, never reads the CLI's credentials or
-`~/.trackharbor/vault.db`, and accepts an alternate server-only data directory
-via `TRACKHARBOR_SERVER_DIR`. Its config currently supports a `listen` address
-on a loopback IP (default `127.0.0.1:8787`). There is **no login**: do not expose
+The server keeps `config.json` and `library.db` beside its executable by default.
+For local development, `make run-server` builds the server in the Git-ignored
+`.local-server/` directory, where it also stores these files. Set
+`TRACKHARBOR_SERVER_CONFIG` and `TRACKHARBOR_SERVER_DB` to override either file
+path independently, or `TRACKHARBOR_SERVER_DIR` to change the default directory
+for both. Relative paths are resolved from the process working directory.
+Existing data in `~/.trackharbor-server/` is not moved automatically; copy its
+files to the new location if you want to retain your connected sources and tracks.
+The server never reads the CLI's credentials or `~/.trackharbor/vault.db`.
+Its config supports a `listen` address on a loopback IP (default
+`127.0.0.1:8787`). There is **no login**: do not expose
 this preview to other devices or the public internet without access control.
 Multi-device deployment is a future step, not enabled by this local preview.
 The web preview vendors HTMX 2.0.4 under `server/internal/web/assets/` with

@@ -6,3 +6,4 @@
 *.pprof
 /logs
 /.codegraph/
+/.local-server/
