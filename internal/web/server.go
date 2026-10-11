@@ -36,13 +36,14 @@ type Server struct {
 	settingsMu  sync.Mutex
 	importMu    sync.Mutex
 	proxyImport proxyImportState
+	player      playerHub
 	status      map[string]string
 	pingStatus  map[string]string
 	downloads   *downloadJob
 }
 
 func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Handler {
-	s := &Server{store: db, logger: logger, status: map[string]string{}, pingStatus: map[string]string{}}
+	s := &Server{store: db, logger: logger, status: map[string]string{}, pingStatus: map[string]string{}, player: playerHub{listeners: make(map[chan struct{}]struct{})}}
 	if len(configs) != 0 {
 		s.downloads = newDownloadJob(db, configs[0], logger)
 		stopped, err := db.DownloadsStopped()
@@ -85,6 +86,9 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("GET /settings/personal/{id}/address", s.personalProxyAddress)
 	mux.HandleFunc("GET /audio", s.playAudio)
 	mux.HandleFunc("GET /audio/tracks", s.playableTracks)
+	mux.HandleFunc("GET /player/state", s.playerState)
+	mux.HandleFunc("GET /player/events", s.playerEvents)
+	mux.HandleFunc("POST /player/command", s.playerCommand)
 	return logRequests(logger, mux, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {

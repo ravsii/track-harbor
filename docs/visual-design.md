@@ -21,6 +21,18 @@ previous level. The theme button cycles through System, Light, and Dark.
 The top bar has no track dropdown: on load it shows the last played available
 track, or the most recently added available one, without autoplay. Play starts the
 shown track; individual tracks are selected from their Play actions in the library.
+Browsers on the same local server share the current track, position and play
+state. Only the browser granted playback ownership emits sound; clicking Play
+in another browser transfers ownership. Other player controls affect the shared
+player without moving its sound. A browser must stop local audio if it loses
+contact with the server; reopening a browser must never autoplay by itself.
+When another browser owns a playing track, its Play button says Play here and
+takes over playback rather than pausing the other browser.
+Show an accent monitor beside the track name with the tooltip "Listening on
+another device" and subtly dim the other player's controls while playback
+belongs to a different tab or browser. Keep Play here legible and operable.
+Use a styled tooltip rather than the browser's delayed native title; show it
+immediately on hover or keyboard focus and keep it visible while hovered.
 
 ## Spacing baseline
 

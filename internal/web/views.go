@@ -39,7 +39,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
         <button type="button" id="player-toggle" class="primary" aria-label="Play">{{template "icon" "play"}}</button>
         <button type="button" id="player-next" aria-label="Next track">{{template "icon" "next"}}</button>
         <div class="player-progress">
-          <strong id="player-track" aria-live="polite"></strong>
+          <div class="player-track-line"><strong id="player-track" aria-live="polite"></strong><span id="player-remote" role="img" tabindex="0" aria-label="Listening on another device" data-tooltip="Listening on another device" hidden>{{template "icon" "computer"}}</span></div>
           <div class="player-progress-row">
             <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek">
             <span id="player-time">0:00 / 0:00</span>

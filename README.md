@@ -26,6 +26,13 @@ On first startup, downloads are enabled and the saved library is checked in
 the background for missing MP3s. Manual Stop/Start choices persist across
 server restarts.
 
+The player shares its track, position, shuffle and play/pause state between
+browsers connected to the same local server. Sound belongs to one browser at a
+time: click Play in another browser to take over. The previous browser stops
+before the new one is allowed to sound; after a server restart the shared player
+starts paused. Browser autoplay restrictions may require a second click after a
+handoff. Keep the server on loopback; there is no multi-device login yet.
+
 The server writes `config.yaml`, `library.db`, and `downloads/` beside its
 executable. `make run` builds the executable in the Git-ignored `.local-server/`
 directory so local development data stays there. Use `TRACKHARBOR_SERVER_DIR`
