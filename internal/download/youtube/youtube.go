@@ -152,7 +152,19 @@ func (p *Provider) Search(query string) (download.Track, error) {
 }
 
 func (p *Provider) SearchWithProxy(query string, onProxy func(string)) (download.Track, error) {
-	output, err := p.runWithProxy("search", time.Minute, onProxy, "--flat-playlist", "--dump-single-json", "--", "ytsearch1:"+query)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	var track download.Track
+	err := p.connectionStrategy().Execute(ctx, func(address string) error {
+		var err error
+		track, err = p.searchConnection(ctx, query, onProxy, address)
+		return err
+	})
+	return track, err
+}
+
+func (p *Provider) searchConnection(ctx context.Context, query string, onProxy func(string), address string) (download.Track, error) {
+	output, err := p.runConnection(ctx, "search", onProxy, address, "--flat-playlist", "--dump-single-json", "--", "ytsearch1:"+query)
 	if err != nil {
 		return download.Track{}, err
 	}

@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spf13/cobra"
+	"meshvault/internal/config"
 	"meshvault/internal/db"
 	"meshvault/internal/download"
 	"meshvault/internal/download/youtube"
@@ -27,12 +28,12 @@ const (
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Скачать все треки из базы",
-	Long:  "Скачать все треки из meshtune.db в tmp_music через YouTube. Стратегия: direct (по умолчанию), proxy или fallback. Параллельность задаётся --workers (по умолчанию 50), при доступном пуле прокси ограничивается его размером.",
+	Long:  "Скачать все треки из ~/.meshvault/vault.db в tmp_music через YouTube. Порядок соединений задаётся strategy в ~/.meshvault/config.yaml. Параллельность задаётся --workers (по умолчанию 50), при доступном пуле прокси ограничивается его размером.",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if _, err := downloadWorkerLimit(cmd); err != nil {
 			return err
 		}
-		_, err := downloadStrategyName(cmd)
+		_, err := config.Load()
 		return err
 	},
 
@@ -41,7 +42,7 @@ var downloadCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		strategyName, err := downloadStrategyName(cmd)
+		cfg, err := config.Load()
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -142,10 +143,21 @@ var downloadCmd = &cobra.Command{
 			fatal(err)
 		}
 		fmt.Fprintf(out, "Источник: %s\n", provider.Name())
-		fmt.Fprintf(out, "Стратегия: %s\n", strategyName)
-		var connection youtube.DownloadStrategy = youtube.Direct{}
+		strategyName := strings.Join(cfg.Strategy, " -> ")
+		fmt.Fprintf(out, "Стратегии: %s\n", strategyName)
+		var proxyStrategy youtube.ProxyOnly
 		workers, proxyCount := workerLimit, 0
-		if strategyName != "direct" {
+		usesProxy, usesDirect, usesConfigProxy := false, false, false
+		for _, name := range cfg.Strategy {
+			usesProxy = usesProxy || name == "random_proxy"
+			usesDirect = usesDirect || name == "direct"
+			usesConfigProxy = usesConfigProxy || name == "config_proxy"
+		}
+		if usesConfigProxy {
+			proxyCount = len(cfg.MyProxy)
+			fmt.Fprintf(out, "Личные прокси из конфигурации: %d (без предварительной проверки).\n", proxyCount)
+		}
+		if usesProxy {
 			var pool *proxy.Pool
 			proxyStore, poolErr := repository.NewProxyRepository(database)
 			if poolErr == nil {
@@ -160,20 +172,31 @@ var downloadCmd = &cobra.Command{
 				})
 			}
 			if poolErr != nil {
-				if strategyName == "proxy" {
+				if !usesDirect && !usesConfigProxy {
 					fatal(fmt.Errorf("подготовка прокси: %w", poolErr))
 				}
 				logger.Warn("proxy_reserve_unavailable", zap.Error(poolErr))
-				fmt.Fprintln(out, "Резерв прокси недоступен; прямые запросы продолжают работать. Ошибка:", poolErr)
+				fmt.Fprintln(out, "Публичный пул прокси недоступен; остальные стратегии продолжают работать. Ошибка:", poolErr)
 			} else {
-				proxyCount = pool.Len()
-				workers = effectiveDownloadWorkers(proxyCount, workerLimit)
-				fmt.Fprintf(out, "Пул прокси готов: %d. Выбор LRU с учётом пауз HTTP 429.\n", proxyCount)
+				proxyCount += pool.Len()
+				fmt.Fprintf(out, "Публичный пул прокси готов: %d. Выбор LRU с учётом пауз HTTP 429.\n", pool.Len())
 			}
-			proxyStrategy := youtube.ProxyOnly{Pool: pool, Unavailable: poolErr}
-			connection = proxyStrategy
-			if strategyName == "fallback" {
-				connection = youtube.DirectWithProxyFallback{Proxy: proxyStrategy, OnFallback: func(err error) { logger.Warn("proxy_fallback", zap.Error(err)) }}
+			proxyStrategy = youtube.ProxyOnly{Pool: pool, Unavailable: poolErr}
+		}
+		if proxyCount > 0 {
+			workers = effectiveDownloadWorkers(proxyCount, workerLimit)
+		}
+		connection := youtube.Priority{OnFallback: func(from, to string, err error) {
+			logger.Warn("strategy_fallback", zap.String("from", from), zap.String("to", to), zap.Error(err))
+		}}
+		for _, name := range cfg.Strategy {
+			switch name {
+			case "direct":
+				connection.Strategies = append(connection.Strategies, youtube.Direct{})
+			case "config_proxy":
+				connection.Strategies = append(connection.Strategies, youtube.ConfigProxy{Addresses: cfg.MyProxy})
+			case "random_proxy":
+				connection.Strategies = append(connection.Strategies, youtube.RandomProxy{ProxyOnly: proxyStrategy})
 			}
 		}
 		provider.WithStrategy(connection)
@@ -209,7 +232,6 @@ func buildQueriesLogged(songs []repository.Song, logger *zap.Logger) []string {
 }
 
 func init() {
-	downloadCmd.Flags().String("strategy", "direct", "Стратегия соединения: direct, proxy или fallback")
 	downloadCmd.Flags().Int("workers", defaultDownloadWorkers, "Лимит параллельных задач (>0); при доступном пуле прокси не больше его размера")
 	downloadCmd.Flags().Bool("pprof", false, "Save cpu+mem profile to meshvault_{cpu,mem}.pprof")
 	downloadCmd.Flags().Bool("allocs", false, "Save allocs profile to meshvault_allocs.pprof")
@@ -229,16 +251,4 @@ func downloadWorkerLimit(cmd *cobra.Command) (int, error) {
 
 func effectiveDownloadWorkers(proxyCount, limit int) int {
 	return min(proxyCount, limit)
-}
-
-func downloadStrategyName(cmd *cobra.Command) (string, error) {
-	name, err := cmd.Flags().GetString("strategy")
-	if err != nil {
-		return "", err
-	}
-	switch name {
-	case "direct", "proxy", "fallback":
-		return name, nil
-	}
-	return "", fmt.Errorf("--strategy: ожидается direct, proxy или fallback, получено %q", name)
 }

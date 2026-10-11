@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -23,7 +22,7 @@ var syncCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		started := time.Now()
 		out := cmd.OutOrStdout()
-		fmt.Fprintln(out, "[1/4] Проверяю сохранённые заголовки в meshtune.db…")
+		fmt.Fprintln(out, "[1/4] Проверяю сохранённые заголовки в ~/.meshvault/vault.db…")
 		database, err := db.New()
 		if err != nil {
 			return fmt.Errorf("[1/4] открытие БД: %w", err)
@@ -31,10 +30,6 @@ var syncCmd = &cobra.Command{
 		defer database.Close()
 		if err := database.Ping(); err != nil {
 			return fmt.Errorf("[1/4] открытие БД: %w", err)
-		}
-		// The DB now stores session credentials; restrict access before writing them.
-		if err := os.Chmod("meshtune.db", 0600); err != nil {
-			return fmt.Errorf("[1/4] защита файла БД: %w", err)
 		}
 		headerRepo := repository.NewSpotifyHeadersRepository(database)
 		headers, err := headerRepo.Load()
@@ -143,7 +138,7 @@ var syncCmd = &cobra.Command{
 			})
 		}
 
-		fmt.Fprintln(out, "[3/4] Заменяю список треков в meshtune.db…")
+		fmt.Fprintln(out, "[3/4] Заменяю список треков в ~/.meshvault/vault.db…")
 		repo := repository.NewSongRepository(database)
 		saved, err := repo.ReplaceAll(ss)
 		if err != nil {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 
 	"meshvault/internal/download"
 )
@@ -75,6 +76,37 @@ type DirectWithProxyFallback struct {
 	OnFallback func(error)
 }
 
+// RandomProxy uses the discovered public pool; its selection remains LRU.
+type RandomProxy struct{ ProxyOnly }
+
+func (RandomProxy) Name() string { return "random_proxy" }
+
+// ConfigProxy tries personal proxies in configuration order. These addresses
+// are trusted user input and are neither publicly discovered nor pre-probed.
+type ConfigProxy struct{ Addresses []string }
+
+func (ConfigProxy) Name() string { return "config_proxy" }
+
+func (s ConfigProxy) Execute(ctx context.Context, request func(string) error) error {
+	if len(s.Addresses) == 0 {
+		return fmt.Errorf("config_proxy: no personal proxies configured")
+	}
+	var lastErr error
+	for _, address := range s.Addresses {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if address == "" {
+			return fmt.Errorf("config_proxy: empty proxy; direct connection forbidden")
+		}
+		lastErr = request(address)
+		if lastErr == nil || errors.Is(lastErr, download.ErrNotFound) || errors.Is(lastErr, context.Canceled) {
+			return lastErr
+		}
+	}
+	return fmt.Errorf("config_proxy: personal proxies exhausted: %w", lastErr)
+}
+
 func (DirectWithProxyFallback) Name() string { return "fallback" }
 func (s DirectWithProxyFallback) Execute(ctx context.Context, request func(string) error) error {
 	err := (Direct{}).Execute(ctx, request)
@@ -103,4 +135,39 @@ func canFallback(err error) bool {
 	}
 	var networkErr net.Error
 	return errors.Is(err, context.DeadlineExceeded) || errors.As(err, &networkErr) && networkErr.Timeout()
+}
+
+// Priority tries each configured route in order for every operation.
+// The last error remains unwrap-able for the downloader's retry policy.
+type Priority struct {
+	Strategies []DownloadStrategy
+	OnFallback func(from, to string, err error)
+}
+
+func (s Priority) Name() string {
+	names := make([]string, 0, len(s.Strategies))
+	for _, strategy := range s.Strategies {
+		names = append(names, strategy.Name())
+	}
+	return strings.Join(names, " -> ")
+}
+
+func (s Priority) Execute(ctx context.Context, request func(string) error) error {
+	if len(s.Strategies) == 0 {
+		return fmt.Errorf("no download strategies configured")
+	}
+	var lastErr error
+	for i, strategy := range s.Strategies {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if i > 0 && s.OnFallback != nil {
+			s.OnFallback(s.Strategies[i-1].Name(), strategy.Name(), lastErr)
+		}
+		lastErr = strategy.Execute(ctx, request)
+		if lastErr == nil || errors.Is(lastErr, download.ErrNotFound) || errors.Is(lastErr, context.Canceled) {
+			return lastErr
+		}
+	}
+	return fmt.Errorf("strategies %s exhausted: %w", s.Name(), lastErr)
 }
