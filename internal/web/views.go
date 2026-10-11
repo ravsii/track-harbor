@@ -78,23 +78,23 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
         <p>Paste the full request headers from a Spotify Web Player request. Only <code>authorization</code> and <code>client-token</code> are saved; other headers and cookies are discarded.</p>
         <form action="/connect" method="post" autocomplete="off"><input type="hidden" name="source" value="spotify">
           <label>REQUEST HEADERS<textarea name="headers" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="authorization: Bearer …&#10;client-token: …" required></textarea></label>
-          <button type="submit">Save credentials <span>{{template "icon" "arrow-right-01"}}</span></button>
+	          <button type="submit"><span>{{template "icon" "checkmark-circle-02"}}</span> Save credentials</button>
         </form>
         {{else}}
         <p><a href="{{.AuthURL}}" target="_blank" rel="noopener noreferrer">Open VK authorization {{template "icon" "external-link"}}</a>, then paste the token or full redirect URL below. The redirect fragment stays in your browser until you paste it.</p>
         <form action="/connect" method="post" autocomplete="off"><input type="hidden" name="source" value="vk">
           <label>ACCESS TOKEN OR REDIRECT URL<input name="token" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste token or redirect URL" required></label>
-          <button type="submit">Save credentials <span>{{template "icon" "arrow-right-01"}}</span></button>
+	          <button type="submit"><span>{{template "icon" "checkmark-circle-02"}}</span> Save credentials</button>
         </form>
 	        {{end}}
 	        {{if .Connected}}</details>{{end}}
-	        <form action="/ping" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Check connection <span>{{template "icon" "arrow-right-01"}}</span></button></form>
+	        <form action="/ping" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}><span>{{template "icon" "reload"}}</span> Check connection</button></form>
         <div class="status" aria-live="polite">CONNECTION <span hx-get="/ping-status?source={{.Source}}" hx-trigger="every 3s" hx-swap="innerHTML">{{if .PingStatus}}{{.PingStatus}}{{else}}Not checked yet.{{end}}</span></div>
       </div>
       <div class="panel sync"><div class="panel-top"><span class="index">02 / SYNC</span><span class="mini-mark">{{template "icon" "reload"}}</span></div>
         <h2>Bring your tracks in</h2>
 	        <p>Fetch your latest liked tracks, then check and download missing audio in the background. Your current list stays available if a sync fails.</p>
-        <form action="/sync" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Sync library <span>{{template "icon" "arrow-right-01"}}</span></button></form>
+	        <form action="/sync" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}><span>{{template "icon" "reload"}}</span> Sync library</button></form>
         <div class="status" aria-live="polite">STATUS <span id="sync-state" hx-get="/status?source={{.Source}}" hx-trigger="every 10s" hx-swap="innerHTML">{{if .Status}}{{.Status}}{{else}}Ready to sync.{{end}}</span></div>
       </div>
     </section>
@@ -107,7 +107,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	        <p>One per line, in priority order: <code>direct</code>, <code>personal_proxy</code>, <code>random_proxy</code>.</p>
 	        <label>PUBLIC PROXIES<textarea name="public_proxy" spellcheck="false" autocomplete="off" placeholder="One proxy URL per line. Leave empty to keep saved values."></textarea></label><p>{{.PublicProxyCount}} saved. Addresses are never shown again; enter new URLs to replace the entire list.</p><label class="clear-option"><input type="checkbox" name="clear_public_proxy"> Remove saved public proxies</label>
 	        <p>VK always uses <code>direct</code> (the only supported route). Set <code>listen</code> and <code>download_dir</code> in <code>config.yaml</code>; changing either requires a restart.</p>
-	        <button type="submit">Save settings <span>{{template "icon" "arrow-right-01"}}</span></button>
+	        <button type="submit"><span>{{template "icon" "checkmark-circle-02"}}</span> Save settings</button>
 	      </form>
 	      <div id="settings-feedback" class="status" role="status" aria-live="polite">{{if .SettingsSaved}}Settings saved. New download batches will use them.{{end}}</div>
 	    </section>
@@ -116,15 +116,15 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	      <p>Each new proxy must reach YouTube over HTTPS before it is saved. Downloads already running keep their current routes.</p>
 	      <form id="personal-proxy-form" action="/settings/personal" method="post" autocomplete="off">
 	        <label>PROXY URL<input name="address" type="text" required autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="http://login:password@host:port"></label>
-	        <button type="submit">Check and add proxy <span>{{template "icon" "arrow-right-01"}}</span></button>
+	        <button type="submit"><span>{{template "icon" "checkmark-circle-02"}}</span> Check and add proxy</button>
 	      </form>
 	      <div id="personal-proxy-feedback" class="status" role="status" aria-live="polite"></div>
 	      {{if .PersonalProxies}}
 	      <ul class="personal-proxy-list">
 	        {{range .PersonalProxies}}
-	        <li data-proxy-id="{{.ID}}"><span class="proxy-address">{{.Scheme}}://{{.Host}}</span>
-	          {{if .HasCredentials}}<button type="button" class="secondary proxy-reveal" aria-expanded="false" aria-label="Show credentials for {{.Host}}">Show credentials</button><span class="proxy-credentials" hidden></span>{{end}}
-	          <form class="proxy-delete" method="post" action="/settings/personal/{{.ID}}/delete"><button type="submit" class="secondary" aria-label="Remove proxy {{.Host}}">Remove</button></form>
+	        <li data-proxy-id="{{.ID}}" data-proxy-host="{{.Host}}"><span class="proxy-address" data-masked="{{.Masked}}">{{.Masked}}</span>
+	          <button type="button" class="secondary proxy-reveal" aria-expanded="false" aria-label="Show proxy URL for {{.Host}}">{{template "icon" "view"}}<span class="proxy-reveal-label">Show URL</span></button>
+	          <form class="proxy-delete" method="post" action="/settings/personal/{{.ID}}/delete"><button type="submit" class="secondary" aria-label="Remove proxy {{.Host}}">{{template "icon" "delete-02"}}<span>Remove</span></button></form>
 	        </li>
 	        {{end}}
 	      </ul>
@@ -132,7 +132,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	    </section>
 	    {{else if eq .Source "downloads"}}
 	    <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOAD CONTROL</span></div>
-	      <button type="button" id="download-toggle" disabled><span class="download-toggle-label">Start downloads</span>{{template "icon" "play"}}</button>
+	      <button type="button" id="download-toggle" disabled>{{template "icon" "play"}}<span class="download-toggle-label">Start downloads</span></button>
 	      <div id="download-state" class="status" role="status" aria-live="polite">Loading download status…</div>
 	    </section>
 	    <section class="library download-library"><div class="library-heading"><div><span class="index">TRACKS</span><h2>Download queue</h2></div><span class="count" id="download-count"></span></div>

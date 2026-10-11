@@ -78,7 +78,7 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("POST /settings", s.saveSettings)
 	mux.HandleFunc("POST /settings/personal", s.addPersonalProxy)
 	mux.HandleFunc("POST /settings/personal/{id}/delete", s.deletePersonalProxy)
-	mux.HandleFunc("GET /settings/personal/{id}/credentials", s.personalProxyCredentials)
+	mux.HandleFunc("GET /settings/personal/{id}/address", s.personalProxyAddress)
 	mux.HandleFunc("GET /audio", s.playAudio)
 	mux.HandleFunc("GET /audio/tracks", s.playableTracks)
 	return logRequests(logger, mux, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -191,7 +191,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				continue
 			}
-			data.PersonalProxies = append(data.PersonalProxies, personalProxyView{ID: proxy.ID, Host: parsed.Host, Scheme: parsed.Scheme, HasCredentials: parsed.User != nil})
+			data.PersonalProxies = append(data.PersonalProxies, personalProxyView{ID: proxy.ID, Host: parsed.Host, Masked: maskPersonalProxy(proxy.Address, parsed)})
 		}
 		data.SettingsSaved = r.URL.Query().Get("saved") == "1"
 	} else if source == "music" {

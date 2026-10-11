@@ -24,16 +24,22 @@ shown track; individual tracks are selected from their Play actions in the libra
 
 ## Spacing baseline
 
-Keep these values in sync with the styles when adjusting the layout:
+Use half the previous spacing throughout the server UI. Keep these exact
+values in sync with `internal/web/assets/theme.css`; halve padding, margins
+and gaps, not text, icons or player control sizes:
 
 | Area | Desktop | Narrow screens |
 | --- | --- | --- |
-| Sidebar padding | `16px 12px`; nav link `8px 10px`, gap `4px` | `8px 12px` at 950px; `8px 10px` at 700px |
-| Top bar content padding | `12px clamp(24px, 5vw, 82px)` | `8px 20px 12px` at 950px |
-| Music content padding | `8px 12px 16px` | `8px 10px 16px` at 700px |
-| Spotify, VK, Downloads, Settings content padding | `14px clamp(16px, 3vw, 38px) 24px` | `12px 16px 20px` at 950px |
-| Non-Music header / panel / list spacing | Header-to-panel `12px`; panel padding `18px`; panel-to-list `20px` | Same values |
-| Track header / row padding (Music, Spotify, VK) | `0 10px 7px` / `7px 10px`; grid gap `8px` | Same compact spacing; tracks scroll horizontally if columns do not fit |
+| Sidebar padding | `8px 6px`; nav link `4px 5px`, gap `2px` | `4px 6px` at 950px; `4px 5px` at 700px |
+| Top bar content padding | `6px clamp(12px, 2.5vw, 41px)` | `4px 10px 6px` at 950px |
+| Music content padding | `4px 6px 8px` | `4px 5px 8px` at 700px |
+| Spotify, VK, Downloads, Settings content padding | `7px clamp(8px, 1.5vw, 19px) 12px` | `6px 8px 10px` at 950px |
+| Non-Music header / panel / list spacing | Header-to-panel `6px`; panel padding `9px`; panel-to-list `10px` | Same values |
+| Track header / row padding (Music, Spotify, VK) | `0 5px 3.5px` / `3.5px 5px`; grid gap `4px` | Same compact spacing; tracks scroll horizontally if columns do not fit |
+| Panel internals | Paragraph bottom `7px`; form gap `5px`; status top `8px` and padding top `5px` | Same values |
+| Form controls | Input and textarea padding `5.5px 6px`; button padding `5.5px 8px`, with a `32px` minimum button height | Same values |
+| Proxy list | Panel-to-panel `10px`; list top `6px`; row padding `5px 0`, row gap `4px 6px` | Same values |
+| Download rows | Header padding `0 8px 5px`; row padding `6px 8px`, grid gap `6px` | Same values |
 
 Music has no fixed content-width or track-list-height cap: its tracks fill the
 space beside the sidebar and scroll with the page. Keep horizontal scrolling
@@ -52,11 +58,19 @@ When a source is connected, tuck the credential replacement form into a collapse
 disclosure so Sync and the track list remain close to the top. Keep that form
 visible by default until the source is connected.
 Settings uses the same compact panel and theme colors as the source pages.
-Show personal proxy scheme, host and port in compact rows with individual
-removal controls. Never render proxy usernames or passwords in the initial
-HTML: fetch them only after an explicit Show credentials action, and hide them
-again on request. Public proxies retain an empty replacement field, saved
-count and explicit clearing control. Saving settings must not interrupt the
+Require an explicit user confirmation before any mutating or destructive
+action (including removal), unless the request expressly says otherwise.
+Settings form buttons fit their labels rather than stretching across the grid;
+Show URL and Remove have matching icons on the left. The reveal icon changes
+with its Show/Hide state.
+Show personal proxies in their original URL format, for example
+`socks5://********:********@host:port`, with exactly eight asterisks for
+each existing username and password, regardless of length. Require
+confirmation before deletion. Never render credentials in the initial HTML:
+Show URL fetches and displays the original URL only in the row, where its text
+can be selected and copied; Hide restores the mask. Do not add a second field.
+Public proxies retain an empty replacement field, saved count and explicit
+clearing control. Saving settings must not interrupt the
 persistent player.
 
 ## Color palette
@@ -111,6 +125,9 @@ navigation, playback, downloads, and status actions. Use the MIT-licensed
 hidden from assistive technology; icon-only buttons must have descriptive
 accessible labels. Icons inherit the surrounding text color and must work in
 both themes.
+Place a button's icon to the left of its label when that fits the action
+(for example, check, sync, save or start). Keep icon-only playback controls
+unchanged.
 
 Every existing and future visual element must work in both themes: text,
 backgrounds, borders, buttons, forms, hover and focus states, errors,

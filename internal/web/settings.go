@@ -13,9 +13,31 @@ import (
 )
 
 type personalProxyView struct {
-	ID             int64
-	Host, Scheme   string
-	HasCredentials bool
+	ID           int64
+	Host, Masked string
+}
+
+func maskPersonalProxy(address string, parsed *url.URL) string {
+	if parsed.User == nil {
+		return address
+	}
+	start := strings.Index(address, "://")
+	if start < 0 {
+		return address
+	}
+	authority := address[start+3:]
+	if end := strings.IndexAny(authority, "/?#"); end >= 0 {
+		authority = authority[:end]
+	}
+	at := strings.LastIndex(authority, "@")
+	if at < 0 {
+		return address
+	}
+	masked := "********"
+	if strings.Contains(authority[:at], ":") {
+		masked += ":********"
+	}
+	return address[:start+3] + masked + address[start+3+at:]
 }
 
 func proxyID(r *http.Request) (int64, error) {
@@ -97,6 +119,11 @@ func (s *Server) deletePersonalProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "downloads unavailable", http.StatusServiceUnavailable)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 4096)
+	if err := r.ParseForm(); err != nil || r.PostForm.Get("confirm") != "yes" {
+		http.Error(w, "confirm proxy removal before submitting", http.StatusBadRequest)
+		return
+	}
 	id, err := proxyID(r)
 	if err != nil {
 		http.Error(w, "invalid proxy ID", http.StatusBadRequest)
@@ -139,7 +166,7 @@ func (s *Server) deletePersonalProxy(w http.ResponseWriter, r *http.Request) {
 	settingsResponse(w, r)
 }
 
-func (s *Server) personalProxyCredentials(w http.ResponseWriter, r *http.Request) {
+func (s *Server) personalProxyAddress(w http.ResponseWriter, r *http.Request) {
 	id, err := proxyID(r)
 	if err != nil {
 		http.Error(w, "invalid proxy ID", http.StatusBadRequest)
@@ -154,22 +181,11 @@ func (s *Server) personalProxyCredentials(w http.ResponseWriter, r *http.Request
 		http.Error(w, "unable to read personal proxy", http.StatusInternalServerError)
 		return
 	}
-	parsed, err := url.Parse(address)
-	if err != nil {
-		http.Error(w, "invalid stored proxy", http.StatusInternalServerError)
-		return
-	}
-	credentials := struct {
-		Login    string `json:"login"`
-		Password string `json:"password"`
-	}{}
-	if parsed.User != nil {
-		credentials.Login = parsed.User.Username()
-		credentials.Password, _ = parsed.User.Password()
-	}
 	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(credentials); err != nil {
-		s.logger.Error("write personal proxy credentials failed")
+	if err := json.NewEncoder(w).Encode(struct {
+		Address string `json:"address"`
+	}{Address: address}); err != nil {
+		s.logger.Error("write personal proxy address failed")
 	}
 }
 
