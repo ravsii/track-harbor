@@ -5,12 +5,30 @@
   const $ = id => document.getElementById(id);
   const stamp = track => `${track.source}\0${track.artist}\0${track.title}`;
   const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '0:00';
-  let tracks = [], current, history = [];
+  let tracks = [], current, history = [], mode = 0, previousVolume = 0.8;
   audio.volume = 0.8;
 
+  function icon(id, name) {
+    $(id).querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${name}`);
+  }
+
+  function updateVolume() {
+    const muted = audio.muted || audio.volume === 0;
+    icon('player-mute', muted ? 'volume-mute' : 'volume-high');
+    $('player-mute').setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
+    $('player-mute').title = muted ? 'Unmute' : 'Mute';
+    $('player-volume').value = muted ? 0 : Math.round(audio.volume * 100);
+  }
+
+  function updateMode() {
+    const labels = ['in order', 'shuffle', 'repeat one'];
+    icon('player-mode', ['list-ordered', 'shuffle', 'repeat-one-01'][mode]);
+    $('player-mode').setAttribute('aria-label', `Playback mode: ${labels[mode]}`);
+    $('player-mode').title = `Playback mode: ${labels[mode]}`;
+  }
+
   function refresh() {
-    $('player-toggle').querySelector('use').setAttribute('href',
-      audio.paused ? '/assets/icons.svg#hg-play' : '/assets/icons.svg#hg-pause');
+    icon('player-toggle', audio.paused ? 'play' : 'pause');
     $('player-toggle').setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
     $('player-time').textContent = `${time(audio.currentTime)} / ${time(audio.duration)}`;
     $('player-seek').value = Number.isFinite(audio.duration) && audio.duration > 0
@@ -59,7 +77,7 @@
     if (!tracks.length) await loadTracks();
     if (!tracks.length) { await play(null); return; }
     const index = tracks.findIndex(track => stamp(track) === current);
-    if ($('player-shuffle').checked && tracks.length > 1) {
+    if (mode === 1 && tracks.length > 1) {
       const candidates = tracks.filter(track => stamp(track) !== current);
       await play(candidates[Math.floor(Math.random() * candidates.length)]);
     } else {
@@ -81,9 +99,10 @@
   audio.addEventListener('durationchange', refresh);
   audio.addEventListener('play', refresh);
   audio.addEventListener('pause', refresh);
+  audio.addEventListener('volumechange', updateVolume);
   audio.addEventListener('error', () => { $('player-error').textContent = 'MP3 unavailable. Download it again and refresh the page.'; });
   audio.addEventListener('ended', () => {
-    if ($('player-repeat').checked) { audio.currentTime = 0; audio.play().catch(() => {}); }
+    if (mode === 2) { audio.currentTime = 0; audio.play().catch(() => {}); }
     else next();
   });
 
@@ -96,6 +115,17 @@
     }
     if (button.id === 'player-prev') previous();
     if (button.id === 'player-next') next();
+    if (button.id === 'player-mode') { mode = (mode + 1) % 3; updateMode(); }
+    if (button.id === 'player-mute') {
+      if (audio.muted || audio.volume === 0) {
+        audio.muted = false;
+        if (audio.volume === 0) audio.volume = previousVolume;
+      } else {
+        previousVolume = audio.volume;
+        audio.muted = true;
+      }
+      updateVolume();
+    }
     if (button.id === 'player-toggle') {
       if (!audio.src) { next(); return; }
       if (audio.paused) audio.play().catch(() => { $('player-error').textContent = 'Could not play this MP3.'; });
@@ -107,7 +137,12 @@
     if (track) play(track);
   });
   document.addEventListener('input', event => {
-    if (event.target.id === 'player-volume') audio.volume = event.target.value / 100;
+    if (event.target.id === 'player-volume') {
+      audio.volume = event.target.value / 100;
+      audio.muted = false;
+      if (audio.volume > 0) previousVolume = audio.volume;
+      updateVolume();
+    }
     if (event.target.id === 'player-seek' && Number.isFinite(audio.duration) && audio.duration > 0)
       audio.currentTime = audio.duration * event.target.value / 1000;
   });
@@ -116,4 +151,6 @@
     if (event.detail.target.id === 'content') loadTracks();
   });
   loadTracks();
+  updateMode();
+  updateVolume();
 })();

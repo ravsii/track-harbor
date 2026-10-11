@@ -13,6 +13,12 @@ not stop playback or reset the track or playback position. A track's Play
 action on any page must use the same player. The top bar and player must work
 on narrow screens and in both color themes.
 
+The top bar spans the viewport, with its controls aligned to the page content:
+logo on the left, track and playback controls in the center, and the theme
+button on the far right. A single playback-mode button cycles through in order,
+shuffle, and repeat one. The volume icon toggles mute without losing the
+previous level. The theme button cycles through System, Light, and Dark.
+
 ## Color palette
 
 The primary visual direction is **marine graphite**. Use these colors in the

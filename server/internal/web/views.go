@@ -27,42 +27,37 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 </head>
 <body>
 <div class="shell">
+  <header id="music-player" class="topbar" aria-label="Music player">
+    <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home"><span class="mark">{{template "icon" "disc-album"}}</span><strong>TrackHarbor</strong></a>
+    <div class="topbar-content">
+      <div class="topbar-track">
+        <strong id="player-track" aria-live="polite">Choose a downloaded track</strong>
+        <select id="player-track-choice" aria-label="Choose a downloaded track"><option value="">Saved tracks</option></select>
+      </div>
+      <audio id="player-audio" preload="none"></audio>
+      <div class="player-controls">
+        <button type="button" id="player-mode" aria-label="Playback mode: in order" title="Playback mode: in order">{{template "icon" "list-ordered"}}</button>
+        <button type="button" id="player-prev" aria-label="Previous track">{{template "icon" "previous"}}</button>
+        <button type="button" id="player-toggle" class="primary" aria-label="Play">{{template "icon" "play"}}</button>
+        <button type="button" id="player-next" aria-label="Next track">{{template "icon" "next"}}</button>
+        <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek">
+        <span id="player-time">0:00 / 0:00</span>
+        <button type="button" id="player-mute" aria-label="Mute" title="Mute">{{template "icon" "volume-high"}}</button>
+        <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume">
+      </div>
+      <button type="button" id="theme-choice" class="theme-toggle" aria-label="Theme: system" title="Theme: system">{{template "icon" "computer"}}</button>
+      <div id="player-error" role="status" aria-live="polite"></div>
+    </div>
+  </header>
   <aside class="sidebar">
-    <div class="brand"><span class="mark">{{template "icon" "disc-album"}}</span><div><strong>TrackHarbor</strong><small>Your music, your harbor.</small></div></div>
     <div class="nav-label">YOUR LIBRARY</div>
     <nav aria-label="Sources">
       <a class="{{if eq .Source "music"}}active{{end}}" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "music-note-01"}}</span> Music <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
       <a class="{{if eq .Source "spotify"}}active{{end}}" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "spotify"}}</span> Spotify <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
       <a class="{{if eq .Source "vk"}}active{{end}}" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "vk"}}</span> VK Music <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
     </nav>
-    <label class="theme-control" for="theme-choice">THEME
-      <select id="theme-choice" aria-label="Color theme">
-        <option value="system">As in system</option>
-        <option value="light">Light</option>
-        <option value="dark">Dark</option>
-      </select>
-    </label>
     <div class="sidebar-bottom"><span class="dot"></span> LOCAL SERVER <p>This preview runs on your computer only. No web login is configured.</p></div>
   </aside>
-  <header id="music-player" class="panel player topbar" aria-label="Music player">
-    <div class="topbar-track">
-      <span class="index">NOW PLAYING / LOCAL FILES</span>
-      <strong id="player-track" aria-live="polite">Choose a downloaded track</strong>
-      <select id="player-track-choice" aria-label="Choose a downloaded track"><option value="">Saved tracks</option></select>
-    </div>
-    <audio id="player-audio" preload="none"></audio>
-    <div class="player-controls">
-      <button type="button" id="player-prev" class="secondary" aria-label="Previous track">{{template "icon" "previous"}}</button>
-      <button type="button" id="player-toggle" class="secondary" aria-label="Play">{{template "icon" "play"}}</button>
-      <button type="button" id="player-next" class="secondary" aria-label="Next track">{{template "icon" "next"}}</button>
-      <label>Position <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek"></label>
-      <span id="player-time">0:00 / 0:00</span>
-      <label>Volume <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume"></label>
-      <label><input type="checkbox" id="player-shuffle"> {{template "icon" "shuffle"}} Shuffle</label>
-      <label><input type="checkbox" id="player-repeat"> {{template "icon" "repeat-one-01"}} Repeat one</label>
-    </div>
-    <div id="player-error" role="status" aria-live="polite"></div>
-  </header>
   <main id="content" data-source="{{.Source}}" hx-history-elt>
     <div class="topline"><span>LIBRARY / {{.Name}}</span><span class="label">EARLY ACCESS</span></div>
     <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>{{if eq .Source "music"}}All your tracks from Spotify and VK Music, together and ordered by when they were added.{{else}}Connect your account, sync your library, and explore what you love. Each source has its own collection.{{end}}</p></header>
