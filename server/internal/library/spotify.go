@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"trackharbor/server/internal/store"
 	"trackharbor/spotify"
@@ -57,7 +58,15 @@ func SyncSpotify(ctx context.Context, db *store.Store) (int, error) {
 			}
 		}
 		if strings.TrimSpace(title) != "" {
-			tracks = append(tracks, store.Track{Artist: strings.Join(artists, ", "), Title: title})
+			addedAt, err := time.Parse(time.RFC3339Nano, item.AddedAt.ISOString)
+			var timestamp int64
+			if err != nil {
+				// Some older entries have no timestamp; do not fabricate a source date.
+				timestamp = 0
+			} else {
+				timestamp = addedAt.Unix()
+			}
+			tracks = append(tracks, store.Track{Artist: strings.Join(artists, ", "), Title: title, AddedAt: timestamp})
 		}
 	}
 	if err := ctx.Err(); err != nil {

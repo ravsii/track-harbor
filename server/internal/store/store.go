@@ -8,7 +8,10 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-type Track struct{ Artist, Title string }
+type Track struct {
+	Artist, Title string
+	AddedAt       int64 // Unix seconds; zero means the source did not provide a date.
+}
 type Store struct{ db *sql.DB }
 
 func Open(path string) (*Store, error) {
@@ -28,10 +31,41 @@ func Open(path string) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS credentials (source TEXT PRIMARY KEY, first TEXT NOT NULL, second TEXT NOT NULL);
-		CREATE TABLE IF NOT EXISTS tracks (source TEXT NOT NULL, artist TEXT NOT NULL, title TEXT NOT NULL, PRIMARY KEY(source, artist, title));`)
+		CREATE TABLE IF NOT EXISTS tracks (source TEXT NOT NULL, artist TEXT NOT NULL, title TEXT NOT NULL, added_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(source, artist, title));`)
 	if err != nil {
 		db.Close()
 		return nil, err
+	}
+	var hasAddedAt bool
+	rows, err := db.Query("PRAGMA table_info(tracks)")
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, kind string
+		var defaultValue sql.NullString
+		if err = rows.Scan(&cid, &name, &kind, &notNull, &defaultValue, &pk); err != nil {
+			break
+		}
+		if name == "added_at" {
+			hasAddedAt = true
+		}
+	}
+	if err == nil {
+		err = rows.Err()
+	}
+	rows.Close()
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
+	if !hasAddedAt {
+		if _, err := db.Exec("ALTER TABLE tracks ADD COLUMN added_at INTEGER NOT NULL DEFAULT 0"); err != nil {
+			db.Close()
+			return nil, err
+		}
 	}
 	return &Store{db: db}, nil
 }
@@ -60,7 +94,7 @@ func (s *Store) Connected(source string) (bool, error) {
 }
 
 func (s *Store) List(source string) ([]Track, error) {
-	rows, err := s.db.Query(`SELECT artist, title FROM tracks WHERE source=? ORDER BY artist, title`, source)
+	rows, err := s.db.Query(`SELECT artist, title, added_at FROM tracks WHERE source=? ORDER BY added_at DESC, artist, title`, source)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +102,7 @@ func (s *Store) List(source string) ([]Track, error) {
 	var tracks []Track
 	for rows.Next() {
 		var track Track
-		if err := rows.Scan(&track.Artist, &track.Title); err != nil {
+		if err := rows.Scan(&track.Artist, &track.Title, &track.AddedAt); err != nil {
 			return nil, err
 		}
 		tracks = append(tracks, track)
@@ -85,12 +119,39 @@ func (s *Store) Replace(source string, tracks []Track) (int, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
+	previous := make(map[string]int64)
+	if source == "vk" || source == "spotify" {
+		rows, err := tx.Query(`SELECT artist, title, added_at FROM tracks WHERE source=?`, source)
+		if err != nil {
+			return 0, err
+		}
+		for rows.Next() {
+			var artist, title string
+			var addedAt int64
+			if err = rows.Scan(&artist, &title, &addedAt); err != nil {
+				break
+			}
+			if addedAt != 0 {
+				previous[artist+"\x00"+title] = addedAt
+			}
+		}
+		if err == nil {
+			err = rows.Err()
+		}
+		rows.Close()
+		if err != nil {
+			return 0, err
+		}
+	}
 	if _, err := tx.Exec(`DELETE FROM tracks WHERE source=?`, source); err != nil {
 		return 0, err
 	}
 	count := 0
 	for _, track := range tracks {
-		result, err := tx.Exec(`INSERT OR IGNORE INTO tracks(source, artist, title) VALUES(?, ?, ?)`, source, track.Artist, track.Title)
+		if addedAt, ok := previous[track.Artist+"\x00"+track.Title]; ok && (source == "vk" || track.AddedAt == 0) {
+			track.AddedAt = addedAt
+		}
+		result, err := tx.Exec(`INSERT OR IGNORE INTO tracks(source, artist, title, added_at) VALUES(?, ?, ?, ?)`, source, track.Artist, track.Title, track.AddedAt)
 		if err != nil {
 			return 0, err
 		}

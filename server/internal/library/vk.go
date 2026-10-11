@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"trackharbor/server/internal/store"
 	"trackharbor/vk"
@@ -21,10 +22,11 @@ func SyncVK(ctx context.Context, db *store.Store) (int, error) {
 		return 0, err
 	}
 	tracks := make([]store.Track, 0, len(songs))
+	addedAt := time.Now().Unix()
 	for _, song := range songs {
 		artist, title := strings.TrimSpace(song.Artist), strings.TrimSpace(song.Title)
 		if artist != "" && title != "" {
-			tracks = append(tracks, store.Track{Artist: artist, Title: title})
+			tracks = append(tracks, store.Track{Artist: artist, Title: title, AddedAt: addedAt})
 		}
 	}
 	if err := ctx.Err(); err != nil {

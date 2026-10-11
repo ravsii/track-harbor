@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jmoiron/sqlx"
 )
@@ -103,11 +104,22 @@ func (r *VKRepository) ReplaceAll(songs []VKSong) (int, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
+	var existing []Song
+	if err := tx.Select(&existing, "SELECT artists, title, created_at FROM vk_songs"); err != nil {
+		return 0, err
+	}
+	addedAt := make(map[string]time.Time, len(existing))
+	for _, song := range existing {
+		addedAt[song.Artists+"\x00"+song.Title] = song.CreatedAt
+	}
 	if _, err := tx.Exec("DELETE FROM vk_songs"); err != nil {
 		return 0, err
 	}
 	saved := 0
 	for _, song := range songs {
+		if previous, ok := addedAt[song.Artists+"\x00"+song.Title]; ok {
+			song.CreatedAt = previous
+		}
 		result, err := tx.Exec(`INSERT INTO vk_songs (artists, title, created_at, owner_id, audio_id, audio_url)
 			VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (artists, title) DO NOTHING`, song.Artists, song.Title, song.CreatedAt, song.OwnerID, song.AudioID, song.URL)
 		if err != nil {

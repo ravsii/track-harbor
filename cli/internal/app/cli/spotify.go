@@ -171,15 +171,20 @@ var syncCmd = &cobra.Command{
 				artistName = "Unknown artist"
 			}
 			fmt.Fprintf(out, "      %d. %s — %s\n", i+1, artistName, title)
+			addedAt, err := time.Parse(time.RFC3339Nano, song.AddedAt.ISOString)
+			if err != nil {
+				// Older entries may not include a date; keep it unknown for storage.
+				addedAt = time.Time{}
+			}
 
 			ss = append(ss, repository.Song{
 				Artists:   buf.String(),
 				Title:     title,
-				CreatedAt: time.Now(),
+				CreatedAt: addedAt,
 			})
 		}
 
-			fmt.Fprintln(out, "[3/4] Replacing the track list in ~/.trackharbor/vault.db…")
+		fmt.Fprintln(out, "[3/4] Replacing the track list in ~/.trackharbor/vault.db…")
 		logger.Info("spotify_tracks_prepared", zap.Int("tracks", len(ss)), zap.Int("unavailable", unavailable))
 		repo := repository.NewSongRepository(database)
 		saved, err := repo.ReplaceAll(ss)
