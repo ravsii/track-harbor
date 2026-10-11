@@ -15,9 +15,48 @@ import (
 	"meshvault/internal/source/spotify"
 )
 
+var spotifyCmd = &cobra.Command{
+	Use:   "spotify",
+	Short: "Authenticate with Spotify and sync Liked Songs",
+}
+
+func init() {
+	spotifyCmd.AddCommand(authCmd, syncCmd)
+	rootCmd.AddCommand(spotifyCmd)
+}
+
+var authCmd = &cobra.Command{
+	Use:          "auth",
+	Short:        "Save Spotify Web Player request tokens",
+	Long:         "Paste authorization and client-token headers from Spotify Web Player. Existing tokens are replaced in ~/.meshvault/vault.db; other headers and cookies are not stored.",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		headers, err := readSyncHeaders(cmd.InOrStdin(), cmd.OutOrStdout())
+		if err != nil {
+			return err
+		}
+		database, err := db.New()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+		repo := repository.NewSpotifyHeadersRepository(database)
+		if _, err := repo.Load(); err != nil {
+			return err
+		}
+		if err := repo.Save(*headers); err != nil {
+			return err
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "Spotify tokens saved. Run meshvault spotify sync to verify them and import Liked Songs.")
+		return nil
+	},
+}
+
 var syncCmd = &cobra.Command{
 	Use:          "sync",
-	Short:        "Import the track list from Spotify",
+	Short:        "Discover and sync Spotify Liked Songs using saved tokens",
+	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		started := time.Now()
@@ -37,32 +76,15 @@ var syncCmd = &cobra.Command{
 			return fmt.Errorf("[1/4] read saved headers: %w", err)
 		}
 
-		var info *spotify.PlaylistResponse
-		if headers != nil {
-			fmt.Fprintln(out, "[2/4] Fetching the first Spotify page with saved headers…")
-			info, err = spotify.GetSongInfo(headers.Authorization, headers.ClientToken)
-			if err != nil {
-				fmt.Fprintf(out, "      Request with saved headers failed: %v\n", err)
-			}
-		} else {
-			fmt.Fprintln(out, "      No saved headers.")
+		if headers == nil {
+			return fmt.Errorf("no saved Spotify tokens; run meshvault spotify auth first")
 		}
-		if headers == nil || err != nil {
-			fresh, err := readSyncHeaders(cmd.InOrStdin(), out)
-			if err != nil {
-				return err
-			}
-			fmt.Fprintln(out, "[2/4] Fetching the first Spotify page with new headers…")
-			info, err = spotify.GetSongInfo(fresh.Authorization, fresh.ClientToken)
-			if err != nil {
-				return fmt.Errorf("[2/4] Spotify request: %w", err)
-			}
-			if err := headerRepo.Save(*fresh); err != nil {
-				return fmt.Errorf("[2/4] save verified headers: %w", err)
-			}
-			fmt.Fprintln(out, "      Verified headers saved for the next sync.")
-			headers = fresh
+		fmt.Fprintln(out, "[2/4] Discovering Liked Songs in your Spotify library…")
+		info, err := spotify.FindLikedSongs(headers.Authorization, headers.ClientToken)
+		if err != nil {
+			return fmt.Errorf("[2/4] discover Liked Songs: %w (if tokens expired, run meshvault spotify auth)", err)
 		}
+		playlistURI := info.Data.PlaylistV2.URI
 
 		playlist := info.Data.PlaylistV2
 		total := playlist.Content.TotalCount
@@ -74,7 +96,7 @@ var syncCmd = &cobra.Command{
 		for pageNumber := 2; len(playlist.Content.Items) < total; pageNumber++ {
 			offset := len(playlist.Content.Items)
 			fmt.Fprintf(out, "      Fetching page %d (offset=%d)…\n", pageNumber, offset)
-			next, err := spotify.GetSongInfoPage(headers.Authorization, headers.ClientToken, offset)
+			next, err := spotify.GetPlaylistPage(headers.Authorization, headers.ClientToken, playlistURI, offset)
 			if err != nil {
 				return fmt.Errorf("[2/4] page %d (offset=%d): %w", pageNumber, offset, err)
 			}
@@ -156,14 +178,14 @@ var syncCmd = &cobra.Command{
 }
 
 func readSyncHeaders(input io.Reader, out io.Writer) (*repository.SpotifyHeaders, error) {
-	fmt.Fprintln(out, "[1/4] Paste Spotify request headers, not cookies.")
+	fmt.Fprintln(out, "Paste Spotify request headers, not cookies.")
 	fmt.Fprintln(out, "      Format (replace the values with your own):")
 	fmt.Fprintln(out, "      authorization: Bearer <token>")
 	fmt.Fprintln(out, "      client-token: <client token>")
 	fmt.Fprintln(out, "      Finish with a blank line (press Enter again) or Ctrl+D.")
 	hMap, skipped, err := parseHeaders(input)
 	if err != nil {
-		return nil, fmt.Errorf("[1/4] read headers: %w", err)
+		return nil, fmt.Errorf("read headers: %w", err)
 	}
 	fmt.Fprintf(out, "      Read %d headers.\n", len(hMap))
 	if skipped > 0 {
@@ -177,7 +199,7 @@ func readSyncHeaders(input io.Reader, out io.Writer) (*repository.SpotifyHeaders
 	}
 	fmt.Fprintf(out, "      authorization: %s; client-token: %s\n", presence(hMap["authorization"]), presence(hMap["client-token"]))
 	if hMap["authorization"] == "" || hMap["client-token"] == "" {
-		return nil, fmt.Errorf("[1/4] non-empty authorization and client-token headers from a Spotify Web Player request are required; a Cookie header cannot replace them")
+		return nil, fmt.Errorf("non-empty authorization and client-token headers from a Spotify Web Player request are required; a Cookie header cannot replace them")
 	}
 	return &repository.SpotifyHeaders{Authorization: hMap["authorization"], ClientToken: hMap["client-token"]}, nil
 }

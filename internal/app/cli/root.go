@@ -13,8 +13,6 @@ var rootCmd = &cobra.Command{
 }
 
 func Execute() {
-	rootCmd.AddCommand(authCmd)
-	rootCmd.AddCommand(syncCmd)
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

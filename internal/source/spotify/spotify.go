@@ -1,44 +1,101 @@
 package spotify
 
 import (
+	"bytes"
+	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/klauspost/compress/zstd"
 )
+
+const playlistQueryHash = "8964e8eafb21aa992a7d951d256d83285c04be2105d209262901de70cb97584a"
 
 func GetSongInfo(
 	bearer string,
 	clientToken string,
 ) (*PlaylistResponse, error) {
-	return GetSongInfoPage(bearer, clientToken, 0)
+	return FindLikedSongs(bearer, clientToken)
 }
 
 // GetSongInfoPage fetches up to 50 playlist entries starting at offset.
 func GetSongInfoPage(bearer, clientToken string, offset int) (*PlaylistResponse, error) {
-	url := "https://api-partner.spotify.com/pathfinder/v2/query"
+	info, err := FindLikedSongs(bearer, clientToken)
+	if err != nil {
+		return nil, err
+	}
+	return GetPlaylistPage(bearer, clientToken, info.Data.PlaylistV2.URI, offset)
+}
 
-	payload := strings.NewReader(fmt.Sprintf(`{
-		"variables": {
-			"uri": "spotify:playlist:37i9dQZF1F5p3rmiWPIYgZ",
-			"offset": %d,
-			"limit": 50,
-			"includeEpisodeContentRatingsV2": true
-		},
-		"operationName": "fetchPlaylistContents",
-		"extensions": {
-			"persistedQuery": {
-				"version": 1,
-				"sha256Hash": "a65e12194ed5fc443a1cdebed5fabe33ca5b07b987185d63c72483867ad13cb4"
-			}
-		}
-	}`, offset))
+func GetPlaylistPage(bearer, clientToken, uri string, offset int) (*PlaylistResponse, error) {
+	return fetchPlaylist(bearer, clientToken, uri, offset, "fetchPlaylistContents")
+}
 
-	req, _ := http.NewRequest("POST", url, payload)
+func fetchPlaylist(bearer, clientToken, uri string, offset int, operation string) (*PlaylistResponse, error) {
+	var response struct {
+		Data struct {
+			PlaylistV2 json.RawMessage `json:"playlistV2"`
+		} `json:"data"`
+	}
+	variables := map[string]any{"uri": uri, "offset": offset, "limit": 50, "includeEpisodeContentRatingsV2": true}
+	if operation == "fetchPlaylist" {
+		variables["enableWatchFeedEntrypoint"] = true
+	}
+	if err := query(bearer, clientToken, operation, playlistQueryHash, variables, &response); err != nil {
+		return nil, err
+	}
+	if len(response.Data.PlaylistV2) == 0 || string(response.Data.PlaylistV2) == "null" {
+		return nil, fmt.Errorf("Spotify response is missing the playlist")
+	}
+	var shape struct {
+		Typename string `json:"__typename"`
+		Content  *struct {
+			Items      *json.RawMessage `json:"items"`
+			TotalCount *int             `json:"totalCount"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(response.Data.PlaylistV2, &shape); err != nil {
+		return nil, fmt.Errorf("read Spotify playlist: %w", err)
+	}
+	if shape.Typename == "NotFound" {
+		return nil, fmt.Errorf("Spotify could not resolve the Liked Songs collection to a playlist")
+	}
+	if shape.Content == nil || shape.Content.Items == nil || string(*shape.Content.Items) == "null" {
+		return nil, fmt.Errorf("Spotify response is missing the track list")
+	}
+	if shape.Content.TotalCount == nil || *shape.Content.TotalCount < 0 {
+		return nil, fmt.Errorf("Spotify response is missing a valid track count")
+	}
+	var responseFull PlaylistResponse
+	if err := json.Unmarshal(response.Data.PlaylistV2, &responseFull.Data.PlaylistV2); err != nil {
+		return nil, fmt.Errorf("read Spotify playlist: %w", err)
+	}
+	if responseFull.Data.PlaylistV2.Content.PagingInfo.Offset != offset {
+		return nil, fmt.Errorf("Spotify returned an unexpected playlist offset")
+	}
+	return &responseFull, nil
+}
 
-	req.Header.Add("accept-encoding", "gzip, deflate, br, zstd")
+func query(bearer, clientToken, operation, hash string, variables any, result any) error {
+	payload, err := json.Marshal(map[string]any{
+		"operationName": operation, "variables": variables,
+		"extensions": map[string]any{"persistedQuery": map[string]any{"version": 1, "sha256Hash": hash}},
+	})
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "POST", "https://api-partner.spotify.com/pathfinder/v2/query", bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Add("accept-encoding", "gzip, zstd")
 	req.Header.Add("user-agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:150.0) Gecko/20100101 Firefox/150.0")
 	req.Header.Add("accept", "application/json")
 	req.Header.Add("accept-language", "en")
@@ -58,57 +115,50 @@ func GetSongInfoPage(bearer, clientToken string, offset int) (*PlaylistResponse,
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return nil, err
+		return fmt.Errorf("Spotify request failed: %w", err)
 	}
 
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
+		return fmt.Errorf("HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
-	decoder, err := zstd.NewReader(resp.Body)
+	var reader io.Reader = resp.Body
+	switch strings.ToLower(strings.TrimSpace(resp.Header.Get("Content-Encoding"))) {
+	case "", "identity":
+	case "gzip":
+		decoder, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return fmt.Errorf("decompress Spotify response: %w", err)
+		}
+		defer decoder.Close()
+		reader = decoder
+	case "zstd":
+		decoder, err := zstd.NewReader(resp.Body)
+		if err != nil {
+			return fmt.Errorf("decompress Spotify response: %w", err)
+		}
+		defer decoder.Close()
+		reader = decoder
+	default:
+		return fmt.Errorf("unsupported Spotify response encoding")
+	}
+	data, err := io.ReadAll(io.LimitReader(reader, 16*1024*1024+1))
 	if err != nil {
-		return nil, fmt.Errorf("decompress response: %w", err)
+		return fmt.Errorf("read Spotify response: %w", err)
 	}
-	defer decoder.Close()
-
-	var response struct {
-		Data struct {
-			PlaylistV2 json.RawMessage `json:"playlistV2"`
-		} `json:"data"`
+	if len(data) > 16*1024*1024 {
+		return fmt.Errorf("Spotify response exceeds size limit")
+	}
+	var envelope struct {
 		Errors []json.RawMessage `json:"errors"`
 	}
-	if err := json.NewDecoder(decoder).Decode(&response); err != nil {
-		return nil, fmt.Errorf("read Spotify response: %w", err)
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return fmt.Errorf("read Spotify response: %w", err)
 	}
-	if len(response.Errors) > 0 {
-		// Do not log response messages: they may contain session information.
-		return nil, fmt.Errorf("Spotify returned a request error")
+	// Never expose raw API error messages, which may include session details.
+	if len(envelope.Errors) > 0 {
+		return fmt.Errorf("Spotify returned a request error for %s", operation)
 	}
-	if len(response.Data.PlaylistV2) == 0 || string(response.Data.PlaylistV2) == "null" {
-		return nil, fmt.Errorf("Spotify response is missing the playlist")
-	}
-	var shape struct {
-		Content *struct {
-			Items      *json.RawMessage `json:"items"`
-			TotalCount *int             `json:"totalCount"`
-		} `json:"content"`
-	}
-	if err := json.Unmarshal(response.Data.PlaylistV2, &shape); err != nil {
-		return nil, fmt.Errorf("read Spotify playlist: %w", err)
-	}
-	if shape.Content == nil || shape.Content.Items == nil {
-		return nil, fmt.Errorf("Spotify response is missing the track list")
-	}
-	if shape.Content.TotalCount == nil || *shape.Content.TotalCount < 0 {
-		return nil, fmt.Errorf("Spotify response is missing a valid track count")
-	}
-	var responseFull PlaylistResponse
-	if err := json.Unmarshal(response.Data.PlaylistV2, &responseFull.Data.PlaylistV2); err != nil {
-		return nil, fmt.Errorf("read Spotify playlist: %w", err)
-	}
-	if responseFull.Data.PlaylistV2.Content.PagingInfo.Offset != offset {
-		return nil, fmt.Errorf("Spotify returned offset %d instead of %d", responseFull.Data.PlaylistV2.Content.PagingInfo.Offset, offset)
-	}
-	return &responseFull, nil
+	return json.Unmarshal(data, result)
 }

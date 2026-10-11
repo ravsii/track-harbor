@@ -126,7 +126,7 @@ var downloadCmd = &cobra.Command{
 		fmt.Fprintln(out, "Log: logs/download.jsonl")
 		logger.Info("database_loaded", zap.String("database", databasePath), zap.Int("total", len(songList)))
 		if len(songList) == 0 {
-			fmt.Fprintln(out, "No tracks in the database. Run meshvault sync first.")
+			fmt.Fprintln(out, "No tracks in the database. Run meshvault spotify sync first.")
 			return
 		}
 
