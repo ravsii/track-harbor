@@ -1,10 +1,12 @@
 package download
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -64,11 +66,21 @@ type Downloader struct {
 	fileLocks      sync.Map // absolute file path → *sync.Mutex
 	initialSkipped int
 	coverURLs      map[string]string // search query → source artwork URL
+	artworkRoute   artworkStrategy
+	socks4Dial     func(context.Context, string, string, time.Duration) (net.Conn, error)
 }
 
 // WithCoverURLs supplies artwork discovered during source synchronization.
 func (d *Downloader) WithCoverURLs(urls map[string]string) *Downloader {
 	d.coverURLs = urls
+	return d
+}
+
+// WithArtworkStrategy uses the same connection order as the audio provider.
+// SOCKS4 dialing is supplied by the CLI's proxy package to avoid a package cycle.
+func (d *Downloader) WithArtworkStrategy(strategy artworkStrategy, socks4Dial func(context.Context, string, string, time.Duration) (net.Conn, error)) *Downloader {
+	d.artworkRoute = strategy
+	d.socks4Dial = socks4Dial
 	return d
 }
 
@@ -373,7 +385,7 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 		err = fmt.Errorf("downloaded file is empty")
 	}
 	if err == nil && (d.provider.Name() != "vk" || d.coverURLs[query] != "") {
-		if coverErr := embedCover(f.Name(), d.coverURLs[query], d.provider.Name(), track.ID); coverErr != nil {
+		if coverErr := embedCover(f.Name(), d.coverURLs[query], d.provider.Name(), track.ID, d.artworkRoute, d.socks4Dial); coverErr != nil {
 			logger.Warn("cover_unavailable", zap.String("reason", coverErr.Error()))
 		} else {
 			// The embedded picture changes the file bytes and therefore its cache hash.

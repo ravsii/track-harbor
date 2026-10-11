@@ -292,7 +292,7 @@ var downloadCmd = &cobra.Command{
 		provider.WithStrategy(connection)
 		fmt.Fprintf(out, "Search and download concurrency: %d (--workers limit: %d).\n", workers, workerLimit)
 		logger.Info("workers_configured", zap.String("strategy", strategyName), zap.Int("workers", workers), zap.Int("proxy_count", proxyCount), zap.Int("workers_limit", workerLimit))
-		downloader := download.New(provider, workers, cfg.DownloadDir).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp).WithInitialSkipped(skipped).WithCoverURLs(covers)
+		downloader := download.New(provider, workers, cfg.DownloadDir).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp).WithInitialSkipped(skipped).WithCoverURLs(covers).WithArtworkStrategy(connection, proxy.DialSOCKS4)
 
 		downloader.Run(pending)
 	},

@@ -43,7 +43,7 @@ func (c *HTTPSChecker) Check(ctx context.Context, address string) error {
 	if u.Scheme == "socks4" {
 		transport.Proxy = nil
 		transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
-			return dialSOCKS4(ctx, u.Host, address, c.timeout)
+			return DialSOCKS4(ctx, u.Host, address, c.timeout)
 		}
 	}
 	defer transport.CloseIdleConnections()
@@ -70,9 +70,9 @@ func (c *HTTPSChecker) Check(ctx context.Context, address string) error {
 	return nil
 }
 
-// SOCKS4 uses an IPv4 destination, like yt-dlp's socks4:// routing. The
-// handshake is bounded and cancellation closes the connection immediately.
-func dialSOCKS4(ctx context.Context, proxyAddress, target string, timeout time.Duration) (net.Conn, error) {
+// DialSOCKS4 uses an IPv4 destination, like yt-dlp's socks4:// routing.
+// The handshake is bounded and cancellation closes the connection immediately.
+func DialSOCKS4(ctx context.Context, proxyAddress, target string, timeout time.Duration) (net.Conn, error) {
 	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	host, portText, err := net.SplitHostPort(target)
