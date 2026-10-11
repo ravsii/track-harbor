@@ -2,5 +2,6 @@
 /tmp_music
 /.DS_Store
 /meshtune.db
+*.before-trackharbor.bak
 *.pprof
 /logs

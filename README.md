@@ -29,6 +29,11 @@ The old top-level `auth` and `sync` commands have been removed. Existing tokens,
 tracks, and download history in `~/.trackharbor/vault.db` are reused; no additional
 database migration is required. No user-specific playlist ID is hardcoded.
 
+TrackHarbor now uses `~/.trackharbor` instead of `~/.meshvault`. When renaming
+an existing installation, move the data directory, update `download_dir` in
+its configuration, and update absolute file paths in download history before
+running the renamed application. Keep a database backup during this migration.
+
 `spotify sync` diagnostics are written to `logs/spotify-sync.jsonl`, relative to
 the working directory. Each run has a `run_id`. The log includes API operations,
 URIs, pagination parameters, HTTP statuses, Liked Songs identification details,
@@ -341,3 +346,29 @@ than the main library:
 ```sh
 TRACKHARBOR_PROXY_LIVE=1 go test ./internal/proxy -run TestLiveProxyScrapePreparation -v -count=1
 ```
+
+## License
+
+TrackHarbor's code and documentation are licensed under the [MIT License](LICENSE).
+MIT permits commercial use and paid or proprietary forks; it does not guarantee
+that every redistributed version will be available free of charge. Third-party
+dependencies and external tools remain subject to their own licenses.
+
+## Disclaimer
+
+End users are responsible for ensuring that their use of the software complies
+with applicable copyright law and for any copyright infringement resulting
+from their actions. This notice does not exclude liability that cannot legally
+be excluded.
+
+Use TrackHarbor only where you have the necessary rights or permissions and
+where your use complies with applicable law and the relevant service terms.
+Public availability of content does not, by itself, grant permission to
+download it. You are responsible for assessing whether your use is permitted.
+The project does not encourage copyright infringement or unauthorized access.
+
+The software is provided "AS IS", without warranties, including any assurance
+that a particular use is lawful or permitted by a service. To the extent
+permitted by applicable law, the authors and copyright holders disclaim
+liability as set out in the MIT License. This notice is not legal advice and
+does not exclude liability that cannot legally be excluded.
