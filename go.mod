@@ -3,6 +3,7 @@ module meshvault
 go 1.26.4
 
 require (
+	github.com/clipperhouse/uax29/v2 v2.2.0
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/klauspost/compress v1.18.6
 	github.com/mattn/go-runewidth v0.0.31
@@ -14,7 +15,6 @@ require (
 )
 
 require (
-	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.9 // indirect
 	go.uber.org/multierr v1.10.0 // indirect

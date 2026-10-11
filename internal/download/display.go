@@ -264,7 +264,7 @@ func (d *Display) render() {
 	} {
 		line := ""
 		for _, counter := range group {
-			if line != "" && runewidth.StringWidth(line+"  "+counter) > width-1 {
+			if line != "" && terminalTextWidth(line+"  "+counter) > width-1 {
 				frame = append(frame, line)
 				line = ""
 			}
@@ -362,7 +362,7 @@ func (d *Display) render() {
 		}
 		// Keep the progress bar complete; shorten the name first. Narrow
 		// windows get a shorter bar rather than a clipped closing bracket.
-		available := max(0, width-1-runewidth.StringWidth("  "+status+" []  "))
+		available := max(0, width-1-terminalTextWidth("  "+status+" []  "))
 		nameReserve := min(12, max(0, available-4))
 		barCellWidth := max(runewidth.RuneWidth('█'), runewidth.RuneWidth('░'))
 		barWidth := min(20, (available-nameReserve)/max(1, barCellWidth))
@@ -395,8 +395,8 @@ func (d *Display) render() {
 				return ' '
 			}
 			return r
-		}, line)
-		frame[i] = runewidth.Truncate(line, max(0, width-1), "…")
+		}, strings.ToValidUTF8(line, "�"))
+		frame[i] = truncateTerminalText(line, max(0, width-1), "…")
 	}
 	if d.interactive && d.started && d.lines > 0 {
 		// Recalculate physical rows if the terminal became narrower since
@@ -422,8 +422,8 @@ func (d *Display) render() {
 func physicalRows(line string, width int) int {
 	width = max(1, width)
 	rows := 1
-	for runewidth.StringWidth(line) > width {
-		prefix := runewidth.Truncate(line, width, "")
+	for terminalTextWidth(line) > width {
+		prefix := truncateTerminalText(line, width, "")
 		if prefix == "" {
 			// Even a single glyph cannot fit in an extremely narrow window.
 			_, size := utf8.DecodeRuneInString(line)
