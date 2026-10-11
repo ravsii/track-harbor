@@ -117,8 +117,9 @@ func (c *Client) MyMusic(ctx context.Context, progress func(int, int)) ([]Track,
 	var tracks []Track
 	seen := make(map[[2]int64]bool)
 	total := -1
+	offset := 0
 	for {
-		if len(tracks) > 0 {
+		if offset > 0 {
 			timer := time.NewTimer(400 * time.Millisecond)
 			select {
 			case <-ctx.Done():
@@ -133,7 +134,7 @@ func (c *Client) MyMusic(ctx context.Context, progress func(int, int)) ([]Track,
 		}
 		params := url.Values{
 			"owner_id": {strconv.FormatInt(users[0].ID, 10)},
-			"count":    {strconv.Itoa(pageSize)}, "offset": {strconv.Itoa(len(tracks))},
+			"count":    {strconv.Itoa(pageSize)}, "offset": {strconv.Itoa(offset)},
 		}
 		if err := c.request(ctx, "audio.get", params, &page); err != nil {
 			return nil, err
@@ -147,7 +148,7 @@ func (c *Client) MyMusic(ctx context.Context, progress func(int, int)) ([]Track,
 		if *page.Count != total {
 			return nil, fmt.Errorf("VK library changed during import; run sync again")
 		}
-		if len(*page.Items) > total-len(tracks) || len(*page.Items) == 0 && len(tracks) < total {
+		if len(*page.Items) > pageSize || len(*page.Items) > total-offset {
 			return nil, fmt.Errorf("VK audio.get: incomplete or invalid page; previous library preserved")
 		}
 		for index, track := range *page.Items {
@@ -164,7 +165,8 @@ func (c *Client) MyMusic(ctx context.Context, progress func(int, int)) ([]Track,
 		if progress != nil {
 			progress(len(tracks), total)
 		}
-		if len(tracks) == total {
+		offset += pageSize
+		if offset >= total {
 			return tracks, nil
 		}
 	}
