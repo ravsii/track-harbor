@@ -27,5 +27,7 @@ test-driven development workflows.
 
 ## Commits
 
+- Use Conventional Commits for every commit: `type(optional-scope): description`
+  (for example, `fix(vk): skip tracks without audio URLs`). See `CONTRIBUTING.md`.
 - When asked to create a commit, keep the human as the primary author and add
   the assistant as a co-author using a `Co-authored-by:` commit-message trailer.
