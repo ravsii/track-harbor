@@ -3,10 +3,23 @@
   if (!audio) return;
 
   const $ = id => document.getElementById(id);
+  const shuffleButton = $('player-shuffle');
+  const shuffleKey = 'trackharbor-shuffle';
   const stamp = track => `${track.source}\0${track.artist}\0${track.title}`;
   const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '0:00';
   let tracks = [], current, history = [], previousVolume = 0.8;
   audio.volume = 0.8;
+
+  function setShuffle(enabled) {
+    shuffleButton.setAttribute('aria-pressed', String(enabled));
+    shuffleButton.title = enabled ? 'Shuffle on' : 'Shuffle off';
+  }
+
+  try {
+    setShuffle(localStorage.getItem(shuffleKey) === 'true');
+  } catch (_) {
+    // Private browsing can disable storage; shuffle still works for this page.
+  }
 
   function icon(id, name) {
     $(id).querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${name}`);
@@ -57,7 +70,7 @@
     if (!tracks.length) await loadTracks();
     if (!tracks.length) { await play(null); return; }
     const index = tracks.findIndex(track => stamp(track) === current);
-    if ($('player-shuffle').getAttribute('aria-pressed') === 'true' && tracks.length > 1) {
+    if (shuffleButton.getAttribute('aria-pressed') === 'true' && tracks.length > 1) {
       const candidates = tracks.filter(track => stamp(track) !== current);
       await play(candidates[Math.floor(Math.random() * candidates.length)]);
     } else {
@@ -94,8 +107,13 @@
     if (button.id === 'player-next') next();
     if (button.id === 'player-shuffle') {
       const enabled = button.getAttribute('aria-pressed') !== 'true';
-      button.setAttribute('aria-pressed', String(enabled));
-      button.title = enabled ? 'Shuffle on' : 'Shuffle off';
+      setShuffle(enabled);
+      try {
+        if (enabled) localStorage.setItem(shuffleKey, 'true');
+        else localStorage.removeItem(shuffleKey);
+      } catch (_) {
+        // Keep the selected state active for this page even without storage.
+      }
     }
     if (button.id === 'player-mute') {
       if (audio.muted || audio.volume === 0) {
