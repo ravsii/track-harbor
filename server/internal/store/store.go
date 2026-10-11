@@ -121,6 +121,24 @@ func (s *Store) ListAll() ([]Track, error) {
 	return scanTracks(rows)
 }
 
+// ListPlayable returns only tracks recorded in this server's download history.
+func (s *Store) ListPlayable() ([]Track, error) {
+	rows, err := s.db.Query(`SELECT t.source, t.artist, t.title FROM tracks t JOIN downloads d ON (t.source=d.source AND t.artist=d.artist AND t.title=d.title) WHERE d.file_path<>'' ORDER BY t.added_at DESC, t.source, t.artist, t.title`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tracks []Track
+	for rows.Next() {
+		var track Track
+		if err := rows.Scan(&track.Source, &track.Artist, &track.Title); err != nil {
+			return nil, err
+		}
+		tracks = append(tracks, track)
+	}
+	return tracks, rows.Err()
+}
+
 func (s *Store) Track(source, artist, title string) (Track, error) {
 	if source != "spotify" && source != "vk" {
 		return Track{}, fmt.Errorf("unknown source")

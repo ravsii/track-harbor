@@ -44,6 +44,25 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     </label>
     <div class="sidebar-bottom"><span class="dot"></span> LOCAL SERVER <p>This preview runs on your computer only. No web login is configured.</p></div>
   </aside>
+  <header id="music-player" class="panel player topbar" aria-label="Music player">
+    <div class="topbar-track">
+      <span class="index">NOW PLAYING / LOCAL FILES</span>
+      <strong id="player-track" aria-live="polite">Choose a downloaded track</strong>
+      <select id="player-track-choice" aria-label="Choose a downloaded track"><option value="">Saved tracks</option></select>
+    </div>
+    <audio id="player-audio" preload="none"></audio>
+    <div class="player-controls">
+      <button type="button" id="player-prev" class="secondary" aria-label="Previous track">◀◀</button>
+      <button type="button" id="player-toggle" class="secondary" aria-label="Play or pause">▶</button>
+      <button type="button" id="player-next" class="secondary" aria-label="Next track">▶▶</button>
+      <label>Position <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek"></label>
+      <span id="player-time">0:00 / 0:00</span>
+      <label>Volume <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume"></label>
+      <label><input type="checkbox" id="player-shuffle"> Shuffle</label>
+      <label><input type="checkbox" id="player-repeat"> Repeat one</label>
+    </div>
+    <div id="player-error" role="status" aria-live="polite"></div>
+  </header>
   <main id="content" data-source="{{.Source}}" hx-history-elt>
     <div class="topline"><span>LIBRARY / {{.Name}}</span><span class="label">EARLY ACCESS</span></div>
     <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>{{if eq .Source "music"}}All your tracks from Spotify and VK Music, together and ordered by when they were added.{{else}}Connect your account, sync your library, and explore what you love. Each source has its own collection.{{end}}</p></header>
@@ -81,28 +100,10 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
       <div id="download-state" class="status" role="status" aria-live="polite">Ready to download.</div>
     </section>
     <dialog id="download-dialog" aria-labelledby="download-dialog-message"><p id="download-dialog-message"></p><button type="button" id="download-dialog-close">OK</button></dialog>
-    {{if eq .Source "music"}}
-    <section id="music-player" class="panel player" aria-label="Music player">
-      <div class="panel-top"><span class="index">NOW PLAYING / LOCAL FILES</span></div>
-      <strong id="player-track">Choose a downloaded track</strong>
-      <audio id="player-audio" preload="none"></audio>
-      <div class="player-controls">
-        <button type="button" id="player-prev" class="secondary" aria-label="Previous track">◀◀</button>
-        <button type="button" id="player-toggle" class="secondary" aria-label="Play or pause">▶</button>
-        <button type="button" id="player-next" class="secondary" aria-label="Next track">▶▶</button>
-        <label>Position <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek"></label>
-        <span id="player-time">0:00 / 0:00</span>
-        <label>Volume <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume"></label>
-        <label><input type="checkbox" id="player-shuffle"> Shuffle</label>
-        <label><input type="checkbox" id="player-repeat"> Repeat one</label>
-      </div>
-      <div id="player-error" role="status" aria-live="polite"></div>
-    </section>
-    {{end}}
     <section class="library {{if eq .Source "music"}}music-library{{end}}"><div class="library-heading"><div><span class="index">{{if eq .Source "music"}}01 / ALL MUSIC{{else}}03 / COLLECTION{{end}}</span><h2>{{if eq .Source "music"}}All tracks{{else}}Your tracks{{end}}</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>
       {{if .Tracks}}
         <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span>FILE</span></div>
-        <ol class="tracks">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<div class="track-actions">{{if eq $.Source "music"}}<button type="button" class="play-track secondary" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">▶</button>{{end}}<form action="/download" method="post"><input type="hidden" name="mode" value="one"><input type="hidden" name="view" value="{{$.Source}}"><input type="hidden" name="source" value="{{$t.Source}}"><input type="hidden" name="artist" value="{{$t.Artist}}"><input type="hidden" name="title" value="{{$t.Title}}"><button class="secondary" type="submit">{{if $t.FilePath}}Saved{{else}}Download{{end}}</button></form></div></li>{{end}}</ol>
+        <ol class="tracks">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<div class="track-actions"><button type="button" class="play-track secondary" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">▶</button><form action="/download" method="post"><input type="hidden" name="mode" value="one"><input type="hidden" name="view" value="{{$.Source}}"><input type="hidden" name="source" value="{{$t.Source}}"><input type="hidden" name="artist" value="{{$t.Artist}}"><input type="hidden" name="title" value="{{$t.Title}}"><button class="secondary" type="submit">{{if $t.FilePath}}Saved{{else}}Download{{end}}</button></form></div></li>{{end}}</ol>
       {{else}}
         <div class="empty"><span>◌</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
       {{end}}

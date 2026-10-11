@@ -14,6 +14,7 @@
       state = JSON.parse(event.data);
       render();
       if (state.stage === 'done') {
+	        document.dispatchEvent(new Event('download:done'));
         for (const row of document.querySelectorAll('.tracks li')) {
           if (row.dataset.source === state.source && row.dataset.artist === state.artist && row.dataset.title === state.title) {
             row.dataset.playable = 'true';

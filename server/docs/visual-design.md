@@ -1,47 +1,61 @@
-# Визуальный дизайн веб-интерфейса TrackHarbor
+# TrackHarbor Web Visual Design
 
-## Цветовая палитра
+## Interface priorities
 
-Основное направление — **морской графит**. Для тёмной схемы используем:
+The site's primary purpose is to make **downloading and listening to music**
+easy. Download and Play actions should be clear and require as few steps as
+possible; secondary elements should not distract from these tasks.
 
-| Роль | Цвет |
+A top bar with a player must appear on **every page**. Users must be able to
+start a saved track from the top bar regardless of the current page, control
+playback, and see the currently playing track. Navigating between pages must
+not stop playback or reset the track or playback position. A track's Play
+action on any page must use the same player. The top bar and player must work
+on narrow screens and in both color themes.
+
+## Color palette
+
+The primary visual direction is **marine graphite**. Use these colors in the
+dark theme:
+
+| Role | Color |
 | --- | --- |
-| Фон страницы | `#0B1522` |
-| Боковая панель | `#101E2D` |
-| Карточки и панели | `#172638` |
-| Основной текст | `#EDF6F7` |
-| Вторичный текст | `#AEC3CB` |
-| Границы | `#315063` |
-| Акцент, активные элементы | `#5DD6D0` |
-| Текст на акцентном фоне | `#08292C` |
-| Фон выделенного пункта | `#193D47` |
+| Page background | `#0B1522` |
+| Sidebar | `#101E2D` |
+| Cards and panels | `#172638` |
+| Primary text | `#EDF6F7` |
+| Secondary text | `#AEC3CB` |
+| Borders | `#315063` |
+| Accent and active elements | `#5DD6D0` |
+| Text on accent backgrounds | `#08292C` |
+| Selected-item background | `#193D47` |
 
-Светлая схема сохраняет **тот же бирюзовый акцент**. Меняются только фон,
-поверхности и цвета текста:
+The light theme keeps **the same turquoise accent**. Only backgrounds,
+surfaces, and text colors adapt:
 
-| Роль | Цвет |
+| Role | Color |
 | --- | --- |
-| Фон страницы | `#F4F2ED` |
-| Боковая панель | `#E9E8E5` |
-| Карточки и панели | `#FFFFFF` |
-| Основной текст | `#202633` |
-| Вторичный текст | `#596376` |
-| Границы | `#D4D8DF` |
-| Акцент, активные элементы | `#5DD6D0` |
-| Текст на акцентном фоне | `#08292C` |
-| Фон выделенного пункта | `#DCF3F1` |
+| Page background | `#F4F2ED` |
+| Sidebar | `#E9E8E5` |
+| Cards and panels | `#FFFFFF` |
+| Primary text | `#202633` |
+| Secondary text | `#596376` |
+| Borders | `#D4D8DF` |
+| Accent and active elements | `#5DD6D0` |
+| Text on accent backgrounds | `#08292C` |
+| Selected-item background | `#DCF3F1` |
 
-Бирюзовый используем как фон кнопок, линий и индикаторов в обеих схемах.
-На светлом фоне мелкий бирюзовый текст плохо читается: ссылки и подписи
-акцентных элементов используйте в цвете основного текста с бирюзовым
-подчёркиванием, обводкой или фоном. На бирюзовой кнопке текст всегда тёмный.
+Use turquoise for button backgrounds, lines, and indicators in both themes.
+Small turquoise text is hard to read on light backgrounds: use the primary
+text color for links and accent labels, with turquoise underlines, borders,
+or backgrounds. Text on turquoise buttons must always be dark.
 
-В интерфейсе **обязателен переключатель** с режимами «Светлая», «Тёмная» и
-«Как в системе». Системный режим следует настройке ОС, в том числе при её
-изменении во время работы. Явный выбор сохраняется в браузере.
+The interface must offer **Light**, **Dark**, and **System** theme options.
+System follows OS settings, including changes while the page is open.
+Explicit choices are saved in the browser.
 
-Каждый существующий и будущий визуальный элемент должен корректно отображаться
-в обеих схемах: текст, фон, границы, кнопки, формы, состояния наведения и фокуса,
-ошибки, индикаторы и плеер. Используйте семантические цветовые переменные для
-тем, а не жёстко заданные цвета отдельных компонентов. При добавлении или
-изменении элемента проверяйте читаемость и состояния в обеих схемах.
+Every existing and future visual element must work in both themes: text,
+backgrounds, borders, buttons, forms, hover and focus states, errors,
+indicators, and the player. Use semantic theme color variables rather than
+hard-coded component colors. Check legibility and states in both themes when
+adding or changing an element.

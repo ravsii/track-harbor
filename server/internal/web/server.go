@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -51,6 +52,7 @@ func New(db *store.Store, configs ...config.Config) http.Handler {
 	mux.HandleFunc("POST /download", s.startDownload)
 	mux.HandleFunc("GET /download/events", s.downloadEvents)
 	mux.HandleFunc("GET /audio", s.playAudio)
+	mux.HandleFunc("GET /audio/tracks", s.playableTracks)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
 		if err != nil {
@@ -74,6 +76,31 @@ func New(db *store.Store, configs ...config.Config) http.Handler {
 		w.Header().Set("Content-Security-Policy", "default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'")
 		mux.ServeHTTP(w, r)
 	})
+}
+
+func (s *Server) playableTracks(w http.ResponseWriter, r *http.Request) {
+	if s.downloads == nil {
+		http.NotFound(w, r)
+		return
+	}
+	tracks, err := s.store.ListPlayable()
+	if err != nil {
+		http.Error(w, "unable to read saved tracks", http.StatusInternalServerError)
+		return
+	}
+	type playableTrack struct {
+		Source string `json:"source"`
+		Artist string `json:"artist"`
+		Title  string `json:"title"`
+	}
+	items := make([]playableTrack, 0, len(tracks))
+	for _, t := range tracks {
+		items = append(items, playableTrack{t.Source, t.Artist, t.Title})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(items); err != nil {
+		log.Print("write saved tracks failed")
+	}
 }
 
 func sourceName(r *http.Request) string {
