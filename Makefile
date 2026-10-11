@@ -14,6 +14,9 @@ clean:
 run: clean
 	go run ./cmd/cli/
 
+run-server:
+	go run ./server/cmd/server/
+
 migrate-up:
 	$(GOOSE) up
 
@@ -26,4 +29,4 @@ migrate-dry-run:
 	$(GOOSE) status
 	@echo ""
 
-.PHONY: build clean run migrate-up migrate-down migrate-status migrate-up-one migrate-reset migrate-dry-run
+.PHONY: build clean run run-server migrate-up migrate-down migrate-status migrate-up-one migrate-reset migrate-dry-run
