@@ -156,3 +156,7 @@ backgrounds, borders, buttons, forms, hover and focus states, errors,
 indicators, and the player. Use semantic theme color variables rather than
 hard-coded component colors. Check legibility and states in both themes when
 adding or changing an element.
+Tailwind utilities should use the existing theme variables through the tokens
+in `internal/web/tailwind.css`. Keep custom CSS for stateful controls and
+selectors that cannot be expressed clearly as utilities; do not enable
+Tailwind Preflight or change the baseline palette during migration.

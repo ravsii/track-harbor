@@ -18,8 +18,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
   <title>TrackHarbor · {{.Name}}</title>
-  <link rel="stylesheet" href="/assets/app.css">
-	  <link rel="stylesheet" href="/assets/theme.css">
+  <link rel="stylesheet" href="/assets/tailwind.css">
 	  <script src="/assets/theme.js"></script>
 	  <script src="/assets/htmx.min.js" defer></script>
 	  <script src="/assets/download.js" defer></script>
@@ -28,8 +27,8 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	  <script src="/assets/duration.js" defer></script>
 </head>
 <body>
-<div class="shell">
-  <header id="music-player" class="topbar" aria-label="Music player">
+<div class="shell grid min-h-screen grid-cols-[256px_minmax(0,1fr)] max-[950.02px]:grid-cols-1">
+  <header id="music-player" class="topbar sticky top-0 z-10 border-b border-edge bg-surface" aria-label="Music player">
     <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home"><span class="mark">{{template "icon" "disc-album"}}</span><strong>TrackHarbor</strong></a>
     <div class="topbar-content">
       <audio id="player-audio" preload="none"></audio>
@@ -55,7 +54,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
       <div id="player-error" role="status" aria-live="polite"></div>
     </div>
   </header>
-  <aside class="sidebar">
+  <aside class="sidebar border-r border-edge bg-sidebar">
 	    <div class="nav-label">NAVIGATION</div>
 	    <nav aria-label="Navigation">
 	      <a class="{{if eq .Source "music"}}active{{end}}" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "music-note-01"}}</span> Tracks <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
@@ -70,8 +69,8 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	    <header class="page-heading"><h1>{{.Name}}</h1></header>
 	    {{end}}
 	    {{if or (eq .Source "spotify") (eq .Source "vk")}}
-    <section class="grid">
-        <div class="panel connect"><div class="panel-top"><span class="index">01 / CONNECTION</span><span class="pill {{if .Connected}}connected{{end}}">{{if .Connected}}{{template "icon" "checkmark-circle-02"}} Connected{{else}}{{template "icon" "circle"}} Not connected{{end}}</span></div>
+    <section class="grid grid-cols-[1.15fr_.85fr] gap-[6px] max-[950.02px]:grid-cols-1">
+        <div class="panel connect min-w-0 rounded-2xl border border-edge bg-surface p-[9px]"><div class="panel-top"><span class="index">01 / CONNECTION</span><span class="pill {{if .Connected}}connected{{end}}">{{if .Connected}}{{template "icon" "checkmark-circle-02"}} Connected{{else}}{{template "icon" "circle"}} Not connected{{end}}</span></div>
 	        <h2>{{if .Connected}}Connection{{else}}Connect {{.Name}}{{end}}</h2>
 	        {{if .Connected}}<details class="credential-details"><summary>Update credentials</summary>{{end}}
 	        {{if eq .Source "spotify"}}
@@ -91,7 +90,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	        <form action="/ping" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}><span>{{template "icon" "reload"}}</span> Check connection</button></form>
         <div class="status" aria-live="polite">CONNECTION <span hx-get="/ping-status?source={{.Source}}" hx-trigger="every 3s" hx-swap="innerHTML">{{if .PingStatus}}{{.PingStatus}}{{else}}Not checked yet.{{end}}</span></div>
       </div>
-      <div class="panel sync"><div class="panel-top"><span class="index">02 / SYNC</span><span class="mini-mark">{{template "icon" "reload"}}</span></div>
+      <div class="panel sync min-w-0 rounded-2xl border border-edge bg-surface p-[9px]"><div class="panel-top"><span class="index">02 / SYNC</span><span class="mini-mark">{{template "icon" "reload"}}</span></div>
         <h2>Bring your tracks in</h2>
 	        <p>Fetch your latest liked tracks, then check and download missing audio in the background. Your current list stays available if a sync fails.</p>
 	        <form action="/sync" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}><span>{{template "icon" "reload"}}</span> Sync library</button></form>
@@ -100,7 +99,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     </section>
     {{end}}
 	    {{if eq .Source "settings"}}
-	    <section class="panel settings-panel">
+    <section class="panel settings-panel min-w-0 rounded-2xl border border-edge bg-surface p-[9px]">
 	      <p>Choose the connection routes for new download batches. Downloads already running keep their current routes.</p>
 	      <form id="settings-form" action="/settings" method="post">
 	        <label>SPOTIFY / YOUTUBE ROUTE ORDER<textarea name="strategy" required spellcheck="false">{{.SettingsStrategy}}</textarea></label>
@@ -116,7 +115,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	      <p>Import from ProxyScrape, Proxifly and TheSpeedX. Check every discovered host:port against YouTube; replace matching entries if working, remove them if not. Other saved proxies stay unchanged.</p>
 	      <div id="public-proxy-import-status" class="status" role="status" aria-live="polite" data-running="{{.ProxyImport.Running}}">{{.ProxyImport.Message}}</div>
 	    </section>
-	    <section class="panel settings-panel personal-proxies">
+    <section class="panel settings-panel personal-proxies min-w-0 rounded-2xl border border-edge bg-surface p-[9px]">
 	      <h2>Personal proxies</h2>
 	      <p>Each new proxy must reach YouTube over HTTPS before it is saved. Downloads already running keep their current routes.</p>
 	      <form id="personal-proxy-form" action="/settings/personal" method="post" autocomplete="off">
@@ -136,7 +135,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	      {{else}}<p>No personal proxies saved yet.</p>{{end}}
 	    </section>
 	    {{else if eq .Source "downloads"}}
-	    <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOAD CONTROL</span></div>
+    <section class="panel download-panel min-w-0 rounded-2xl border border-edge bg-surface p-[9px]"><div class="panel-top"><span class="index">DOWNLOAD CONTROL</span></div>
 	      <button type="button" id="download-toggle" disabled>{{template "icon" "play"}}<span class="download-toggle-label">Start downloads</span></button>
 	      <div id="download-state" class="status" role="status" aria-live="polite">Loading download status…</div>
 	    </section>
@@ -147,8 +146,8 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	    {{else}}
 	    <section class="library {{if eq .Source "music"}}music-library{{end}}"{{if eq .Source "music"}} aria-label="Tracks"{{end}}>{{if ne .Source "music"}}<div class="library-heading"><div><span class="index">03 / COLLECTION</span><h2>Your tracks</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>{{end}}
       {{if .Tracks}}
-	        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span aria-label="Duration">TIME</span></div>
-	        <ol class="tracks">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="track-number"><span class="number">{{add $i 1}}</span><button type="button" class="play-track" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button><span class="playing-indicator" aria-hidden="true"><span></span><span></span><span></span></span></span><strong><span class="track-title">{{$t.Title}}</span></strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<span class="track-duration">—</span><a class="download-track{{if not $t.FilePath}} unavailable{{end}}" href="/audio?source={{$t.Source | urlquery}}&amp;artist={{$t.Artist | urlquery}}&amp;title={{$t.Title | urlquery}}&amp;download=1" aria-label="Download {{$t.Title}} as MP3" title="Download MP3"{{if not $t.FilePath}} aria-disabled="true" tabindex="-1"{{end}}>{{template "icon" "download-01"}}</a></li>{{end}}</ol>
+        <div class="track-head grid items-center"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span aria-label="Duration">TIME</span></div>
+        <ol class="tracks m-0 list-none border-t border-edge p-0">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="track-number"><span class="number">{{add $i 1}}</span><button type="button" class="play-track" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button><span class="playing-indicator" aria-hidden="true"><span></span><span></span><span></span></span></span><strong><span class="track-title">{{$t.Title}}</span></strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<span class="track-duration">—</span><a class="download-track{{if not $t.FilePath}} unavailable{{end}}" href="/audio?source={{$t.Source | urlquery}}&amp;artist={{$t.Artist | urlquery}}&amp;title={{$t.Title | urlquery}}&amp;download=1" aria-label="Download {{$t.Title}} as MP3" title="Download MP3"{{if not $t.FilePath}} aria-disabled="true" tabindex="-1"{{end}}>{{template "icon" "download-01"}}</a></li>{{end}}</ol>
       {{else}}
         <div class="empty"><span>{{template "icon" "disc"}}</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
       {{end}}

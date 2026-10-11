@@ -1,0 +1,26 @@
+/* Preserve existing component styles and the Go-only build while moving markup
+   to Tailwind utilities. Preflight is intentionally excluded. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "./assets/app.css" layer(components);
+@import "./assets/theme.css" layer(components);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+
+@source "./views.go";
+@source "./assets/download.js";
+@source "./assets/player.js";
+@source "./assets/settings.js";
+@source "./assets/theme.js";
+@source "./assets/duration.js";
+
+@theme inline {
+  --color-canvas: var(--bg);
+  --color-sidebar: var(--sidebar);
+  --color-surface: var(--panel);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-edge: var(--edge);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-selected: var(--selected);
+}

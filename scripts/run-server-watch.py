@@ -14,17 +14,24 @@ SOURCES = [ROOT / name for name in (
     "cmd", "internal", "audio", "download", "spotify", "vk", "youtube",
     "go.mod", "go.sum",
 )]
+CSS_SOURCES = [ROOT / "internal/web" / name for name in (
+    "tailwind.css", "views.go", "assets/app.css", "assets/theme.css",
+    "assets/download.js", "assets/player.js", "assets/settings.js",
+    "assets/theme.js", "assets/duration.js",
+)] + [ROOT / "package.json", ROOT / "package-lock.json"]
+CSS_CLI = ROOT / "node_modules/.bin/tailwindcss"
+CSS_OUTPUT = ROOT / "internal/web/assets/tailwind.css"
 OUTPUT = ROOT / ".local-server"
 BINARY = OUTPUT / "trackharbor-server"
 
 
-def fingerprint():
+def fingerprint(sources=SOURCES):
     digest = hashlib.sha256()
 
     def fail(error):
         raise error
 
-    for source in SOURCES:
+    for source in sources:
         paths = [source]
         if source.is_dir():
             for directory, children, files in os.walk(source, onerror=fail):
@@ -81,10 +88,31 @@ def main():
     signal.signal(signal.SIGTERM, interrupt)
     process = None
     built_from = None
+    css_built_from = fingerprint(CSS_SOURCES)
+    missing_css_warned = False
+    if CSS_CLI.is_file() and (not CSS_OUTPUT.exists() or
+            any(path.stat().st_mtime_ns > CSS_OUTPUT.stat().st_mtime_ns
+                for path in CSS_SOURCES)):
+        css_built_from = None
     print("Watching server source for changes. Press Ctrl+C to stop.", flush=True)
     try:
         while True:
             try:
+                css_current = fingerprint(CSS_SOURCES)
+                if css_current != css_built_from:
+                    if not CSS_CLI.is_file():
+                        if not missing_css_warned:
+                            print("CSS changed; run npm ci to enable Tailwind builds.", flush=True)
+                            missing_css_warned = True
+                        time.sleep(1)
+                        continue
+                    result = subprocess.run(["npm", "run", "css:build"], cwd=ROOT)
+                    if result.returncode != 0:
+                        print("CSS build failed; keeping the previous server.", flush=True)
+                        time.sleep(1)
+                        continue
+                    css_built_from = css_current
+                    missing_css_warned = False
                 current = fingerprint()
                 if current != built_from:
                     print("Building server…", flush=True)

@@ -7,3 +7,4 @@
 /logs
 /.codegraph/
 /.local-server/
+/node_modules/

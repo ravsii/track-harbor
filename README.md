@@ -40,6 +40,18 @@ to change the default directory, or `TRACKHARBOR_SERVER_CONFIG` and
 `TRACKHARBOR_SERVER_DB` to set those paths independently. Existing server data
 is not moved automatically; keep using the same data directory when upgrading.
 Server database migrations in `internal/store/migrations/` run on startup.
+The server embeds the checked-in `internal/web/assets/tailwind.css`, so
+`go build ./...` and `make run` do not need Node.js. To change web styles,
+install dependencies with `npm ci` and run `make css-build` before building
+the Go server. `make css-watch` recompiles styles while editing;
+`make run-server-watch` rebuilds Tailwind automatically after CSS, template or UI JS
+edits when dependencies are installed, then restarts the server. Tailwind's
+source is `internal/web/tailwind.css`; existing component/state styles in
+`internal/web/assets/app.css` and `theme.css` remain bundled during the
+incremental migration. Preflight is intentionally disabled to preserve the
+current appearance. Commit the generated CSS with each style change.
+Tailwind v4 targets Chrome 111+, Safari 16.4+ and Firefox 128+; browsers
+older than these are not supported by the new utility styles.
 Configure download route order and personal/public proxy lists on the local
 **Settings** page. Changes affect new download batches; running transfers keep
 their routes. Add personal proxies one at a time: each must reach YouTube over
