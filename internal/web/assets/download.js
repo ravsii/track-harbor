@@ -144,22 +144,26 @@
         else load();
       }
       if (state.stage === 'done') {
-        document.dispatchEvent(new Event('download:done'));
+        document.dispatchEvent(new CustomEvent('download:done', {detail: state}));
         for (const row of document.querySelectorAll('.library .tracks li[data-source]')) {
           if (row.dataset.source === state.source && row.dataset.artist === state.artist && row.dataset.title === state.title) {
             row.dataset.playable = 'true';
             const button = row.querySelector('.play-track');
             if (button) button.disabled = false;
+            const link = row.querySelector('.download-track');
+            if (link) { link.classList.remove('unavailable'); link.removeAttribute('aria-disabled'); link.removeAttribute('tabindex'); }
           }
         }
       }
       if (state.stage === 'missing') {
-        document.dispatchEvent(new Event('download:missing'));
+        document.dispatchEvent(new CustomEvent('download:missing', {detail: state}));
         for (const row of document.querySelectorAll('.library .tracks li[data-source]')) {
           if (row.dataset.source === state.source && row.dataset.artist === state.artist && row.dataset.title === state.title) {
             row.dataset.playable = 'false';
             const button = row.querySelector('.play-track');
             if (button) button.disabled = true;
+            const link = row.querySelector('.download-track');
+            if (link) { link.classList.add('unavailable'); link.setAttribute('aria-disabled', 'true'); link.tabIndex = -1; }
           }
         }
       }

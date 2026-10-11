@@ -3,6 +3,7 @@ package web
 import (
 	"database/sql"
 	"errors"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -61,6 +62,15 @@ func (s *Server) playAudio(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "audio/mpeg")
-	w.Header().Set("Content-Disposition", "inline")
+	if r.URL.Query().Has("download") {
+		name := strings.ReplaceAll(t.Title, "\\", "_")
+		name = strings.ReplaceAll(name, "/", "_")
+		if name == "" {
+			name = "track"
+		}
+		w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name + ".mp3"}))
+	} else {
+		w.Header().Set("Content-Disposition", "inline")
+	}
 	http.ServeContent(w, r, "", info.ModTime(), f)
 }

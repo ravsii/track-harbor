@@ -22,6 +22,26 @@ The top bar has no track dropdown: on load it shows the last played available
 track, or the most recently added available one, without autoplay. Play starts the
 shown track; individual tracks are selected from their Play actions in the library.
 
+## Spacing baseline
+
+Keep these values in sync with the styles when adjusting the layout:
+
+| Area | Desktop | Narrow screens |
+| --- | --- | --- |
+| Sidebar padding | `36px 22px` | `14px 20px` at 950px; `16px 20px` at 700px |
+| Top bar content padding | `12px clamp(24px, 5vw, 82px)` | `8px 20px 12px` at 950px |
+| Music content padding | `8px 12px 16px` | `8px 10px 16px` at 700px |
+| Other page content padding | `37px clamp(24px, 5vw, 82px) 26px` | `28px 20px` at 950px |
+| Track header / row padding (Music, Spotify, VK) | `0 10px 7px` / `7px 10px`; grid gap `8px` | Same compact spacing; tracks scroll horizontally if columns do not fit |
+
+Music has no fixed content-width or track-list-height cap: its tracks fill the
+space beside the sidebar and scroll with the page. Keep horizontal scrolling
+only when the track columns cannot fit on a narrow screen. Preserve the top
+player and source navigation rather than spending their space on decoration.
+The row number becomes Play on hover or keyboard focus; on touch, Play remains
+visible. Show the duration of the local MP3 when available and put its download
+action at the right edge of each row. Missing files have neither action active.
+
 ## Color palette
 
 The primary visual direction is **marine graphite**. Use these colors in the

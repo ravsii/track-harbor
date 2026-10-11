@@ -24,6 +24,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	  <script src="/assets/htmx.min.js" defer></script>
 	  <script src="/assets/download.js" defer></script>
 	  <script src="/assets/player.js" defer></script>
+	  <script src="/assets/duration.js" defer></script>
 </head>
 <body>
 <div class="shell">
@@ -107,16 +108,16 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	      <ol class="tracks" id="download-tracks"></ol>
 	    </section>
 	    {{else}}
-	    <section class="library {{if eq .Source "music"}}music-library{{end}}"><div class="library-heading">{{if ne .Source "music"}}<div><span class="index">03 / COLLECTION</span><h2>Your tracks</h2></div>{{end}}<span class="count">{{len .Tracks}} TRACKS</span></div>
+	    <section class="library {{if eq .Source "music"}}music-library{{end}}"{{if eq .Source "music"}} aria-label="Tracks"{{end}}>{{if ne .Source "music"}}<div class="library-heading"><div><span class="index">03 / COLLECTION</span><h2>Your tracks</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>{{end}}
       {{if .Tracks}}
-	        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span>PLAY</span></div>
-	        <ol class="tracks">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<div class="track-actions"><button type="button" class="play-track secondary" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button></div></li>{{end}}</ol>
+	        <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span aria-label="Duration">TIME</span><span aria-label="Download">↓</span></div>
+	        <ol class="tracks">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="track-number"><span class="number">{{add $i 1}}</span><button type="button" class="play-track" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button></span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<span class="track-duration">—</span><a class="download-track{{if not $t.FilePath}} unavailable{{end}}" href="/audio?source={{$t.Source | urlquery}}&amp;artist={{$t.Artist | urlquery}}&amp;title={{$t.Title | urlquery}}&amp;download=1" aria-label="Download {{$t.Title}} as MP3" title="Download MP3"{{if not $t.FilePath}} aria-disabled="true" tabindex="-1"{{end}}>{{template "icon" "download-01"}}</a></li>{{end}}</ol>
       {{else}}
         <div class="empty"><span>{{template "icon" "disc"}}</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
       {{end}}
 	    </section>
 	    {{end}}
-    <footer>LOCAL DOWNLOADS · TRACKHARBOR</footer>
+	    {{if ne .Source "music"}}<footer>LOCAL DOWNLOADS · TRACKHARBOR</footer>{{end}}
   </main>
 </div>
 </body></html>{{define "icon"}}<svg class="icon" aria-hidden="true" focusable="false"><use href="/assets/icons.svg#hg-{{.}}"></use></svg>{{end}}`))
