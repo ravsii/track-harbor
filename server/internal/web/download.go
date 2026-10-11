@@ -12,7 +12,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -147,9 +146,13 @@ func (d *downloadJob) run(tracks []store.Track) {
 			state.Stage = "skipped"
 			state.Message = "Already downloaded"
 		} else {
-			name := downloadFilename(t)
-			path := filepath.Join(d.config.DownloadDir, t.Source, name)
-			hash, saveErr := download.Save(ctx, download.Track{Source: t.Source, Artist: t.Artist, Title: t.Title, AudioURL: t.AudioURL, CoverURL: t.CoverURL}, path, routes, func(e download.Event) {
+			directory := filepath.Join(d.config.DownloadDir, "youtube")
+			id := ""
+			if t.Source == "vk" {
+				directory = filepath.Join(d.config.DownloadDir, "vk")
+				id = fmt.Sprintf("%d_%d", t.OwnerID, t.AudioID)
+			}
+			path, hash, saveErr := download.Save(ctx, download.Track{Source: t.Source, SourceID: id, Artist: t.Artist, Title: t.Title, AudioURL: t.AudioURL, CoverURL: t.CoverURL}, directory, routes, func(e download.Event) {
 				state.Stage, state.Bytes, state.TotalBytes = e.Stage, e.Bytes, e.Total
 				state.Message = "Downloading " + t.Source
 				d.publish(state)
@@ -205,27 +208,6 @@ func (d *downloadJob) run(tracks []store.Track) {
 	} else {
 		d.logger.Info("download finished", zap.Int("total", len(tracks)))
 	}
-}
-
-func downloadFilename(t store.Track) string {
-	sum := sha256.Sum256([]byte(t.Source + "\x00" + t.Artist + "\x00" + t.Title))
-	label := strings.Map(func(r rune) rune {
-		if r < ' ' || strings.ContainsRune("/\\:", r) {
-			return '-'
-		}
-		return r
-	}, t.Artist+" - "+t.Title)
-	if len(label) > 110 {
-		var short strings.Builder
-		for _, char := range label {
-			if short.Len()+len(string(char)) > 110 {
-				break
-			}
-			short.WriteRune(char)
-		}
-		label = short.String()
-	}
-	return label + "-" + hex.EncodeToString(sum[:8]) + ".mp3"
 }
 
 func (d *downloadJob) saved(t store.Track) (bool, error) {

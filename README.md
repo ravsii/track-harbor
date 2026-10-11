@@ -73,6 +73,9 @@ to an individual track. Progress is pushed to the browser with SSE. The server
 keeps MP3s in its own `downloads/` directory beside `library.db`, with download
 history in that same server database. Existing files are skipped after checking
 their stored hashes. Sync VK again if its signed audio URLs expire.
+New files are named by their actual audio source ID: `downloads/youtube/<video-id>.mp3`
+for Spotify library tracks and `downloads/vk/<owner-id>_<audio-id>.mp3` for VK.
+Already downloaded files retain their recorded paths and remain playable.
 Server logs are JSON on stderr at Info level by default. They record significant
 HTTP requests and SSE stream lifetimes with event counts, not event payloads;
 routine polling, audio requests, and static assets are omitted on success.
