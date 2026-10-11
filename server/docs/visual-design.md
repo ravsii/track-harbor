@@ -13,10 +13,10 @@ not stop playback or reset the track or playback position. A track's Play
 action on any page must use the same player. The top bar and player must work
 on narrow screens and in both color themes.
 
-The top bar spans the viewport, with its controls aligned to the page content:
-logo on the left, track and playback controls in the center, and the theme
-button on the far right. A single playback-mode button cycles through in order,
-shuffle, and repeat one. The volume icon toggles mute without losing the
+The top bar spans the viewport, with playback controls centered relative to
+the full viewport: logo on the left, current track beside the controls, and
+the theme button on the far right. A single playback-mode button cycles through
+in order, shuffle, and repeat one. The volume icon toggles mute without losing the
 previous level. The theme button cycles through System, Light, and Dark.
 The top bar has no track dropdown: Play starts the first saved track, and
 individual tracks are selected from their Play actions in the library.
