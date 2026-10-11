@@ -95,6 +95,7 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 }
 .topbar-track { min-width: 0; }
 .topbar-track strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 0 0 4px; font-size: 13px; }
+.topbar-track strong:empty { display: none; }
 .topbar-track select {
   width: 100%;
   padding: 4px 8px;

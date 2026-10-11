@@ -31,8 +31,8 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home"><span class="mark">{{template "icon" "disc-album"}}</span><strong>TrackHarbor</strong></a>
     <div class="topbar-content">
       <div class="topbar-track">
-        <strong id="player-track" aria-live="polite">Choose a downloaded track</strong>
-        <select id="player-track-choice" aria-label="Choose a downloaded track"><option value="">Saved tracks</option></select>
+        <strong id="player-track" aria-live="polite"></strong>
+        <select id="player-track-choice" aria-label="Saved tracks"><option value="">Saved tracks</option></select>
       </div>
       <audio id="player-audio" preload="none"></audio>
       <div class="player-controls">
