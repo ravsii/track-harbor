@@ -28,10 +28,9 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{"ad
       <div class="panel connect"><div class="panel-top"><span class="index">01 / CONNECTION</span><span class="pill {{if .Connected}}connected{{end}}">{{if .Connected}}● Connected{{else}}○ Not connected{{end}}</span></div>
         <h2>Connect {{.Name}}</h2>
         {{if eq .Source "spotify"}}
-        <p>Paste the <code>authorization</code> and <code>client-token</code> headers from a Spotify Web Player request. Do not paste cookies.</p>
+        <p>Paste the full request headers from a Spotify Web Player request. Only <code>authorization</code> and <code>client-token</code> are saved; other headers and cookies are discarded.</p>
         <form action="/connect" method="post" autocomplete="off"><input type="hidden" name="source" value="spotify">
-          <label>AUTHORIZATION<input name="authorization" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Bearer …" required></label>
-          <label>CLIENT-TOKEN<input name="client_token" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Client token" required></label>
+          <label>REQUEST HEADERS<textarea name="headers" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="authorization: Bearer …&#10;client-token: …" required></textarea></label>
           <button type="submit">Save credentials <span>↗</span></button>
         </form>
         {{else}}

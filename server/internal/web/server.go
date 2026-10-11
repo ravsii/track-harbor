@@ -124,7 +124,7 @@ func (s *Server) currentStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid form", 400)
 		return
@@ -142,9 +142,9 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	var first, second string
 	if source == "spotify" {
-		first, second = strings.TrimSpace(r.PostForm.Get("authorization")), strings.TrimSpace(r.PostForm.Get("client_token"))
+		first, second = spotifyHeaders(r.PostForm.Get("headers"))
 		if !strings.HasPrefix(first, "Bearer ") || len(first) < len("Bearer ")+1 || second == "" {
-			http.Error(w, "paste authorization: Bearer … and client-token", 400)
+			http.Error(w, "paste request headers containing authorization: Bearer … and client-token", 400)
 			return
 		}
 	} else {
@@ -161,6 +161,25 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 	}
 	s.status[source] = "Credentials saved. Click Sync library to import tracks."
 	http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
+}
+
+// spotifyHeaders extracts only the two credentials needed for sync from a
+// DevTools header dump. Other headers (including cookies) are never persisted.
+func spotifyHeaders(input string) (authorization, clientToken string) {
+	for _, line := range strings.Split(input, "\n") {
+		name, value, ok := strings.Cut(strings.TrimSpace(line), ":")
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		switch strings.ToLower(strings.TrimSpace(name)) {
+		case "authorization":
+			authorization = value
+		case "client-token":
+			clientToken = value
+		}
+	}
+	return authorization, clientToken
 }
 
 func (s *Server) syncSource(w http.ResponseWriter, r *http.Request) {

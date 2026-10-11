@@ -24,10 +24,10 @@ Running the CLI without a subcommand displays help and does not start downloads.
 make run-server
 ```
 
-Visit `http://127.0.0.1:8787` to connect Spotify (paste Web Player
-`authorization` and `client-token` headers) or VK (open the displayed VK
-authorization link, then paste its token or redirect URL). Each source has its
-own Sync button and track list. Sync runs in the background and does not erase
+Visit `http://127.0.0.1:8787` to connect Spotify (paste the full Web Player
+request headers; only `authorization` and `client-token` are saved) or VK (open
+the displayed VK authorization link, then paste its token or redirect URL).
+Each source has its own Sync button and track list. Sync runs in the background and does not erase
 the previous library on failure. Playback and downloads in the web app are not
 implemented yet; the CLI still supports downloading.
 
