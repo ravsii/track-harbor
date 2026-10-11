@@ -3,7 +3,8 @@
 > **MVP status:** This project is heavily vibe-coded. The priority right now is
 > getting the core workflow working; cleaning up the slop comes later.
 
-Sync Spotify tracks to SQLite and download music to `~/.trackharbor/downloaded`.
+Sync Spotify Liked Songs or VK My Music to SQLite and download music to
+`~/.trackharbor/downloaded`.
 
 ```sh
 go run ./cmd/cli spotify auth
@@ -51,6 +52,43 @@ library is requested with the `LIKED_SONGS` feature flag. The discovered
 JavaScript. This is not a user-specific ID extracted from the library. The
 response must have `format: liked-songs`; the collection URI is never passed to
 `fetchPlaylist`. If synchronization fails, the previous track list is preserved.
+
+## VK My Music (experimental)
+
+The simplest VK integration uses a manually obtained user access token:
+
+```sh
+go run ./cmd/cli vk auth
+go run ./cmd/cli vk sync
+go run ./cmd/cli download
+```
+
+1. Open [vkhost.github.io](https://vkhost.github.io/) and select **VFeed**
+   (application ID `4083558`). Review the requested permissions before granting
+   access; enter your password only on VK's login page. This is a third-party
+   application authorization, not an application owned by TrackHarbor.
+2. Copy the `access_token` value from the final redirect URL. Paste the token
+   or the complete redirect URL into `vk auth`. Terminal input is hidden.
+3. Run `vk sync` to import only your own **My Music** library through `audio.get`.
+
+The token is stored in `vk_credentials` in `~/.trackharbor/vault.db`; it is not
+printed or logged. Treat it like a password, do not commit or share it, and
+revoke the application's access in VK when it is no longer needed. TrackHarbor
+does not automate browser login or store your VK password. VK requests use a
+direct connection, not the download proxies.
+
+VK tracks are stored separately in `vk_songs`. A successful `vk sync` atomically
+replaces only this table; Spotify's `songs` table and credentials are untouched.
+Failed requests or incomplete pagination preserve the previous library.
+`download` reads both libraries, deduplicates identical search queries, and
+continues downloading from YouTube using the shared download history. It does
+not download audio files from VK. Diagnostics: `logs/vk-sync.jsonl`.
+
+**Audio access is not guaranteed.** VK restricts audio methods by application
+and token permissions. VFeed token issuance and audio access have not been
+verified live for this integration. If VK rejects the request, the command
+reports the API error code without logging the token or raw response. No
+automatic fallback to web cookies or another application is attempted.
 
 ## Database and configuration
 

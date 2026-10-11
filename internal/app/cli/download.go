@@ -30,7 +30,7 @@ const (
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Download all tracks from the database",
-	Long:  "Download all tracks from ~/.trackharbor/vault.db using YouTube. Set download_dir in ~/.trackharbor/config.yaml to choose the output directory (default: ~/.trackharbor/downloaded). The strategy list controls connection priority. Use --workers to set concurrency (default: 50), capped by the available proxy pool size when using proxies.",
+	Long:  "Download tracks from both the Spotify and VK libraries in ~/.trackharbor/vault.db using YouTube. Set download_dir in ~/.trackharbor/config.yaml to choose the output directory (default: ~/.trackharbor/downloaded). The strategy list controls connection priority. Use --workers to set concurrency (default: 50), capped by the available proxy pool size when using proxies.",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if _, err := downloadWorkerLimit(cmd); err != nil {
 			return err
@@ -111,13 +111,27 @@ var downloadCmd = &cobra.Command{
 		}
 		defer database.Close()
 
-		repo := repository.NewSongRepository(database)
-
-		songList, err := repo.GetAll()
+		var songList []repository.Song
+		var spotifyTable int
+		if err := database.Get(&spotifyTable, "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'songs'"); err != nil {
+			fatal(err)
+		}
+		if spotifyTable > 0 {
+			songList, err = repository.NewSongRepository(database).GetAll()
+			if err != nil {
+				fatal(err)
+			}
+		}
+		vkRepo, err := repository.NewVKRepository(database)
 		if err != nil {
 			fatal(err)
 		}
-		databasePath, err := filepath.Abs("meshtune.db")
+		vkSongs, err := vkRepo.GetAll()
+		if err != nil {
+			fatal(err)
+		}
+		songList = append(songList, vkSongs...)
+		databasePath, err := config.DatabasePath()
 		if err != nil {
 			fatal(err)
 		}
@@ -126,7 +140,7 @@ var downloadCmd = &cobra.Command{
 		fmt.Fprintln(out, "Log: logs/download.jsonl")
 		logger.Info("database_loaded", zap.String("database", databasePath), zap.Int("total", len(songList)))
 		if len(songList) == 0 {
-			fmt.Fprintln(out, "No tracks in the database. Run trackharbor spotify sync first.")
+			fmt.Fprintln(out, "No tracks in the database. Run trackharbor spotify sync or trackharbor vk sync first.")
 			return
 		}
 
@@ -276,6 +290,7 @@ func buildQueries(songs []repository.Song) []string {
 
 func buildQueriesLogged(songs []repository.Song, logger *zap.Logger) []string {
 	out := make([]string, 0, len(songs))
+	seen := make(map[string]bool)
 	for _, song := range songs {
 		var artists []string
 		err := json.NewDecoder(strings.NewReader(song.Artists)).Decode(&artists)
@@ -286,7 +301,11 @@ func buildQueriesLogged(songs []repository.Song, logger *zap.Logger) []string {
 			}
 			continue
 		}
-		out = append(out, strings.Join(artists, " ")+" "+song.Title)
+		query := strings.Join(artists, " ") + " " + song.Title
+		if !seen[query] {
+			seen[query] = true
+			out = append(out, query)
+		}
 	}
 	return out
 }
