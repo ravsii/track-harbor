@@ -25,7 +25,7 @@ type Pool struct {
 func NewPool(addresses []string) (*Pool, error) {
 	addresses = usableAddresses(addresses)
 	if len(addresses) == 0 {
-		return nil, fmt.Errorf("нет проверенных прокси; прямое подключение не используется")
+		return nil, fmt.Errorf("no verified proxies; direct connections are not used")
 	}
 	p := &Pool{addresses: append([]string(nil), addresses...), state: make([]proxyState, len(addresses)), now: time.Now}
 	return p, nil

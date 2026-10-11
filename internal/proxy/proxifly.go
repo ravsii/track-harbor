@@ -105,7 +105,7 @@ func (s *CombinedSource) Fetch(ctx context.Context) ([]string, error) {
 	}
 	addresses = usableAddresses(addresses)
 	if len(addresses) == 0 {
-		return nil, fmt.Errorf("ни один источник не вернул пригодных адресов прокси (ProxyScrape/Proxifly/TheSpeedX)")
+		return nil, fmt.Errorf("no source returned usable proxy addresses (ProxyScrape/Proxifly/TheSpeedX)")
 	}
 	return addresses, nil
 }

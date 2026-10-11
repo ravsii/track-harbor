@@ -184,9 +184,9 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 				d.display.Update(StatusEvent{JobID: jobID, Source: d.provider.Name(), Kind: kind, Name: name, Proxy: proxyAddress, TotalBytes: -1})
 			} else {
 				if connection == "direct" {
-					fmt.Printf("%s: %s · напрямую\n", stage, name)
+					fmt.Printf("%s: %s · direct\n", stage, name)
 				} else {
-					fmt.Printf("%s: %s · прокси: %s\n", stage, name, proxyAddress)
+					fmt.Printf("%s: %s · proxy: %s\n", stage, name, proxyAddress)
 				}
 			}
 		}
@@ -273,7 +273,7 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 		verified, err = d.migrateLegacyFile(track.ID, filePath, logger)
 	}
 	if err != nil {
-		fail("check_file", fmt.Errorf("проверка скачанного файла: %w", err))
+		fail("check_file", fmt.Errorf("check downloaded file: %w", err))
 		return
 	}
 	if verified {
@@ -350,10 +350,10 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 		err = errors.Join(bodyCloseErr, fileCloseErr)
 	}
 	if err == nil && resp.ContentLength >= 0 && written != resp.ContentLength {
-		err = fmt.Errorf("неполный файл: получено %d из %d байт", written, resp.ContentLength)
+		err = fmt.Errorf("incomplete file: received %d of %d bytes", written, resp.ContentLength)
 	}
 	if err == nil && written == 0 {
-		err = fmt.Errorf("пустой скачанный файл")
+		err = fmt.Errorf("downloaded file is empty")
 	}
 	if err == nil {
 		failureStage = "saving"

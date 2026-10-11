@@ -54,7 +54,7 @@ func (r *SpotifyHeadersRepository) Save(headers SpotifyHeaders) error {
 			authorization = excluded.authorization,
 			client_token = excluded.client_token`, headers.Authorization, headers.ClientToken)
 	if err != nil {
-		return fmt.Errorf("запись заголовков: %w", err)
+		return fmt.Errorf("save headers: %w", err)
 	}
 	return nil
 }

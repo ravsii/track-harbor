@@ -94,7 +94,7 @@ func TestSyncSavesAllPlaylistPages(t *testing.T) {
 	if count != 127 || last != 1 {
 		t.Errorf("not all songs saved: count=%d last=%d", count, last)
 	}
-	for _, want := range []string{"Страница 1", "Страница 2", "Страница 3", "50 из 127", "100 из 127", "127 из 127", "Сохранено 127 треков"} {
+	for _, want := range []string{"Page 1", "Page 2", "Page 3", "50 of 127", "100 of 127", "127 of 127", "Saved 127 tracks"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("missing pagination progress %q", want)
 		}
@@ -176,7 +176,7 @@ func TestSyncPaginatesWithStoredOrRenewedHeaders(t *testing.T) {
 				}
 				return playlistPageResponse(t, offset, min(50, 127-offset), 127), nil
 			}), func(database *sql.DB) { seedStoredHeaders(t, database) })
-			if err != nil || !strings.Contains(output, "Сохранено 127 треков") {
+			if err != nil || !strings.Contains(output, "Saved 127 tracks") {
 				t.Fatalf("pagination failed: err=%v output=%s", err, output)
 			}
 			want := []int{0, 50, 100}
@@ -186,7 +186,7 @@ func TestSyncPaginatesWithStoredOrRenewedHeaders(t *testing.T) {
 			if !reflect.DeepEqual(offsets, want) {
 				t.Errorf("unexpected page requests: %v", offsets)
 			}
-			if !renew && strings.Contains(output, "Вставьте заголовки") {
+			if !renew && strings.Contains(output, "Paste Spotify request headers") {
 				t.Error("working cached headers still prompted for input")
 			}
 		})

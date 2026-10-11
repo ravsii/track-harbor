@@ -20,13 +20,13 @@ import (
 
 var proxyCmd = &cobra.Command{
 	Use:   "proxy",
-	Short: "Работа с личными и публичными прокси",
+	Short: "Manage personal and public proxies",
 }
 
 var proxyTestCmd = &cobra.Command{
 	Use:          "test",
-	Short:        "Проверить личные прокси и публичный кеш",
-	Long:         "Проверить HTTPS-доступ к YouTube через все personal_proxy и актуальные адреса в кеше. Если рабочие кешированные адреса есть, источники не запрашиваются. Иначе публичный пул обновляется.",
+	Short:        "Check personal proxies and the public proxy cache",
+	Long:         "Check HTTPS access to YouTube through all personal_proxy addresses and unexpired cached proxies. If any cached proxies work, source lists are not fetched. Otherwise, the public pool is refreshed.",
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -40,14 +40,14 @@ var proxyTestCmd = &cobra.Command{
 		}
 		defer func() {
 			if err := closeLog(); err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), "Ошибка журнала:", err)
+				fmt.Fprintln(cmd.ErrOrStderr(), "Log error:", err)
 			}
 		}()
 		logger.Info("proxy_test_started")
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
-		fmt.Fprintln(out, "Проверка HTTPS-доступа к YouTube. Журнал: logs/proxy-test.jsonl")
-		personal, err := checkProxyGroup(ctx, out, logger, "Личные", cfg.PersonalProxy, proxy.NewPersonalHTTPSChecker())
+		fmt.Fprintln(out, "Checking HTTPS access to YouTube. Log: logs/proxy-test.jsonl")
+		personal, err := checkProxyGroup(ctx, out, logger, "Personal", cfg.PersonalProxy, proxy.NewPersonalHTTPSChecker())
 		if err != nil {
 			return err
 		}
@@ -62,32 +62,32 @@ var proxyTestCmd = &cobra.Command{
 		}
 		cached, err := store.Valid(ctx, time.Now())
 		if err != nil {
-			return fmt.Errorf("чтение кеша прокси: %w", err)
+			return fmt.Errorf("read proxy cache: %w", err)
 		}
-		public, err := checkProxyGroup(ctx, out, logger, "Кеш", cached, proxy.NewHTTPSChecker())
+		public, err := checkProxyGroup(ctx, out, logger, "Cached", cached, proxy.NewHTTPSChecker())
 		if err != nil {
 			return err
 		}
 		if public > 0 {
-			fmt.Fprintln(out, "В кеше есть рабочие прокси: списки не обновляются, срок кеша не продлевается.")
+			fmt.Fprintln(out, "Working cached proxies found: lists are not refreshed and cache expiry is unchanged.")
 		} else {
-			fmt.Fprintln(out, "В кеше нет рабочих прокси. Загружаю свежие списки и проверяю публичный пул…")
+			fmt.Fprintln(out, "No working cached proxies. Fetching fresh lists and checking the public pool…")
 			pool, err := proxy.NewManager(proxy.NewSources(logger), proxy.NewHTTPSChecker(), store, logger).Refresh(ctx, func(checked, total, valid int) {
 				if total > 0 && (checked%100 == 0 || checked == total) {
-					fmt.Fprintf(out, "Проверка публичных: %d/%d, доступных: %d\n", checked, total, valid)
+					fmt.Fprintf(out, "Checking public proxies: %d/%d, available: %d\n", checked, total, valid)
 				}
 			})
 			if err != nil {
 				logger.Error("proxy_test_refresh_failed", zap.Error(err))
-				fmt.Fprintf(out, "Личных доступно: %d/%d.\n", personal, len(cfg.PersonalProxy))
-				return fmt.Errorf("обновление публичных прокси: %w", err)
+				fmt.Fprintf(out, "Personal proxies available: %d/%d.\n", personal, len(cfg.PersonalProxy))
+				return fmt.Errorf("refresh public proxies: %w", err)
 			}
 			public = pool.Len()
 			for _, address := range pool.List() {
-				fmt.Fprintf(out, "  Публичный: %s — доступен\n", download.ProxyLabel(address))
+				fmt.Fprintf(out, "  Public: %s — available\n", download.ProxyLabel(address))
 			}
 		}
-		fmt.Fprintf(out, "Итого доступных: личных %d/%d, публичных %d.\n", personal, len(cfg.PersonalProxy), public)
+		fmt.Fprintf(out, "Total available: personal %d/%d, public %d.\n", personal, len(cfg.PersonalProxy), public)
 		logger.Info("proxy_test_finished", zap.Int("personal_available", personal), zap.Int("public_available", public))
 		return nil
 	},
@@ -96,7 +96,7 @@ var proxyTestCmd = &cobra.Command{
 // Output is written by the collecting goroutine only; credentials and raw
 // network errors never reach the terminal or structured log.
 func checkProxyGroup(ctx context.Context, out io.Writer, logger *zap.Logger, group string, addresses []string, checker proxy.Checker) (int, error) {
-	fmt.Fprintf(out, "%s прокси: %d\n", group, len(addresses))
+	fmt.Fprintf(out, "%s proxies: %d\n", group, len(addresses))
 	type result struct {
 		address  string
 		err      error
@@ -134,14 +134,14 @@ func checkProxyGroup(ctx context.Context, out io.Writer, logger *zap.Logger, gro
 			continue
 		}
 		label := download.ProxyLabel(result.address)
-		status := "доступен"
+		status := "available"
 		if result.err == nil {
 			available++
 		} else {
-			status = "нет HTTPS-доступа к YouTube"
+			status = "no HTTPS access to YouTube"
 			var networkErr net.Error
 			if errors.As(result.err, &networkErr) && networkErr.Timeout() {
-				status = "таймаут"
+				status = "timed out"
 			}
 		}
 		fmt.Fprintf(out, "  %s: %s — %s (%s)\n", group, label, status, result.duration.Round(time.Millisecond))

@@ -17,81 +17,81 @@ import (
 
 var syncCmd = &cobra.Command{
 	Use:          "sync",
-	Short:        "Импортировать список треков из Spotify",
+	Short:        "Import the track list from Spotify",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		started := time.Now()
 		out := cmd.OutOrStdout()
-		fmt.Fprintln(out, "[1/4] Проверяю сохранённые заголовки в ~/.meshvault/vault.db…")
+		fmt.Fprintln(out, "[1/4] Checking saved headers in ~/.meshvault/vault.db…")
 		database, err := db.New()
 		if err != nil {
-			return fmt.Errorf("[1/4] открытие БД: %w", err)
+			return fmt.Errorf("[1/4] open database: %w", err)
 		}
 		defer database.Close()
 		if err := database.Ping(); err != nil {
-			return fmt.Errorf("[1/4] открытие БД: %w", err)
+			return fmt.Errorf("[1/4] open database: %w", err)
 		}
 		headerRepo := repository.NewSpotifyHeadersRepository(database)
 		headers, err := headerRepo.Load()
 		if err != nil {
-			return fmt.Errorf("[1/4] чтение сохранённых заголовков: %w", err)
+			return fmt.Errorf("[1/4] read saved headers: %w", err)
 		}
 
 		var info *spotify.PlaylistResponse
 		if headers != nil {
-			fmt.Fprintln(out, "[2/4] Запрашиваю первую страницу Spotify с сохранёнными заголовками…")
+			fmt.Fprintln(out, "[2/4] Fetching the first Spotify page with saved headers…")
 			info, err = spotify.GetSongInfo(headers.Authorization, headers.ClientToken)
 			if err != nil {
-				fmt.Fprintf(out, "      Запрос с сохранёнными заголовками не удался: %v\n", err)
+				fmt.Fprintf(out, "      Request with saved headers failed: %v\n", err)
 			}
 		} else {
-			fmt.Fprintln(out, "      Сохранённых заголовков нет.")
+			fmt.Fprintln(out, "      No saved headers.")
 		}
 		if headers == nil || err != nil {
 			fresh, err := readSyncHeaders(cmd.InOrStdin(), out)
 			if err != nil {
 				return err
 			}
-			fmt.Fprintln(out, "[2/4] Запрашиваю первую страницу Spotify с новыми заголовками…")
+			fmt.Fprintln(out, "[2/4] Fetching the first Spotify page with new headers…")
 			info, err = spotify.GetSongInfo(fresh.Authorization, fresh.ClientToken)
 			if err != nil {
-				return fmt.Errorf("[2/4] запрос Spotify: %w", err)
+				return fmt.Errorf("[2/4] Spotify request: %w", err)
 			}
 			if err := headerRepo.Save(*fresh); err != nil {
-				return fmt.Errorf("[2/4] сохранение проверенных заголовков: %w", err)
+				return fmt.Errorf("[2/4] save verified headers: %w", err)
 			}
-			fmt.Fprintln(out, "      Проверенные заголовки сохранены для следующего sync.")
+			fmt.Fprintln(out, "      Verified headers saved for the next sync.")
 			headers = fresh
 		}
 
 		playlist := info.Data.PlaylistV2
 		total := playlist.Content.TotalCount
-		fmt.Fprintf(out, "      Плейлист: %q.\n", playlist.Name)
-		fmt.Fprintf(out, "      Страница 1 (offset=0): получено %d из %d треков.\n", len(playlist.Content.Items), total)
+		fmt.Fprintf(out, "      Playlist: %q.\n", playlist.Name)
+		fmt.Fprintf(out, "      Page 1 (offset=0): received %d of %d tracks.\n", len(playlist.Content.Items), total)
 		if total < 0 || len(playlist.Content.Items) > total || len(playlist.Content.Items) == 0 && total > 0 {
-			return fmt.Errorf("[2/4] первая страница содержит неполный или некорректный список треков")
+			return fmt.Errorf("[2/4] first page contains an incomplete or invalid track list")
 		}
 		for pageNumber := 2; len(playlist.Content.Items) < total; pageNumber++ {
 			offset := len(playlist.Content.Items)
-			fmt.Fprintf(out, "      Запрашиваю страницу %d (offset=%d)…\n", pageNumber, offset)
+			fmt.Fprintf(out, "      Fetching page %d (offset=%d)…\n", pageNumber, offset)
 			next, err := spotify.GetSongInfoPage(headers.Authorization, headers.ClientToken, offset)
 			if err != nil {
-				return fmt.Errorf("[2/4] страница %d (offset=%d): %w", pageNumber, offset, err)
+				return fmt.Errorf("[2/4] page %d (offset=%d): %w", pageNumber, offset, err)
 			}
 			content := next.Data.PlaylistV2.Content
 			if content.TotalCount != total {
-				return fmt.Errorf("[2/4] количество треков изменилось во время загрузки; повторите sync")
+				return fmt.Errorf("[2/4] track count changed during import; run sync again")
 			}
 			if content.PagingInfo.Offset != offset {
-				return fmt.Errorf("[2/4] страница %d: Spotify вернул неверное смещение %d вместо %d", pageNumber, content.PagingInfo.Offset, offset)
+				return fmt.Errorf("[2/4] page %d: Spotify returned offset %d instead of %d", pageNumber, content.PagingInfo.Offset, offset)
 			}
 			if len(content.Items) == 0 || len(content.Items) > total-offset {
-				return fmt.Errorf("[2/4] страница %d: неполный или некорректный список треков", pageNumber)
+				return fmt.Errorf("[2/4] page %d: incomplete or invalid track list", pageNumber)
 			}
 			playlist.Content.Items = append(playlist.Content.Items, content.Items...)
-			fmt.Fprintf(out, "      Страница %d (offset=%d): получено %d из %d треков.\n", pageNumber, offset, len(playlist.Content.Items), total)
+			fmt.Fprintf(out, "      Page %d (offset=%d): received %d of %d tracks.\n", pageNumber, offset, len(playlist.Content.Items), total)
 		}
-		fmt.Fprintf(out, "      Получено %d из %d треков.\n", len(playlist.Content.Items), total)
+		fmt.Fprintf(out, "      Received %d of %d tracks.\n", len(playlist.Content.Items), total)
 		var ss []repository.Song
 		unavailable := 0
 
@@ -115,7 +115,7 @@ var syncCmd = &cobra.Command{
 			}
 			if strings.TrimSpace(title) == "" {
 				unavailable++
-				fmt.Fprintf(out, "      %d. Недоступный трек — пропущен.\n", i+1)
+				fmt.Fprintf(out, "      %d. Unavailable track — skipped.\n", i+1)
 				continue
 			}
 
@@ -123,11 +123,11 @@ var syncCmd = &cobra.Command{
 
 			err := json.NewEncoder(&buf).Encode(artists)
 			if err != nil {
-				return fmt.Errorf("[2/4] подготовка трека %d: %w", i+1, err)
+				return fmt.Errorf("[2/4] prepare track %d: %w", i+1, err)
 			}
 			artistName := strings.Join(artists, ", ")
 			if artistName == "" {
-				artistName = "Неизвестный исполнитель"
+				artistName = "Unknown artist"
 			}
 			fmt.Fprintf(out, "      %d. %s — %s\n", i+1, artistName, title)
 
@@ -138,46 +138,46 @@ var syncCmd = &cobra.Command{
 			})
 		}
 
-		fmt.Fprintln(out, "[3/4] Заменяю список треков в ~/.meshvault/vault.db…")
+		fmt.Fprintln(out, "[3/4] Replacing the track list in ~/.meshvault/vault.db…")
 		repo := repository.NewSongRepository(database)
 		saved, err := repo.ReplaceAll(ss)
 		if err != nil {
-			return fmt.Errorf("[3/4] сохранение треков (предыдущий список сохранён): %w", err)
+			return fmt.Errorf("[3/4] save tracks (previous list preserved): %w", err)
 		}
-		fmt.Fprintf(out, "[4/4] Готово. Сохранено %d треков за %.1f с.\n", saved, time.Since(started).Seconds())
+		fmt.Fprintf(out, "[4/4] Done. Saved %d tracks in %.1f s.\n", saved, time.Since(started).Seconds())
 		if repeats := len(ss) - saved; repeats > 0 {
-			fmt.Fprintf(out, "      Повторов: %d (сохранены по одному экземпляру).\n", repeats)
+			fmt.Fprintf(out, "      Duplicates: %d (one copy kept per track).\n", repeats)
 		}
 		if unavailable > 0 {
-			fmt.Fprintf(out, "      Пропущено недоступных треков: %d.\n", unavailable)
+			fmt.Fprintf(out, "      Unavailable tracks skipped: %d.\n", unavailable)
 		}
 		return nil
 	},
 }
 
 func readSyncHeaders(input io.Reader, out io.Writer) (*repository.SpotifyHeaders, error) {
-	fmt.Fprintln(out, "[1/4] Вставьте заголовки запроса Spotify, не cookies.")
-	fmt.Fprintln(out, "      Формат (замените значения своими):")
-	fmt.Fprintln(out, "      authorization: Bearer <токен>")
-	fmt.Fprintln(out, "      client-token: <токен клиента>")
-	fmt.Fprintln(out, "      Завершите ввод пустой строкой (Enter ещё раз) или Ctrl+D.")
+	fmt.Fprintln(out, "[1/4] Paste Spotify request headers, not cookies.")
+	fmt.Fprintln(out, "      Format (replace the values with your own):")
+	fmt.Fprintln(out, "      authorization: Bearer <token>")
+	fmt.Fprintln(out, "      client-token: <client token>")
+	fmt.Fprintln(out, "      Finish with a blank line (press Enter again) or Ctrl+D.")
 	hMap, skipped, err := parseHeaders(input)
 	if err != nil {
-		return nil, fmt.Errorf("[1/4] чтение заголовков: %w", err)
+		return nil, fmt.Errorf("[1/4] read headers: %w", err)
 	}
-	fmt.Fprintf(out, "      Прочитано %d заголовков.\n", len(hMap))
+	fmt.Fprintf(out, "      Read %d headers.\n", len(hMap))
 	if skipped > 0 {
-		fmt.Fprintf(out, "      Пропущено некорректных строк: %d.\n", skipped)
+		fmt.Fprintf(out, "      Invalid lines skipped: %d.\n", skipped)
 	}
 	presence := func(value string) string {
 		if value == "" {
-			return "нет"
+			return "missing"
 		}
-		return "есть"
+		return "present"
 	}
 	fmt.Fprintf(out, "      authorization: %s; client-token: %s\n", presence(hMap["authorization"]), presence(hMap["client-token"]))
 	if hMap["authorization"] == "" || hMap["client-token"] == "" {
-		return nil, fmt.Errorf("[1/4] необходимы непустые заголовки authorization и client-token из запроса Spotify Web Player; строка Cookie их не заменяет")
+		return nil, fmt.Errorf("[1/4] non-empty authorization and client-token headers from a Spotify Web Player request are required; a Cookie header cannot replace them")
 	}
 	return &repository.SpotifyHeaders{Authorization: hMap["authorization"], ClientToken: hMap["client-token"]}, nil
 }

@@ -53,10 +53,10 @@ func (p *Provider) connectionStrategy() DownloadStrategy {
 func NewProvider() (*Provider, error) {
 	path, err := exec.LookPath("yt-dlp")
 	if err != nil {
-		return nil, fmt.Errorf("YouTube: yt-dlp должен быть установлен и доступен в PATH: %w", err)
+		return nil, fmt.Errorf("YouTube: yt-dlp must be installed and available in PATH: %w", err)
 	}
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		return nil, fmt.Errorf("YouTube: ffmpeg должен быть установлен и доступен в PATH: %w", err)
+		return nil, fmt.Errorf("YouTube: ffmpeg must be installed and available in PATH: %w", err)
 	}
 	return &Provider{executable: path}, nil
 }
@@ -148,7 +148,7 @@ func (p *Provider) runConnectionWithProgress(ctx context.Context, stage string, 
 			return nil, &download.HTTPError{Stage: stage, StatusCode: code}
 		}
 		// Do not persist raw stderr: it can contain signed URLs and cookies.
-		return nil, fmt.Errorf("yt-dlp %s: %w (проверьте версию yt-dlp, доступ к YouTube и JS runtime)", stage, err)
+		return nil, fmt.Errorf("yt-dlp %s: %w (check the yt-dlp version, YouTube access and JS runtime)", stage, err)
 	}
 	return output, nil
 }
@@ -245,7 +245,7 @@ func (p *Provider) convertSource(ctx context.Context, source string, onProgress 
 	configureCancellation(cmd)
 	err = cmd.Run()
 	if err != nil {
-		return download.DownloadResponse{}, fmt.Errorf("FFmpeg: конвертация в MP3 не удалась (исходник сохранён в %q): %w", source, err)
+		return download.DownloadResponse{}, fmt.Errorf("FFmpeg: MP3 conversion failed (source preserved at %q): %w", source, err)
 	}
 	f, err := os.Open(filepath.Join(dir, "audio.mp3"))
 	if err != nil {

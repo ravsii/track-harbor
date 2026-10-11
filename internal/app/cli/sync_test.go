@@ -106,7 +106,7 @@ func TestSyncExplainsHeaderFormatForCookieInput(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "Cookie") || !strings.Contains(err.Error(), "authorization") || !strings.Contains(err.Error(), "client-token") {
 		t.Fatalf("expected explanation that cookies are not tokens, got %v", err)
 	}
-	for _, want := range []string{"пустой строкой", "authorization: Bearer", "client-token:"} {
+	for _, want := range []string{"blank line", "authorization: Bearer", "client-token:"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("input instructions missing %q: %s", want, output)
 		}
@@ -226,7 +226,7 @@ func TestSyncReusesStoredHeadersWithoutReadingInput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second sync should use stored headers, not read stdin: %v", err)
 	}
-	if strings.Contains(output, "Вставьте заголовки") || !strings.Contains(output, "сохранёнными заголовками") || !strings.Contains(output, "[4/4]") {
+	if strings.Contains(output, "Paste Spotify request headers") || !strings.Contains(output, "saved headers") || !strings.Contains(output, "[4/4]") {
 		t.Fatalf("unexpected cached sync output: %s", output)
 	}
 	for _, secret := range []string{"secret-auth", "secret-client"} {
@@ -253,7 +253,7 @@ func TestSyncRetriesWithNewHeadersAndPersistsThem(t *testing.T) {
 	if err != nil || requests != 2 {
 		t.Fatalf("expected cached request then one retry, got requests=%d err=%v", requests, err)
 	}
-	if !strings.Contains(output, "Вставьте заголовки") || !strings.Contains(output, "HTTP 401") {
+	if !strings.Contains(output, "Paste Spotify request headers") || !strings.Contains(output, "HTTP 401") {
 		t.Fatalf("missing cache failure and input prompt: %s", output)
 	}
 	// A third run proves the successful replacement survives reopening the DB.
@@ -383,7 +383,7 @@ func TestSyncAcceptsLegitimateEmptyPlaylist(t *testing.T) {
 	output, err := runSyncTest(t, "", syncTransport(func(*http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 200, Body: io.NopCloser(bytes.NewReader(data))}, nil
 	}), func(database *sql.DB) { seedStoredHeaders(t, database) })
-	if err != nil || strings.Contains(output, "Вставьте заголовки") || !strings.Contains(output, "Сохранено 0 треков") {
+	if err != nil || strings.Contains(output, "Paste Spotify request headers") || !strings.Contains(output, "Saved 0 tracks") {
 		t.Fatalf("legitimate empty playlist should succeed without input, err=%v output=%s", err, output)
 	}
 }
@@ -410,10 +410,10 @@ func TestSyncReportsStagesAndTracksWithoutSecrets(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"[1/4]", "Ctrl+D", "Прочитано 2 заголовков", "Пропущено некорректных строк: 1",
-		"authorization: есть; client-token: есть", "[2/4]", "My playlist", "Получено 2 из 2 треков",
-		"1. Artist A, Artist B — First song", "2. Неизвестный исполнитель — Second song",
-		"Страница 1", "[3/4]", "meshtune.db", "[4/4]", "Сохранено 2 треков за",
+		"[1/4]", "Ctrl+D", "Read 2 headers", "Invalid lines skipped: 1",
+		"authorization: present; client-token: present", "[2/4]", "My playlist", "Received 2 of 2 tracks",
+		"1. Artist A, Artist B — First song", "2. Unknown artist — Second song",
+		"Page 1", "[3/4]", "meshtune.db", "[4/4]", "Saved 2 tracks in",
 	} {
 		if !strings.Contains(output, want) {
 			t.Errorf("output missing %q: %s", want, output)

@@ -160,9 +160,9 @@ func (d *Display) Update(evt StatusEvent) {
 	if !d.interactive && (evt.Kind == StatusConverting || evt.Kind == StatusDownloading && evt.DownloadedBytes > 0) {
 		line := fmt.Sprintf("%s · %s", transferStatus(evt), evt.Name)
 		if evt.Proxy == "direct" {
-			line += " · напрямую"
+			line += " · direct"
 		} else if evt.Proxy != "" {
-			line += " · прокси: " + evt.Proxy
+			line += " · proxy: " + evt.Proxy
 		}
 		line = strings.Map(func(r rune) rune {
 			if unicode.IsControl(r) {
@@ -256,11 +256,11 @@ func (d *Display) render() {
 	}
 	active = processing
 	width, height := d.size()
-	frame := []string{"Скачивание"}
+	frame := []string{"Downloads"}
 	// Wrap counters between fields, not through values, in narrow windows.
 	for _, group := range [][]string{
-		{fmt.Sprintf("Всего: %d", total), fmt.Sprintf("В очереди: %d", queued), fmt.Sprintf("В работе: %d", len(active))},
-		{fmt.Sprintf("Скачано: %d", ok), fmt.Sprintf("Пропущено: %d", skipped), fmt.Sprintf("Ошибок: %d", fail)},
+		{fmt.Sprintf("Total: %d", total), fmt.Sprintf("Queued: %d", queued), fmt.Sprintf("Active: %d", len(active))},
+		{fmt.Sprintf("Downloaded: %d", ok), fmt.Sprintf("Skipped: %d", skipped), fmt.Sprintf("Errors: %d", fail)},
 	} {
 		line := ""
 		for _, counter := range group {
@@ -276,10 +276,10 @@ func (d *Display) render() {
 		frame = append(frame, line)
 	}
 	if waiting > 0 {
-		frame = append(frame, fmt.Sprintf("Ожидают повтора: %d", waiting))
+		frame = append(frame, fmt.Sprintf("Waiting to retry: %d", waiting))
 	}
 	for _, pause := range []struct{ stage, label string }{
-		{"search", "поиск приостановлен"}, {"download", "скачивание приостановлено"},
+		{"search", "search paused"}, {"download", "downloads paused"},
 	} {
 		remaining := d.rateLimits[pause.stage].Sub(d.now())
 		if remaining <= 0 {
@@ -287,7 +287,7 @@ func (d *Display) render() {
 			continue
 		}
 		seconds := int((remaining + time.Second - 1) / time.Second)
-		frame = append(frame, "HTTP 429: "+pause.label, fmt.Sprintf("  Повтор через: %d с (автоматически)", seconds))
+		frame = append(frame, "HTTP 429: "+pause.label, fmt.Sprintf("  Retrying in: %d s (automatically)", seconds))
 	}
 	var sections []string
 	sectionCount := 0
@@ -306,8 +306,8 @@ func (d *Display) render() {
 		title string
 		count int
 	}{
-		{StatusNotFound, "Не найдено на сайте", notFound},
-		{StatusFailed, "Технические ошибки", fail},
+		{StatusNotFound, "Not found", notFound},
+		{StatusFailed, "Technical errors", fail},
 	} {
 		if group.count == 0 {
 			continue
@@ -336,29 +336,29 @@ func (d *Display) render() {
 		}
 	}
 	for _, ev := range active[:visible] {
-		status := "Ищется"
+		status := "Searching"
 		pct := -1.0
 		switch ev.Kind {
 		case StatusChecking:
-			status = "Проверка файла"
+			status = "Checking file"
 		case StatusPreparing:
-			status = "Подготовка"
+			status = "Preparing"
 		case StatusSaving:
-			status = "Сохранение"
+			status = "Saving"
 		case StatusConverting:
-			status = "Конвертация MP3"
+			status = "Converting to MP3"
 		case StatusDownloading:
-			status = "Скачивается"
+			status = "Downloading"
 			pct = progressPercent(ev)
 			if pct >= 0 {
-				status = fmt.Sprintf("Скачивается %3.0f%%", pct)
+				status = fmt.Sprintf("Downloading %3.0f%%", pct)
 			}
 			status += transferDetails(ev.BytesPerSecond, ev.ETA)
 		}
 		if ev.Proxy == "direct" {
-			status += " · напрямую"
+			status += " · direct"
 		} else if ev.Proxy != "" {
-			status += " · прокси: " + ev.Proxy
+			status += " · proxy: " + ev.Proxy
 		}
 		// Keep the progress bar complete; shorten the name first. Narrow
 		// windows get a shorter bar rather than a clipped closing bracket.
@@ -383,7 +383,7 @@ func (d *Display) render() {
 		frame = append(frame, fmt.Sprintf("  %s  %s", status, ev.Name))
 	}
 	if visible < len(active) && (!d.interactive || len(frame)+len(sections) < height-1) {
-		frame = append(frame, fmt.Sprintf("  … ещё в работе: %d", len(active)-visible))
+		frame = append(frame, fmt.Sprintf("  … more active: %d", len(active)-visible))
 	}
 	frame = append(frame, sections...)
 	if d.interactive && len(frame) >= height {
@@ -450,11 +450,11 @@ func progressPercent(ev StatusEvent) float64 {
 
 func transferStatus(ev StatusEvent) string {
 	if ev.Kind == StatusConverting {
-		return "Конвертация MP3"
+		return "Converting to MP3"
 	}
-	status := "Скачивается"
+	status := "Downloading"
 	if pct := progressPercent(ev); pct >= 0 {
-		status = fmt.Sprintf("Скачивается %.0f%%", pct)
+		status = fmt.Sprintf("Downloading %.0f%%", pct)
 	} else if ev.DownloadedBytes > 0 {
 		status += " " + humanBytes(ev.DownloadedBytes)
 	}
@@ -464,11 +464,11 @@ func transferStatus(ev StatusEvent) string {
 func transferDetails(speed float64, eta time.Duration) string {
 	text := ""
 	if speed > 0 {
-		text += " · " + humanBytes(int64(speed)) + "/с"
+		text += " · " + humanBytes(int64(speed)) + "/s"
 	}
 	if eta > 0 {
 		seconds := int((eta + time.Second - 1) / time.Second)
-		text += fmt.Sprintf(" · осталось %02d:%02d", seconds/60, seconds%60)
+		text += fmt.Sprintf(" · ETA %02d:%02d", seconds/60, seconds%60)
 	}
 	return text
 }

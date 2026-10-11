@@ -23,7 +23,7 @@ func (p *Provider) prepareSource(ctx context.Context, track download.Track, onPr
 		root = filepath.Join(dir, "downloaded", ".sources")
 	}
 	if err := os.MkdirAll(root, 0700); err != nil {
-		return "", fmt.Errorf("создание кеша исходников: %w", err)
+		return "", fmt.Errorf("create source cache: %w", err)
 	}
 	destination := filepath.Join(root, track.ID)
 	if source, err := cachedSource(destination); err != nil || source != "" {
@@ -60,7 +60,7 @@ func (p *Provider) prepareSource(ctx context.Context, track download.Track, onPr
 			}
 		}
 		if audio == "" {
-			return fmt.Errorf("yt-dlp: исходное аудио отсутствует или пустое")
+			return fmt.Errorf("yt-dlp: source audio is missing or empty")
 		}
 		// A fixed cache filename avoids depending on the downloaded extension.
 		if err := os.Rename(audio, filepath.Join(dir, "source")); err != nil {
@@ -72,7 +72,7 @@ func (p *Provider) prepareSource(ctx context.Context, track download.Track, onPr
 				source = existing
 				return nil
 			}
-			return fmt.Errorf("сохранение исходника: %w", err)
+			return fmt.Errorf("save source audio: %w", err)
 		}
 		source = filepath.Join(destination, "source")
 		return nil
@@ -90,7 +90,7 @@ func cachedSource(directory string) (string, error) {
 		return "", err
 	}
 	if !info.Mode().IsRegular() || info.Size() == 0 {
-		return "", fmt.Errorf("некорректный кеш исходника %q: удалите его для повторного скачивания", path)
+		return "", fmt.Errorf("invalid cached source %q: remove it to download again", path)
 	}
 	return path, nil
 }

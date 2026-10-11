@@ -61,7 +61,7 @@ func TestSyncPersistsUniqueSongsWhenPlaylistContainsRepeats(t *testing.T) {
 	if count != 2 || old != 0 {
 		t.Fatalf("replacement saved the wrong list: count=%d old=%d", count, old)
 	}
-	if !strings.Contains(output, "Сохранено 2 треков") || !strings.Contains(output, "Повторов: 1") {
+	if !strings.Contains(output, "Saved 2 tracks") || !strings.Contains(output, "Duplicates: 1") {
 		t.Fatalf("summary did not report actual persisted count and repeats: %s", output)
 	}
 }
@@ -91,7 +91,7 @@ func TestSyncReadsLegacyMetadataAndSkipsUnavailableSongs(t *testing.T) {
 	if title != "Legacy title" || strings.TrimSpace(artists) != `["Legacy artist"]` {
 		t.Fatalf("legacy metadata lost: title=%q artists=%q", title, artists)
 	}
-	if !strings.Contains(output, "Сохранено 1 треков") || !strings.Contains(output, "Пропущено недоступных треков: 1") {
+	if !strings.Contains(output, "Saved 1 tracks") || !strings.Contains(output, "Unavailable tracks skipped: 1") {
 		t.Fatalf("unavailable track was not reported: %s", output)
 	}
 }

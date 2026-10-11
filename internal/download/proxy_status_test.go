@@ -23,7 +23,7 @@ func TestDisplayShowsProxyForSearchAndDownloadWithoutSecrets(t *testing.T) {
 		d.Update(StatusEvent{JobID: "1", Source: "youtube", Kind: kind, Name: "Artist — Song", Proxy: "socks5://user:SECRET@203.0.113.1:1080/?token=SECRET"})
 		d.render()
 	}
-	for _, want := range []string{"Ищется", "Скачивается", "прокси: socks5://203.0.113.1:1080"} {
+	for _, want := range []string{"Searching", "Downloading", "proxy: socks5://203.0.113.1:1080"} {
 		if !strings.Contains(output.String(), want) {
 			t.Fatalf("missing %q: %s", want, output.String())
 		}

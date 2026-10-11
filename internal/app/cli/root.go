@@ -9,7 +9,7 @@ import (
 // Without a subcommand Cobra displays help; it does not start a download.
 var rootCmd = &cobra.Command{
 	Use:   "meshvault",
-	Short: "Синхронизация Spotify и скачивание музыки с YouTube",
+	Short: "Sync Spotify playlists and download music from YouTube",
 }
 
 func Execute() {

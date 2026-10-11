@@ -68,7 +68,7 @@ func GetSongInfoPage(bearer, clientToken string, offset int) (*PlaylistResponse,
 
 	decoder, err := zstd.NewReader(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("распаковка ответа: %w", err)
+		return nil, fmt.Errorf("decompress response: %w", err)
 	}
 	defer decoder.Close()
 
@@ -79,14 +79,14 @@ func GetSongInfoPage(bearer, clientToken string, offset int) (*PlaylistResponse,
 		Errors []json.RawMessage `json:"errors"`
 	}
 	if err := json.NewDecoder(decoder).Decode(&response); err != nil {
-		return nil, fmt.Errorf("чтение ответа Spotify: %w", err)
+		return nil, fmt.Errorf("read Spotify response: %w", err)
 	}
 	if len(response.Errors) > 0 {
 		// Do not log response messages: they may contain session information.
-		return nil, fmt.Errorf("Spotify вернул ошибку запроса")
+		return nil, fmt.Errorf("Spotify returned a request error")
 	}
 	if len(response.Data.PlaylistV2) == 0 || string(response.Data.PlaylistV2) == "null" {
-		return nil, fmt.Errorf("в ответе Spotify отсутствует плейлист")
+		return nil, fmt.Errorf("Spotify response is missing the playlist")
 	}
 	var shape struct {
 		Content *struct {
@@ -95,20 +95,20 @@ func GetSongInfoPage(bearer, clientToken string, offset int) (*PlaylistResponse,
 		} `json:"content"`
 	}
 	if err := json.Unmarshal(response.Data.PlaylistV2, &shape); err != nil {
-		return nil, fmt.Errorf("чтение плейлиста Spotify: %w", err)
+		return nil, fmt.Errorf("read Spotify playlist: %w", err)
 	}
 	if shape.Content == nil || shape.Content.Items == nil {
-		return nil, fmt.Errorf("в ответе Spotify отсутствует список треков")
+		return nil, fmt.Errorf("Spotify response is missing the track list")
 	}
 	if shape.Content.TotalCount == nil || *shape.Content.TotalCount < 0 {
-		return nil, fmt.Errorf("в ответе Spotify отсутствует корректное количество треков")
+		return nil, fmt.Errorf("Spotify response is missing a valid track count")
 	}
 	var responseFull PlaylistResponse
 	if err := json.Unmarshal(response.Data.PlaylistV2, &responseFull.Data.PlaylistV2); err != nil {
-		return nil, fmt.Errorf("чтение плейлиста Spotify: %w", err)
+		return nil, fmt.Errorf("read Spotify playlist: %w", err)
 	}
 	if responseFull.Data.PlaylistV2.Content.PagingInfo.Offset != offset {
-		return nil, fmt.Errorf("Spotify вернул неверное смещение %d вместо %d", responseFull.Data.PlaylistV2.Content.PagingInfo.Offset, offset)
+		return nil, fmt.Errorf("Spotify returned offset %d instead of %d", responseFull.Data.PlaylistV2.Content.PagingInfo.Offset, offset)
 	}
 	return &responseFull, nil
 }

@@ -48,7 +48,7 @@ func restoreDownloadQueries(store *repository.DownloadedTracksRepository) error 
 		}
 		seen[key] = true
 		if err := store.SaveQuery(event.Source, event.Query, event.TrackID, event.FilePath); err != nil {
-			return fmt.Errorf("восстановление истории поиска: %w", err)
+			return fmt.Errorf("restore search history: %w", err)
 		}
 	}
 	return scanner.Err()

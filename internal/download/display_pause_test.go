@@ -16,7 +16,7 @@ func TestDisplayExplains429WhenNoJobsAreProcessing(t *testing.T) {
 		d.Update(StatusEvent{JobID: "1", Kind: StatusRetryWaiting, Name: "Waiting song"})
 		d.Stop()
 	})
-	for _, want := range []string{"В работе: 0", "HTTP 429: скачивание приостановлено", "Повтор через: 17 с", "автоматически"} {
+	for _, want := range []string{"Active: 0", "HTTP 429: downloads paused", "Retrying in: 17 s", "automatically"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in %s", want, output)
 		}
@@ -41,12 +41,12 @@ func TestDisplayCountdownUpdatesAndExpiredPauseDisappears(t *testing.T) {
 			t.Fatal("expired countdown keeps refreshing")
 		}
 	})
-	for _, want := range []string{"HTTP 429: поиск приостановлен", "Повтор через: 10 с", "Повтор через: 7 с"} {
+	for _, want := range []string{"HTTP 429: search paused", "Retrying in: 10 s", "Retrying in: 7 s"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in %s", want, output)
 		}
 	}
-	final := output[strings.LastIndex(output, "Скачивание"):]
+	final := output[strings.LastIndex(output, "Downloads"):]
 	if strings.Contains(final, "HTTP 429") {
 		t.Fatal("expired pause still displayed")
 	}
@@ -62,7 +62,7 @@ func TestDisplayShowsSearchAndDownloadPausesSeparately(t *testing.T) {
 		d.SetRateLimitPause("download", now.Add(2*time.Second)) // An older wave must not shorten the UI deadline.
 		d.Stop()
 	})
-	for _, want := range []string{"поиск приостановлен", "скачивание приостановлено", "Повтор через: 5 с", "Повтор через: 20 с"} {
+	for _, want := range []string{"search paused", "downloads paused", "Retrying in: 5 s", "Retrying in: 20 s"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in %s", want, output)
 		}
@@ -86,7 +86,7 @@ func TestPauseExplanationFitsShortTerminal(t *testing.T) {
 		}
 	})
 	final := output[strings.LastIndex(output, "\033[J")+len("\033[J"):]
-	for _, want := range []string{"HTTP 429: скачивание приостановлено", "Повтор через: 30 с"} {
+	for _, want := range []string{"HTTP 429: downloads paused", "Retrying in: 30 s"} {
 		if !strings.Contains(final, want) {
 			t.Fatalf("short terminal hid %q: %s", want, final)
 		}

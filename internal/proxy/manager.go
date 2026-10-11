@@ -62,11 +62,11 @@ func (m *Manager) Prepare(ctx context.Context, progress func(checked, total, val
 	}
 	cached, err := m.store.Valid(ctx, time.Now())
 	if err != nil {
-		return nil, fmt.Errorf("чтение кеша прокси: %w", err)
+		return nil, fmt.Errorf("read proxy cache: %w", err)
 	}
 	ready, err := m.store.Ready(ctx, time.Now())
 	if err != nil {
-		return nil, fmt.Errorf("чтение состояния кеша прокси: %w", err)
+		return nil, fmt.Errorf("read proxy cache state: %w", err)
 	}
 	if cached = usableAddresses(cached); ready && len(cached) > 0 {
 		m.logger.Info("proxy_cache_loaded", zap.Int("valid", len(cached)))
@@ -86,11 +86,11 @@ func (m *Manager) Refresh(ctx context.Context, progress func(checked, total, val
 	}
 	addresses, err := m.source.Fetch(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("получение списка прокси: %w", err)
+		return nil, fmt.Errorf("fetch proxy list: %w", err)
 	}
 	addresses = usableAddresses(addresses)
 	if err := m.store.Reset(ctx); err != nil {
-		return nil, fmt.Errorf("обновление кеша прокси: %w", err)
+		return nil, fmt.Errorf("refresh proxy cache: %w", err)
 	}
 	m.logger.Info("proxy_probe_started", zap.Int("total", len(addresses)), zap.Int("workers", ProbeWorkers))
 	if progress != nil {
@@ -148,7 +148,7 @@ func (m *Manager) Refresh(ctx context.Context, progress func(checked, total, val
 				fullUntil = until
 			}
 			if err := m.store.Save(ctx, result.address, until); err != nil {
-				return nil, fmt.Errorf("запись кеша прокси: %w", err)
+				return nil, fmt.Errorf("write proxy cache: %w", err)
 			}
 			valid = append(valid, result.address)
 		}
@@ -165,7 +165,7 @@ func (m *Manager) Refresh(ctx context.Context, progress func(checked, total, val
 	m.logger.Info("proxy_probe_finished", zap.Int("checked", checked), zap.Int("valid", len(valid)))
 	if len(valid) > 0 {
 		if err := m.store.Complete(ctx, fullUntil); err != nil {
-			return nil, fmt.Errorf("сохранение состояния кеша прокси: %w", err)
+			return nil, fmt.Errorf("save proxy cache state: %w", err)
 		}
 	}
 	return NewPool(valid)

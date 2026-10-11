@@ -15,10 +15,10 @@ func audioFilename(track Track) string {
 	id = limitFilenamePart(id, 64)
 	artist, title := safeFilePart(track.Artist), safeFilePart(track.Title)
 	if artist == "" {
-		artist = "Неизвестный исполнитель"
+		artist = "Unknown artist"
 	}
 	if title == "" {
-		title = "Без названия"
+		title = "Untitled"
 	}
 	suffix := " [" + id + "].mp3"
 	// Leave room for both names, the stable ID and the extension. The bound

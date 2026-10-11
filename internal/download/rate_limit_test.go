@@ -237,12 +237,12 @@ func TestQueuedStatusDoesNotCountAsProcessing(t *testing.T) {
 		d.Update(StatusEvent{JobID: "2", Kind: StatusSearching, Name: "Active"})
 		d.Stop()
 	})
-	for _, want := range []string{"В очереди: 1", "В работе: 1", "Ошибок: 0"} {
+	for _, want := range []string{"Queued: 1", "Active: 1", "Errors: 0"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %s in %s", want, output)
 		}
 	}
-	if strings.Contains(output, "Ожидают повтора") {
+	if strings.Contains(output, "Waiting to retry") {
 		t.Fatal("start spacing mistaken for retry")
 	}
 }

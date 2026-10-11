@@ -57,7 +57,7 @@ func TestDisplayShowsOnlyActiveTracksAndCounters(t *testing.T) {
 		d.Stop()
 		d.Stop()
 	})
-	for _, want := range []string{"Всего: 4", "В очереди: 0", "В работе: 1", "Скачано: 1", "Пропущено: 1", "Ошибок: 1", "Ищется", "Active track"} {
+	for _, want := range []string{"Total: 4", "Queued: 0", "Active: 1", "Downloaded: 1", "Skipped: 1", "Errors: 1", "Searching", "Active track"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("missing %q: %q", want, output)
 		}
@@ -76,12 +76,12 @@ func TestDisplaySeparatesNotFoundAndTechnicalErrors(t *testing.T) {
 		d.Update(StatusEvent{JobID: "2", Kind: StatusFailed, Name: "Broken request", Err: &HTTPError{Stage: "search", StatusCode: 500}})
 		d.Stop()
 	})
-	for _, want := range []string{"Не найдено на сайте: 1", "Технические ошибки: 1", "Missing song", "Broken request", "HTTP 500", "Ошибок: 1", "В работе: 0"} {
+	for _, want := range []string{"Not found: 1", "Technical errors: 1", "Missing song", "Broken request", "HTTP 500", "Errors: 1", "Active: 0"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("missing error section %q: %s", want, output)
 		}
 	}
-	if strings.Index(output, "Missing song") > strings.Index(output, "Технические ошибки:") {
+	if strings.Index(output, "Missing song") > strings.Index(output, "Technical errors:") {
 		t.Fatal("empty search mixed with technical errors")
 	}
 }
@@ -103,7 +103,7 @@ func TestErrorSectionHeadersRemainVisibleInShortTerminal(t *testing.T) {
 		}
 	})
 	final := output[strings.LastIndex(output, "\033[J")+len("\033[J"):]
-	for _, want := range []string{"Не найдено на сайте: 1", "Технические ошибки: 1", "HTTP 500", "Ищется"} {
+	for _, want := range []string{"Not found: 1", "Technical errors: 1", "HTTP 500", "Searching"} {
 		if !strings.Contains(final, want) {
 			t.Errorf("short display hid %q: %s", want, final)
 		}
@@ -118,7 +118,7 @@ func TestDisplayDoesNotGrowWithCompletedTrackCount(t *testing.T) {
 		}
 		d.Stop()
 	})
-	if strings.Contains(output, "Finished track") || strings.Count(output, "\n") > 6 || !strings.Contains(output, "Скачано: 100") {
+	if strings.Contains(output, "Finished track") || strings.Count(output, "\n") > 6 || !strings.Contains(output, "Downloaded: 100") {
 		t.Fatalf("summary accumulated track rows instead of counts: %q", output)
 	}
 }
@@ -163,7 +163,7 @@ func TestDisplayPipedOutputIsOneSummaryWithoutANSI(t *testing.T) {
 		d.Update(StatusEvent{JobID: "1", Kind: StatusDone, Name: "Track"})
 		d.Stop()
 	})
-	if strings.Contains(output, "\033") || strings.Count(output, "Всего:") != 1 || !strings.Contains(output, "Скачано: 1") {
+	if strings.Contains(output, "\033") || strings.Count(output, "Total:") != 1 || !strings.Contains(output, "Downloaded: 1") {
 		t.Fatalf("pipe received redraws instead of a summary: %q", output)
 	}
 }
@@ -180,7 +180,7 @@ func TestDisplayQueueCountsDoNotChangeWithPhaseUpdates(t *testing.T) {
 		d.Update(StatusEvent{JobID: "2", Kind: StatusSkipped, Name: "Second"})
 		d.Stop()
 	})
-	for _, want := range []string{"Всего: 12", "В очереди: 10", "В работе: 1", "Пропущено: 1", "50%"} {
+	for _, want := range []string{"Total: 12", "Queued: 10", "Active: 1", "Skipped: 1", "50%"} {
 		if !strings.Contains(output, want) {
 			t.Errorf("incorrect queue/phase counters, missing %q: %q", want, output)
 		}
@@ -211,7 +211,7 @@ func TestInteractiveDisplayFitsNarrowAndShortTerminal(t *testing.T) {
 			}
 		}
 	})
-	if !strings.Contains(output, "64%") || !strings.Contains(output, "ещё в работе") || !strings.Contains(output, "…") {
+	if !strings.Contains(output, "64%") || !strings.Contains(output, "more active") || !strings.Contains(output, "…") {
 		t.Fatalf("narrow display lost useful status: %q", output)
 	}
 	if strings.Contains(output, "\033[2J") {
@@ -229,7 +229,7 @@ func TestInteractiveDisplayCoalescesRapidProgressUpdates(t *testing.T) {
 		}
 		d.Stop()
 	})
-	if frames := strings.Count(output, "Скачивание\n"); frames > 2 {
+	if frames := strings.Count(output, "Downloads\n"); frames > 2 {
 		t.Fatalf("progress caused %d redraws instead of coalescing", frames)
 	}
 	if !strings.Contains(output, "100%") {
@@ -287,7 +287,7 @@ func TestInteractiveResizeClearsAlreadyRenderedWideTrack(t *testing.T) {
 	}
 	// CSI J clears from the cursor down; anything above that position survives.
 	screen = append(screen[:len(screen)-up], after...)
-	if headings := strings.Count(strings.Join(screen, "\n"), "Скачивание"); headings != 1 {
+	if headings := strings.Count(strings.Join(screen, "\n"), "Downloads"); headings != 1 {
 		t.Fatalf("resize left an old heading on screen (%d headings): %q", headings, screen)
 	}
 }
@@ -322,7 +322,7 @@ func TestSearchShowsIndeterminateProgressWithoutInventedPercentage(t *testing.T)
 		d.Update(StatusEvent{JobID: "1", Kind: StatusSearching, Name: "Track"})
 		d.Stop()
 	})
-	if !strings.Contains(output, "Ищется") || !regexp.MustCompile(`\[[█░]+\]`).MatchString(output) || strings.Contains(output, "%") {
+	if !strings.Contains(output, "Searching") || !regexp.MustCompile(`\[[█░]+\]`).MatchString(output) || strings.Contains(output, "%") {
 		t.Fatalf("search needs an indeterminate bar, not a fabricated percentage: %q", output)
 	}
 }
@@ -330,7 +330,7 @@ func TestSearchShowsIndeterminateProgressWithoutInventedPercentage(t *testing.T)
 type searchFrameObserver struct{ frames chan string }
 
 func (w searchFrameObserver) Write(p []byte) (int, error) {
-	if strings.Contains(string(p), "Ищется") {
+	if strings.Contains(string(p), "Searching") {
 		select {
 		case w.frames <- string(p):
 		default:

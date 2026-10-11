@@ -18,12 +18,12 @@ func ProxyLabel(address string) string {
 	}
 	u, err := url.Parse(address)
 	if err != nil || u.Hostname() == "" {
-		return "неизвестный"
+		return "unknown"
 	}
 	switch u.Scheme {
 	case "http", "https", "socks4", "socks5", "socks5h":
 	default:
-		return "неизвестный"
+		return "unknown"
 	}
 	return u.Scheme + "://" + u.Host
 }

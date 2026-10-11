@@ -94,7 +94,7 @@ func TestWaitingRetryIsQueuedNotProcessingOrFailed(t *testing.T) {
 		d.Update(StatusEvent{JobID: "2", Kind: StatusSearching, Name: "Active track"})
 		d.Stop()
 	})
-	for _, want := range []string{"В очереди: 1", "В работе: 1", "Ошибок: 0", "Ожидают повтора: 1", "Active track"} {
+	for _, want := range []string{"Queued: 1", "Active: 1", "Errors: 0", "Waiting to retry: 1", "Active track"} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("missing %q in %s", want, output)
 		}

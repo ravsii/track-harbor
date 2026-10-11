@@ -93,7 +93,7 @@ func TestDownloadCommandHandlesEmptyDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{path, "Треков в базе: 0", "В базе нет треков", "meshvault sync"} {
+	for _, want := range []string{path, "Tracks in database: 0", "No tracks in the database", "meshvault sync"} {
 		if !strings.Contains(output.String(), want) {
 			t.Errorf("empty database output missing %q: %s", want, output.String())
 		}
