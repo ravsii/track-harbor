@@ -53,7 +53,12 @@ show the newest dates first.
 
 The server keeps `config.yaml` and `library.db` beside its executable by default.
 For local development, `make run-server` builds the server in the Git-ignored
-`.local-server/` directory, where it also stores these files. Set
+`.local-server/` directory, where it also stores these files. Use
+`make run-server-watch` (requires Python 3) to rebuild and restart on any change
+under `server/`.
+Failed builds are retried every second without stopping the previous server;
+the watcher keeps running until Ctrl+C. Stop any separately running server
+before starting the watcher to avoid a port conflict. Set
 `TRACKHARBOR_SERVER_CONFIG` and `TRACKHARBOR_SERVER_DB` to override either file
 path independently, or `TRACKHARBOR_SERVER_DIR` to change the default directory
 for both. Relative paths are resolved from the process working directory.

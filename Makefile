@@ -19,6 +19,9 @@ run-server:
 	go build -o .local-server/trackharbor-server ./server/cmd/server/
 	./.local-server/trackharbor-server
 
+run-server-watch:
+	python3 scripts/run-server-watch.py
+
 migrate-up:
 	$(GOOSE) up
 
@@ -31,4 +34,4 @@ migrate-dry-run:
 	$(GOOSE) status
 	@echo ""
 
-.PHONY: build clean run run-server migrate-up migrate-down migrate-status migrate-up-one migrate-reset migrate-dry-run
+.PHONY: build clean run run-server run-server-watch migrate-up migrate-down migrate-status migrate-up-one migrate-reset migrate-dry-run
