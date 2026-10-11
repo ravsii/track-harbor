@@ -6,13 +6,28 @@ The core goal is to synchronize and store collections of tracks, then download
 them for local use. The primary use case is keeping local copies of Spotify
 playlists or YouTube video/audio without requiring a subscription.
 
-## MVP: build fast, fail fast
+## Project boundaries
 
-- We are building an MVP. Prioritize getting the core workflow working quickly
-  over designing a universal architecture or adding speculative features.
+- The project is no longer an MVP. Keep the CLI and server as independent
+  applications, each with its own configuration, credentials, database, and
+  synchronization state. Never point the server at the CLI's local database.
+- `cli` is a local fire-and-forget tool; preserve its current commands and
+  `~/.trackharbor` data. `server` is a separate web application intended for
+  eventual multi-device deployment. The web UI has no user login yet: bind it
+  to loopback by default and do not expose it publicly without access control.
+- `trackharbor` contains only reusable source authorization/integration and
+  file-download mechanics. CLI and server own their separate storage, config,
+  orchestration, and presentation. Shared code must not import either app.
+
+## Development
+
+- Prioritize the core workflow over speculative features, but keep application
+  boundaries explicit and deployment/security constraints visible.
 - When a request is clear, proceed directly to implementation. Do not create
   preliminary drafts, specifications, design documents, or implementation plans
   unless explicitly requested. Do not require separate approval of such documents.
+- If a plan is requested or needed, present it in the conversation only.
+  Do not save plans in `docs/` or any other project file.
 - Do not write or run tests, including unit, integration, race, and live tests,
   unless explicitly requested. Do not delete existing tests.
 - Keep changes small, simple, and focused on the task. Follow the existing code
@@ -22,8 +37,8 @@ playlists or YouTube video/audio without requiring a subscription.
 - Keep final responses concise and describe what changed. Do not claim that code
   was verified or tests passed when those checks were not performed.
 
-During the MVP phase, these rules override default design, planning, and
-test-driven development workflows.
+These project rules take precedence over default planning and test-driven
+development workflows unless explicitly updated by the user.
 
 ## Commits
 

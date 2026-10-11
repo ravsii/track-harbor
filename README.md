@@ -1,20 +1,45 @@
 # TrackHarbor
 
-> **MVP status:** This project is heavily vibe-coded. The priority right now is
-> getting the core workflow working; cleaning up the slop comes later.
+> **Early development:** This project is heavily vibe-coded. The CLI works
+> locally; the independent server and browser interface are still evolving.
 
-Sync Spotify Liked Songs or VK My Music to SQLite and download music to
-`~/.trackharbor/downloaded`.
+TrackHarbor has three Go modules in one workspace: `cli` (local fire-and-forget
+tool), `server` (independent web app), and `trackharbor` (shared source access
+and file-download mechanics). CLI syncs Spotify Liked Songs or VK My Music to
+SQLite and downloads music to `~/.trackharbor/downloaded`.
 
 ```sh
-go run ./cmd/cli spotify auth
-go run ./cmd/cli spotify sync
-go run ./cmd/cli download
+go run ./cli/cmd/cli spotify auth
+go run ./cli/cmd/cli spotify sync
+go run ./cli/cmd/cli download
 ```
 
 Spotify tracks use YouTube. VK tracks download directly from VK through FFmpeg;
 there is no provider selection or YouTube fallback for VK.
 Running the CLI without a subcommand displays help and does not start downloads.
+
+## Web preview
+
+```sh
+go run ./server/cmd/server
+```
+
+Visit `http://127.0.0.1:8787` to connect Spotify (paste Web Player
+`authorization` and `client-token` headers) or VK (open the displayed VK
+authorization link, then paste its token or redirect URL). Each source has its
+own Sync button and track list. Sync runs in the background and does not erase
+the previous library on failure. Playback and downloads in the web app are not
+implemented yet; the CLI still supports downloading.
+
+The server has its **own** `~/.trackharbor-server/config.json` and
+`~/.trackharbor-server/library.db`, never reads the CLI's credentials or
+`~/.trackharbor/vault.db`, and accepts an alternate server-only data directory
+via `TRACKHARBOR_SERVER_DIR`. Its config currently supports a `listen` address
+on a loopback IP (default `127.0.0.1:8787`). There is **no login**: do not expose
+this preview to other devices or the public internet without access control.
+Multi-device deployment is a future step, not enabled by this local preview.
+The web preview vendors HTMX 2.0.4 under `server/internal/web/assets/` with
+its license alongside the script; pages and styles are served by Go.
 
 ## Spotify
 
@@ -60,9 +85,9 @@ The simplest VK integration opens browser authorization and accepts a user
 access token:
 
 ```sh
-go run ./cmd/cli vk auth
-go run ./cmd/cli vk sync
-go run ./cmd/cli download
+go run ./cli/cmd/cli vk auth
+go run ./cli/cmd/cli vk sync
+go run ./cli/cmd/cli download
 ```
 
 1. Run `vk auth`. On macOS it uses `open` to launch VK's authorization page
@@ -214,12 +239,12 @@ In all modes, `yt-dlp` receives an explicit route and does not inherit
 `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROXY`. The UI displays `direct`
 or the proxy address. In code, this policy is implemented by `DownloadStrategy`,
 its `Direct`, `PersonalProxy`, and `RandomProxy` implementations, and the ordered
-`Priority` chain in `internal/download/youtube/strategy.go`.
+`Priority` chain in `cli/internal/download/youtube/strategy.go`.
 
 ## Proxy checks
 
 ```sh
-go run ./cmd/cli proxy test
+go run ./cli/cmd/cli proxy test
 ```
 
 Checks all personal addresses in `personal_proxy`, regardless of the enabled
@@ -300,7 +325,7 @@ the hash is registered for the new path. Untracked old files are left untouched.
   `direct` mode, or `min(available personal and prepared public proxies, 50)`
   when proxy strategies have available addresses. `--workers N` replaces the
   default limit of 50 with a positive number. For example:
-  `go run ./cmd/cli download --workers 20`.
+  `go run ./cli/cmd/cli download --workers 20`.
   The selected worker count is displayed at startup and logged. Searches run
   concurrently without a one-second delay; only audio download starts are
   spaced at least one second apart.
@@ -330,7 +355,7 @@ real search and download of the Rick Astley test video (`dQw4w9WgXcQ`), with MP3
 verification using `ffprobe`:
 
 ```sh
-TRACKHARBOR_YOUTUBE_LIVE=1 go test ./internal/download/youtube -run TestLiveYouTubeSearchAndDownload -v -count=1
+TRACKHARBOR_YOUTUBE_LIVE=1 go test ./cli/internal/download/youtube -run TestLiveYouTubeSearchAndDownload -v -count=1
 ```
 
 This check also requires `ffprobe`, which is distributed with FFmpeg.
@@ -410,7 +435,7 @@ To perform a live API and proxy check using a temporary SQLite database rather
 than the main library:
 
 ```sh
-TRACKHARBOR_PROXY_LIVE=1 go test ./internal/proxy -run TestLiveProxyScrapePreparation -v -count=1
+TRACKHARBOR_PROXY_LIVE=1 go test ./cli/internal/proxy -run TestLiveProxyScrapePreparation -v -count=1
 ```
 
 ## License
