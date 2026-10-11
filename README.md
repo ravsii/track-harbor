@@ -352,15 +352,15 @@ the hash is registered for the new path. Untracked old files are left untouched.
   default limit of 50 with a positive number. For example:
   `go run ./cli/cmd/cli download --workers 20`.
   The selected worker count is displayed at startup and logged. Searches run
-  concurrently without a one-second delay; only audio download starts are
-  spaced at least one second apart.
+  concurrently without a start delay; YouTube audio download starts are
+  spaced at least 100 milliseconds apart.
 - HTTP 429 through the public proxy pool cools down only that address. Retries
   select another available proxy immediately; if all are cooling down, selection
   waits for the first to recover. Without a pool-managed proxy, the first 429
   pauses new requests for the affected stage across all workers. Search and
   download pauses are independent and increase in waves: 5, 10, 15, 20, 25,
   then 30 seconds maximum. Running operations are not interrupted. Download
-  starts remain spaced at least one second apart.
+  YouTube download starts remain spaced at least 100 milliseconds apart.
 - Tracks receiving HTTP 429 stay queued with unlimited retries until processed
   or the application is stopped.
 - Other technical errors receive five retries after 1, 2, 4, 8, and 16 seconds.

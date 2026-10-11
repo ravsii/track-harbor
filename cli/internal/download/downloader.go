@@ -89,7 +89,7 @@ func New(provider Provider, workers int, outputDir string) *Downloader {
 	return &Downloader{provider: provider, workers: max(1, workers), outputDir: outputDir, logger: zap.NewNop(), retryDelay: retryDelay, startInterval: time.Second, rateLimitDelay: rateLimitDelay}
 }
 
-// WithStartInterval disables YouTube's audio spacing for direct VK transfers.
+// WithStartInterval sets the minimum spacing between audio download starts.
 func (d *Downloader) WithStartInterval(interval time.Duration) *Downloader {
 	d.startInterval = interval
 	return d
