@@ -50,7 +50,7 @@
       const response = await fetch('/download', {
         method: 'POST',
         headers: {Accept: 'application/json'},
-        body: new FormData(form),
+        body: new URLSearchParams(new FormData(form)),
       });
       if (response.status === 409) popup('Загрузка уже идёт. Дождитесь её завершения.');
       else if (response.status === 404) popup('Трек больше не найден в библиотеке. Обновите страницу.');
