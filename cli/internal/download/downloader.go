@@ -65,7 +65,8 @@ type Downloader struct {
 	downloadGate   *requestGate
 	fileLocks      sync.Map // absolute file path → *sync.Mutex
 	initialSkipped int
-	coverURLs      map[string]string // search query → source artwork URL
+	coverURLs      map[string]string      // search query → source artwork URL
+	metadata       map[string]MP3Metadata // search query → library title and artist
 	artworkRoute   artworkStrategy
 	socks4Dial     func(context.Context, string, string, time.Duration) (net.Conn, error)
 }
@@ -73,6 +74,17 @@ type Downloader struct {
 // WithCoverURLs supplies artwork discovered during source synchronization.
 func (d *Downloader) WithCoverURLs(urls map[string]string) *Downloader {
 	d.coverURLs = urls
+	return d
+}
+
+// MP3Metadata comes from the saved library, never from a YouTube search result.
+type MP3Metadata struct {
+	Title  string
+	Artist string
+}
+
+func (d *Downloader) WithMetadata(metadata map[string]MP3Metadata) *Downloader {
+	d.metadata = metadata
 	return d
 }
 
@@ -384,11 +396,33 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	if err == nil && written == 0 {
 		err = fmt.Errorf("downloaded file is empty")
 	}
-	if err == nil && (d.provider.Name() != "vk" || d.coverURLs[query] != "") {
-		if coverErr := embedCover(f.Name(), d.coverURLs[query], d.provider.Name(), track.ID, d.artworkRoute, d.socks4Dial); coverErr != nil {
-			logger.Warn("cover_unavailable", zap.String("reason", coverErr.Error()))
-		} else {
-			// The embedded picture changes the file bytes and therefore its cache hash.
+	metadata, hasMetadata := d.metadata[query]
+	if err == nil && (hasMetadata || d.provider.Name() != "vk" || d.coverURLs[query] != "") {
+		var image []byte
+		if d.provider.Name() != "vk" || d.coverURLs[query] != "" {
+			var coverErr error
+			image, coverErr = fetchCover(d.coverURLs[query], d.provider.Name(), track.ID, d.artworkRoute, d.socks4Dial)
+			if coverErr != nil {
+				logger.Warn("cover_unavailable", zap.String("reason", coverErr.Error()))
+			}
+		}
+		if hasMetadata || len(image) > 0 {
+			var tags *MP3Metadata
+			if hasMetadata {
+				tags = &metadata
+			}
+			err = writeMP3Metadata(f.Name(), tags, image)
+			if err != nil && len(image) > 0 {
+				logger.Warn("cover_unavailable", zap.String("reason", "could not embed artwork"))
+				if hasMetadata {
+					err = writeMP3Metadata(f.Name(), tags, nil)
+				} else {
+					err = nil
+				}
+			}
+		}
+		if err == nil {
+			// Both tags and artwork change the bytes recorded in download history.
 			file, openErr := os.Open(f.Name())
 			if openErr == nil {
 				hash.Reset()
@@ -396,7 +430,7 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 				openErr = errors.Join(openErr, file.Close())
 			}
 			if openErr != nil {
-				err = fmt.Errorf("hash MP3 with cover: %w", openErr)
+				err = fmt.Errorf("hash MP3 with metadata: %w", openErr)
 			}
 		}
 	}

@@ -59,11 +59,13 @@ func downloadVKTracks(repo *repository.VKRepository, store *repository.Downloade
 	}
 	provider := vkdownload.NewProvider(byQuery)
 	covers := make(map[string]string, len(byQuery))
+	metadata := make(map[string]download.MP3Metadata, len(byQuery))
 	for query, song := range byQuery {
 		covers[query] = song.CoverURL
+		metadata[query] = metadataFromSong(song.Song)
 	}
 	// Download up to ten VK tracks concurrently, independently of YouTube workers.
-	d := download.New(provider, 10, outputDir).WithStartInterval(0).WithDownloadStore(store).WithLogger(logger).WithDisplay(download.NewDisplay()).WithInitialSkipped(skipped).WithCoverURLs(covers)
+	d := download.New(provider, 10, outputDir).WithStartInterval(0).WithDownloadStore(store).WithLogger(logger).WithDisplay(download.NewDisplay()).WithInitialSkipped(skipped).WithCoverURLs(covers).WithMetadata(metadata)
 	d.Run(pending)
 	return nil
 }

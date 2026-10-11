@@ -41,8 +41,10 @@ them. New Spotify MP3 downloads use the source artwork, falling back to the
 matching YouTube video's thumbnail. Spotify artwork requests use the configured
 download connection strategy (direct, personal, or public proxy), including
 the public pool's per-proxy 429 cooldown. VK MP3 downloads use only artwork
-returned by VK; without it, they are saved without a cover. Already downloaded
-MP3s are not modified; server downloads are not implemented yet.
+returned by VK; without it, they are saved without a cover. New MP3s from both
+sources use the saved library title and artist as ID3 tags, even when artwork
+is unavailable. Already downloaded MP3s are not modified; server downloads
+are not implemented yet.
 
 Spotify sync saves the date supplied for each liked track. VK sync uses the
 optional `date` field (VK describes it as the audio upload date, not necessarily

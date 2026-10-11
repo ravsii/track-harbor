@@ -167,10 +167,14 @@ var downloadCmd = &cobra.Command{
 		}
 		queries := buildQueriesLogged(songList, logger)
 		covers := make(map[string]string, len(songList))
+		metadata := make(map[string]download.MP3Metadata, len(songList))
 		for _, song := range songList {
 			query := buildQueries([]repository.Song{song})
-			if len(query) == 1 && song.CoverURL != "" {
-				covers[query[0]] = song.CoverURL
+			if len(query) == 1 {
+				if song.CoverURL != "" {
+					covers[query[0]] = song.CoverURL
+				}
+				metadata[query[0]] = metadataFromSong(song)
 			}
 		}
 		pending := make([]string, 0, len(queries))
@@ -292,7 +296,7 @@ var downloadCmd = &cobra.Command{
 		provider.WithStrategy(connection)
 		fmt.Fprintf(out, "Search and download concurrency: %d (--workers limit: %d).\n", workers, workerLimit)
 		logger.Info("workers_configured", zap.String("strategy", strategyName), zap.Int("workers", workers), zap.Int("proxy_count", proxyCount), zap.Int("workers_limit", workerLimit))
-		downloader := download.New(provider, workers, cfg.DownloadDir).WithStartInterval(100*time.Millisecond).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp).WithInitialSkipped(skipped).WithCoverURLs(covers).WithArtworkStrategy(connection, proxy.DialSOCKS4)
+		downloader := download.New(provider, workers, cfg.DownloadDir).WithStartInterval(100*time.Millisecond).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp).WithInitialSkipped(skipped).WithCoverURLs(covers).WithMetadata(metadata).WithArtworkStrategy(connection, proxy.DialSOCKS4)
 
 		downloader.Run(pending)
 	},
@@ -300,6 +304,12 @@ var downloadCmd = &cobra.Command{
 
 func buildQueries(songs []repository.Song) []string {
 	return buildQueriesLogged(songs, nil)
+}
+
+func metadataFromSong(song repository.Song) download.MP3Metadata {
+	var artists []string
+	_ = json.Unmarshal([]byte(song.Artists), &artists) // buildQueries rejects malformed artist lists.
+	return download.MP3Metadata{Title: song.Title, Artist: strings.Join(artists, ", ")}
 }
 
 func buildQueriesLogged(songs []repository.Song, logger *zap.Logger) []string {
