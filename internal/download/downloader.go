@@ -269,7 +269,28 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	generation = d.waitForRequest(gate, jobID, name, StatusPreparing)
 
 	var resp DownloadResponse
-	if provider, ok := d.provider.(ProxyAwareProvider); ok {
+	if provider, ok := d.provider.(ProgressAwareProvider); ok {
+		var lastProgress time.Time
+		resp, err = provider.DownloadWithProgress(track, onProxy("download", StatusDownloading), func(progress DownloadProgress) {
+			// Do not flood non-interactive output; the live display redraws separately.
+			now := time.Now()
+			if !progress.Converting && now.Sub(lastProgress) < time.Second {
+				return
+			}
+			lastProgress = now
+			kind := StatusDownloading
+			if progress.Converting {
+				kind = StatusConverting
+			}
+			event := StatusEvent{JobID: jobID, Source: d.provider.Name(), Kind: kind, Name: name, Proxy: proxyAddress,
+				DownloadedBytes: progress.DownloadedBytes, TotalBytes: progress.TotalBytes, BytesPerSecond: progress.BytesPerSecond, ETA: progress.ETA}
+			if d.display != nil {
+				d.display.Update(event)
+			} else {
+				fmt.Printf("%s · %s\n", transferStatus(event), name)
+			}
+		})
+	} else if provider, ok := d.provider.(ProxyAwareProvider); ok {
 		resp, err = provider.DownloadWithProxy(track, onProxy("download", StatusDownloading))
 	} else {
 		resp, err = d.provider.Download(track)

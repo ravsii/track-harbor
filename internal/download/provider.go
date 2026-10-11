@@ -3,6 +3,7 @@ package download
 import (
 	"errors"
 	"io"
+	"time"
 )
 
 // ErrNotFound — провайдер не нашёл подходящий трек.
@@ -43,4 +44,18 @@ type Provider interface {
 type ProxyAwareProvider interface {
 	SearchWithProxy(query string, onProxy func(string)) (Track, error)
 	DownloadWithProxy(track Track, onProxy func(string)) (DownloadResponse, error)
+}
+
+// DownloadProgress describes network transfer, not the later local file copy.
+type DownloadProgress struct {
+	DownloadedBytes int64
+	TotalBytes      int64 // May be an estimate; -1 means unknown.
+	BytesPerSecond  float64
+	ETA             time.Duration
+	Converting      bool
+}
+
+// ProgressAwareProvider streams progress for this invocation only.
+type ProgressAwareProvider interface {
+	DownloadWithProgress(Track, func(string), func(DownloadProgress)) (DownloadResponse, error)
 }

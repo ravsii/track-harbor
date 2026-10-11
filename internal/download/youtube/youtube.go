@@ -74,8 +74,15 @@ func (p *Provider) runWithProxy(stage string, timeout time.Duration, onProxy fun
 }
 
 func (p *Provider) runConnection(ctx context.Context, stage string, onProxy func(string), proxyAddress string, args ...string) ([]byte, error) {
+	return p.runConnectionWithProgress(ctx, stage, onProxy, proxyAddress, nil, args...)
+}
+
+func (p *Provider) runConnectionWithProgress(ctx context.Context, stage string, onProxy func(string), proxyAddress string, onProgress func(download.DownloadProgress), args ...string) ([]byte, error) {
 	// Never invoke a shell; query strings are a single argument, not commands.
 	options := []string{"--ignore-config", "--no-progress", "--no-cache-dir", "--socket-timeout", "15", "--retries", "0", "--fragment-retries", "0", "--extractor-retries", "0", "--file-access-retries", "0"}
+	if onProgress != nil {
+		options = append(options, "--progress", "--newline", "--progress-delta", "0.5", "--progress-template", progressTemplate)
+	}
 	// --proxy "" explicitly disables environment proxies for direct requests.
 	options = append(options, "--proxy", proxyAddress)
 	if onProxy != nil {
@@ -101,7 +108,16 @@ func (p *Provider) runConnection(ctx context.Context, stage string, onProxy func
 	configureCancellation(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
-	output, err := cmd.Output()
+	var output []byte
+	var err error
+	if onProgress == nil {
+		output, err = cmd.Output()
+	} else {
+		writer := &progressWriter{onProgress: onProgress}
+		cmd.Stdout = writer
+		err = cmd.Run()
+		writer.flush()
+	}
 	rateLimited := false
 	if err != nil {
 		for _, match := range httpStatus.FindAllStringSubmatch(stderr.String(), -1) {
@@ -173,6 +189,10 @@ func (p *Provider) Download(track download.Track) (download.DownloadResponse, er
 }
 
 func (p *Provider) DownloadWithProxy(track download.Track, onProxy func(string)) (download.DownloadResponse, error) {
+	return p.DownloadWithProgress(track, onProxy, nil)
+}
+
+func (p *Provider) DownloadWithProgress(track download.Track, onProxy func(string), onProgress func(download.DownloadProgress)) (download.DownloadResponse, error) {
 	if !videoID.MatchString(track.ID) {
 		return download.DownloadResponse{}, fmt.Errorf("YouTube: invalid video ID")
 	}
@@ -181,13 +201,13 @@ func (p *Provider) DownloadWithProxy(track download.Track, onProxy func(string))
 	var response download.DownloadResponse
 	err := p.connectionStrategy().Execute(ctx, func(address string) error {
 		var err error
-		response, err = p.downloadConnection(ctx, track, onProxy, address)
+		response, err = p.downloadConnection(ctx, track, onProxy, address, onProgress)
 		return err
 	})
 	return response, err
 }
 
-func (p *Provider) downloadConnection(ctx context.Context, track download.Track, onProxy func(string), address string) (download.DownloadResponse, error) {
+func (p *Provider) downloadConnection(ctx context.Context, track download.Track, onProxy func(string), address string, onProgress func(download.DownloadProgress)) (download.DownloadResponse, error) {
 	dir, err := os.MkdirTemp("", "meshvault-youtube-*")
 	if err != nil {
 		return download.DownloadResponse{}, err
@@ -198,7 +218,7 @@ func (p *Provider) downloadConnection(ctx context.Context, track download.Track,
 			os.RemoveAll(dir)
 		}
 	}()
-	_, err = p.runConnection(ctx, "download", onProxy, address, "--no-playlist", "--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K", "--output", filepath.Join(dir, "audio.%(ext)s"), "--", "https://www.youtube.com/watch?v="+track.ID)
+	_, err = p.runConnectionWithProgress(ctx, "download", onProxy, address, onProgress, "--no-playlist", "--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K", "--output", filepath.Join(dir, "audio.%(ext)s"), "--", "https://www.youtube.com/watch?v="+track.ID)
 	if err != nil {
 		return download.DownloadResponse{}, err
 	}

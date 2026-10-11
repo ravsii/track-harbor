@@ -29,6 +29,7 @@ const (
 	StatusSaving                         // сохранение файла и хеша
 	StatusRetryWaiting                   // отложенный повтор в очереди
 	StatusQueued                         // ожидание разрешения на старт запроса
+	StatusConverting                     // сеть завершена, FFmpeg готовит MP3
 )
 
 // StatusEvent — событие жизненного цикла обработки одного трека/запроса.
@@ -41,6 +42,8 @@ type StatusEvent struct {
 	Err             error
 	TotalBytes      int64 // общий размер (если известен), иначе -1
 	DownloadedBytes int64 // сколько байт уже скачано
+	BytesPerSecond  float64
+	ETA             time.Duration
 }
 
 // Display — live-статус в терминале через ANSI.
@@ -143,6 +146,21 @@ func (d *Display) Update(evt StatusEvent) {
 			d.order = append(d.order, key)
 		}
 		d.active[key] = &evt
+	}
+	if !d.interactive && (evt.Kind == StatusConverting || evt.Kind == StatusDownloading && evt.DownloadedBytes > 0) {
+		line := fmt.Sprintf("%s · %s", transferStatus(evt), evt.Name)
+		if evt.Proxy == "direct" {
+			line += " · напрямую"
+		} else if evt.Proxy != "" {
+			line += " · прокси: " + evt.Proxy
+		}
+		line = strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return ' '
+			}
+			return r
+		}, line)
+		fmt.Fprintln(d.out, line)
 	}
 
 	d.dirty = true
@@ -315,12 +333,15 @@ func (d *Display) render() {
 			status = "Подготовка"
 		case StatusSaving:
 			status = "Сохранение"
+		case StatusConverting:
+			status = "Конвертация MP3"
 		case StatusDownloading:
 			status = "Скачивается"
 			pct = progressPercent(ev)
 			if pct >= 0 {
 				status = fmt.Sprintf("Скачивается %3.0f%%", pct)
 			}
+			status += transferDetails(ev.BytesPerSecond, ev.ETA)
 		}
 		if ev.Proxy == "direct" {
 			status += " · напрямую"
@@ -413,6 +434,31 @@ func progressPercent(ev StatusEvent) float64 {
 		pct = 100
 	}
 	return pct
+}
+
+func transferStatus(ev StatusEvent) string {
+	if ev.Kind == StatusConverting {
+		return "Конвертация MP3"
+	}
+	status := "Скачивается"
+	if pct := progressPercent(ev); pct >= 0 {
+		status = fmt.Sprintf("Скачивается %.0f%%", pct)
+	} else if ev.DownloadedBytes > 0 {
+		status += " " + humanBytes(ev.DownloadedBytes)
+	}
+	return status + transferDetails(ev.BytesPerSecond, ev.ETA)
+}
+
+func transferDetails(speed float64, eta time.Duration) string {
+	text := ""
+	if speed > 0 {
+		text += " · " + humanBytes(int64(speed)) + "/с"
+	}
+	if eta > 0 {
+		seconds := int((eta + time.Second - 1) / time.Second)
+		text += fmt.Sprintf(" · осталось %02d:%02d", seconds/60, seconds%60)
+	}
+	return text
 }
 
 // activeUnsafe возвращает активные события в порядке появления запросов.
