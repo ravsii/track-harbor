@@ -33,6 +33,7 @@ type Server struct {
 	store      *store.Store
 	logger     *zap.Logger
 	mu         sync.Mutex
+	settingsMu sync.Mutex
 	status     map[string]string
 	pingStatus map[string]string
 	downloads  *downloadJob
@@ -74,6 +75,7 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("POST /download/start", s.startDownloads)
 	mux.HandleFunc("POST /download/stop", s.stopDownloads)
 	mux.HandleFunc("GET /download/events", s.downloadEvents)
+	mux.HandleFunc("POST /settings", s.saveSettings)
 	mux.HandleFunc("GET /audio", s.playAudio)
 	mux.HandleFunc("GET /audio/tracks", s.playableTracks)
 	return logRequests(logger, mux, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +138,9 @@ func sourceName(r *http.Request) string {
 	if r.FormValue("source") == "downloads" {
 		return "downloads"
 	}
+	if r.FormValue("source") == "settings" {
+		return "settings"
+	}
 	return "music"
 }
 
@@ -148,6 +153,9 @@ type pageData struct {
 	Source, Name, Status, PingStatus, AuthURL string
 	Connected                                 bool
 	Tracks                                    []store.Track
+	SettingsStrategy                          string
+	PersonalProxyCount, PublicProxyCount      int
+	SettingsSaved                             bool
 }
 
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
@@ -160,6 +168,17 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if source == "downloads" {
 		data.Name = "Downloads"
+	} else if source == "settings" {
+		data.Name = "Settings"
+		settings, settingsErr := s.store.DownloadSettings()
+		if settingsErr != nil {
+			http.Error(w, "unable to read download settings", http.StatusInternalServerError)
+			return
+		}
+		data.SettingsStrategy = strings.Join(settings.Strategy, "\n")
+		data.PersonalProxyCount = len(settings.PersonalProxy)
+		data.PublicProxyCount = len(settings.PublicProxy)
+		data.SettingsSaved = r.URL.Query().Get("saved") == "1"
 	} else if source == "music" {
 		data.Tracks, err = s.store.ListAll()
 	} else {

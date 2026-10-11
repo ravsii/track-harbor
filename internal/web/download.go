@@ -178,7 +178,11 @@ func (d *downloadJob) runQueue(ctx context.Context) {
 }
 
 func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
-	routes := &download.Routes{Order: d.config.Strategy, Personal: d.config.PersonalProxy, Public: d.config.PublicProxy}
+	d.mu.Lock()
+	routes := &download.Routes{
+		Order: append([]string(nil), d.config.Strategy...), Personal: append([]string(nil), d.config.PersonalProxy...), Public: append([]string(nil), d.config.PublicProxy...),
+	}
+	d.mu.Unlock()
 	process := func(t store.Track) {
 		state := downloadState{Running: true}
 		state.Source, state.Artist, state.Title = t.Source, t.Artist, t.Title

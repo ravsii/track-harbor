@@ -1,12 +1,14 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 )
@@ -14,13 +16,14 @@ import (
 type Config struct {
 	Listen        string   `yaml:"listen"`
 	DownloadDir   string   `yaml:"download_dir"`
+	ConfigPath    string   `yaml:"-"`
 	Strategy      []string `yaml:"strategy"`
-	VKStrategy    []string `yaml:"vk_strategy"`
 	PersonalProxy []string `yaml:"personal_proxy"`
 	PublicProxy   []string `yaml:"public_proxy"`
+	loadedYAML    []byte
 }
 
-const defaultYAML = "listen: 127.0.0.1:8787\nstrategy:\n  - direct\nvk_strategy:\n  - direct\n"
+const defaultYAML = "listen: 127.0.0.1:8787\n"
 
 func Load() (Config, string, error) {
 	dir := os.Getenv("TRACKHARBOR_SERVER_DIR")
@@ -78,28 +81,81 @@ func Load() (Config, string, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, "", fmt.Errorf("server config: %w", err)
 	}
+	cfg.ConfigPath = configPath
+	cfg.loadedYAML = data
 	if cfg.DownloadDir == "" {
 		cfg.DownloadDir = filepath.Join(filepath.Dir(dbPath), "downloads")
 	}
 	if len(cfg.Strategy) == 0 {
 		cfg.Strategy = []string{"direct"}
 	}
-	for _, route := range cfg.Strategy {
-		if route != "direct" && route != "personal_proxy" && route != "random_proxy" {
-			return Config{}, "", fmt.Errorf("server config: unknown download strategy %q", route)
-		}
-	}
-	if len(cfg.VKStrategy) == 0 {
-		cfg.VKStrategy = []string{"direct"}
-	}
-	if len(cfg.VKStrategy) != 1 || cfg.VKStrategy[0] != "direct" {
-		return Config{}, "", fmt.Errorf("server config: vk_strategy currently supports only direct")
-	}
 	host, _, err := net.SplitHostPort(cfg.Listen)
 	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
 		return Config{}, "", fmt.Errorf("server without login must listen on a loopback IP address")
 	}
 	return cfg, dbPath, nil
+}
+
+// RemoveImportedSettings leaves startup-only settings in YAML after the
+// download routes and proxies have been safely imported into the database.
+func RemoveImportedSettings(cfg Config, strategy, personal, public []string) error {
+	path, err := filepath.EvalSymlinks(cfg.ConfigPath)
+	if err != nil {
+		return err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(data, cfg.loadedYAML) {
+		return fmt.Errorf("server config changed during settings import; review config.yaml")
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return err
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return fmt.Errorf("server config must be a YAML mapping")
+	}
+	root := doc.Content[0]
+	content := make([]*yaml.Node, 0, len(root.Content))
+	changed := false
+	for i := 0; i < len(root.Content); i += 2 {
+		switch root.Content[i].Value {
+		case "strategy", "vk_strategy", "personal_proxy", "public_proxy":
+			changed = true
+		default:
+			content = append(content, root.Content[i], root.Content[i+1])
+		}
+	}
+	if !changed {
+		return nil
+	}
+	if !slices.Equal(cfg.Strategy, strategy) || !slices.Equal(cfg.PersonalProxy, personal) || !slices.Equal(cfg.PublicProxy, public) {
+		return fmt.Errorf("legacy download settings differ from the database; review config.yaml before removing them")
+	}
+	root.Content = content
+	updated, err := yaml.Marshal(&doc)
+	if err != nil {
+		return err
+	}
+	f, err := os.CreateTemp(filepath.Dir(path), ".config-*.yaml")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+	if _, err := f.Write(updated); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(f.Name(), path)
 }
 
 // migrateJSON preserves existing server settings (including private proxy URLs)

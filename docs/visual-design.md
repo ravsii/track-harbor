@@ -31,7 +31,7 @@ Keep these values in sync with the styles when adjusting the layout:
 | Sidebar padding | `16px 12px`; nav link `8px 10px`, gap `4px` | `8px 12px` at 950px; `8px 10px` at 700px |
 | Top bar content padding | `12px clamp(24px, 5vw, 82px)` | `8px 20px 12px` at 950px |
 | Music content padding | `8px 12px 16px` | `8px 10px 16px` at 700px |
-| Spotify, VK, Downloads content padding | `14px clamp(16px, 3vw, 38px) 24px` | `12px 16px 20px` at 950px |
+| Spotify, VK, Downloads, Settings content padding | `14px clamp(16px, 3vw, 38px) 24px` | `12px 16px 20px` at 950px |
 | Non-Music header / panel / list spacing | Header-to-panel `12px`; panel padding `18px`; panel-to-list `20px` | Same values |
 | Track header / row padding (Music, Spotify, VK) | `0 10px 7px` / `7px 10px`; grid gap `8px` | Same compact spacing; tracks scroll horizontally if columns do not fit |
 
@@ -51,6 +51,10 @@ decorative hero. Put connection, sync, and download controls directly beneath it
 When a source is connected, tuck the credential replacement form into a collapsed
 disclosure so Sync and the track list remain close to the top. Keep that form
 visible by default until the source is connected.
+Settings uses the same compact panel and theme colors as the source pages.
+Keep proxy addresses out of rendered HTML; show counts, empty replacement
+fields, and explicit controls for clearing saved lists. Saving settings must
+not interrupt the persistent player.
 
 ## Color palette
 

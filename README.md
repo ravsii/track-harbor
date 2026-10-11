@@ -33,6 +33,15 @@ to change the default directory, or `TRACKHARBOR_SERVER_CONFIG` and
 `TRACKHARBOR_SERVER_DB` to set those paths independently. Existing server data
 is not moved automatically; keep using the same data directory when upgrading.
 Server database migrations in `internal/store/migrations/` run on startup.
+Configure download route order and personal/public proxy lists on the local
+**Settings** page. Changes affect new download batches; running transfers keep
+their routes. Saved proxy URLs are not shown again: a blank list leaves its
+current values unchanged, and the removal checkbox clears them. On upgrade,
+the server imports existing `strategy`, `personal_proxy`, and `public_proxy`
+values from `config.yaml` into `library.db` and removes those keys from YAML.
+`vk_strategy` is fixed to `direct`. Keep `listen` and optional `download_dir`
+in `config.yaml`; changes to either require a server restart. The web UI has
+no login: keep it on loopback and protect access to the server database.
 
 Server logs are structured JSON on stderr at Info level. Downloads use
 `downloads/youtube/<video-id>.mp3` for Spotify library tracks and

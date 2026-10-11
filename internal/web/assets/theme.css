@@ -41,6 +41,8 @@ a { color: var(--accent-label); text-decoration-color: var(--accent); }
 .player #player-error { color: var(--error); }
 
 body:has(#content[data-source="vk"]) .sidebar nav a[href="/?source=spotify"],
+body:has(#content[data-source="settings"]) .sidebar nav a:not([href="/?source=settings"]),
+body:has(#content:not([data-source="settings"])) .sidebar nav a[href="/?source=settings"],
 body:has(#content[data-source="spotify"]) .sidebar nav a[href="/?source=vk"],
 body:has(#content[data-source="music"]) .sidebar nav a[href^="/?source="],
 body:has(#content[data-source="downloads"]) .sidebar nav a:not([href="/?source=downloads"]),
@@ -53,6 +55,7 @@ body:has(#content[data-source="vk"]) .sidebar nav a[href="/"] {
 body:has(#content[data-source="vk"]) .sidebar nav a[href="/?source=vk"],
 body:has(#content[data-source="spotify"]) .sidebar nav a[href="/?source=spotify"],
 body:has(#content[data-source="downloads"]) .sidebar nav a[href="/?source=downloads"],
+body:has(#content[data-source="settings"]) .sidebar nav a[href="/?source=settings"],
 body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
   background: var(--selected);
   color: var(--accent-label);
@@ -105,6 +108,12 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 .credential-details summary { color: var(--accent-label); cursor: pointer; font-weight: 600; }
 .credential-details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .credential-details[open] > p { margin-top: 10px; }
+.settings-panel textarea { min-height: 100px; font: 13px/1.5 ui-monospace, monospace; letter-spacing: 0; }
+.settings-panel .settings-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.settings-panel .clear-option { display: flex; align-items: center; gap: 8px; color: var(--ink); font: 12px/1.5 'DM Sans', sans-serif; letter-spacing: 0; }
+.settings-panel .clear-option input { width: auto; accent-color: var(--accent); }
+.settings-panel #settings-feedback:empty { display: none; }
+.settings-panel #settings-feedback[data-error="true"] { color: var(--error); }
 #content .library:not(.music-library) { margin-top: 20px; }
 #content .library-heading { margin-bottom: 12px; }
 #content:not([data-source="music"]) footer { margin-top: 24px; }
@@ -220,6 +229,7 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 #content { grid-column: 2; grid-row: 2; }
 
 @media (max-width: 950px) {
+  .settings-panel .settings-fields { grid-template-columns: 1fr; }
   #content:not([data-source="music"]) { padding: 12px 16px 20px; }
   .shell { grid-template-rows: auto auto minmax(0, 1fr); }
   .topbar .brand { position: static; transform: none; padding: 8px 20px 0; }
