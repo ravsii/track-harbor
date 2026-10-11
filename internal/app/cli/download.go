@@ -30,7 +30,7 @@ const (
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Download all tracks from the database",
-	Long:  "Download Spotify tracks from YouTube and VK tracks directly through FFmpeg into the configured download_dir. YouTube strategy priority applies only to Spotify. Use --workers to set YouTube concurrency (default: 50).",
+	Long:  "Download Spotify tracks from YouTube using strategy (proxy priority) and VK tracks directly through FFmpeg using vk_strategy. Set both in ~/.trackharbor/config.yaml. Use --workers to set YouTube concurrency (default: 50).",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if _, err := downloadWorkerLimit(cmd); err != nil {
 			return err
@@ -196,7 +196,7 @@ var downloadCmd = &cobra.Command{
 		provider.WithSourceDirectory(filepath.Join(cfg.DownloadDir, ".sources"))
 		fmt.Fprintf(out, "Source: %s\n", provider.Name())
 		strategyName := strings.Join(cfg.Strategy, " -> ")
-		fmt.Fprintf(out, "Strategies: %s\n", strategyName)
+		fmt.Fprintf(out, "Spotify strategies: %s\n", strategyName)
 		var proxyStrategy youtube.ProxyOnly
 		workers, proxyCount := workerLimit, 0
 		usesProxy, usesDirect, usesPersonalProxy := false, false, false

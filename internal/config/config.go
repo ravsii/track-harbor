@@ -14,11 +14,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const defaultYAML = "version: 1\n\ndownload_dir: ~/.trackharbor/downloaded\npersonal_proxy: []\nstrategy:\n  - direct\n"
+const defaultYAML = "version: 1\n\ndownload_dir: ~/.trackharbor/downloaded\npersonal_proxy: []\nstrategy:\n  - direct\nvk_strategy:\n  - direct\n"
 
 type Config struct {
 	Version       int      `yaml:"version"`
 	Strategy      []string `yaml:"strategy"`
+	VKStrategy    []string `yaml:"vk_strategy"`
 	PersonalProxy []string `yaml:"personal_proxy"`
 	DownloadDir   string   `yaml:"download_dir"`
 }
@@ -82,7 +83,10 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("%s: version must be 1, got %d", path, cfg.Version)
 	}
 	if len(cfg.Strategy) == 0 {
-		return Config{}, fmt.Errorf("%s: strategy must be a non-empty list of direct/personal_proxy/random_proxy", path)
+		return Config{}, fmt.Errorf("%s: strategy (Spotify) must be a non-empty list of direct/personal_proxy/random_proxy", path)
+	}
+	if len(cfg.VKStrategy) != 1 || cfg.VKStrategy[0] != "direct" {
+		return Config{}, fmt.Errorf("%s: vk_strategy currently supports only [direct]; VK FFmpeg proxy routing is not implemented", path)
 	}
 	seen := make(map[string]bool)
 	for i, name := range cfg.Strategy {

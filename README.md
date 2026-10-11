@@ -120,6 +120,8 @@ download_dir: ~/.trackharbor/downloaded
 personal_proxy: []
 strategy:
   - direct
+vk_strategy:
+  - direct
 ```
 
 If the new database does not exist, the application copies the contents of
@@ -131,12 +133,12 @@ On systems with POSIX permissions, the application directory is created with
 `0700` permissions, and the database and configuration use `0600`.
 
 When configuration is loaded, missing fields are automatically added to
-`config.yaml` with their current defaults: `version`, `strategy`,
+`config.yaml` with their current defaults: `version`, `strategy`, `vk_strategy`,
 `personal_proxy`, and `download_dir`. Existing values and YAML comments are
 preserved. The `version` key always comes first, followed by one blank line;
 other top-level keys are sorted alphabetically. The order of items in
-`strategy` and `personal_proxy` is unchanged. If all fields and formatting are
-already up to date, the file is not rewritten. Explicitly invalid values cause
+`strategy`, `vk_strategy`, and `personal_proxy` is unchanged. If all fields and
+formatting are already up to date, the file is not rewritten. Explicitly invalid values cause
 an error rather than being silently corrected. Updates are saved through a
 temporary file with `0600` permissions.
 
@@ -156,8 +158,9 @@ them, set `download_dir` to the absolute path of the old directory.
 
 ## Connection strategies
 
-`strategy` is a non-empty priority list applied separately to each search and
-download. For example, in `~/.trackharbor/config.yaml`:
+`strategy` controls **Spotify/YouTube only**: it is a non-empty priority list
+applied separately to each search and download. `vk_strategy` controls **VK
+only**. For example, Spotify through proxies only and VK directly:
 
 ```yaml
 version: 1
@@ -167,9 +170,10 @@ personal_proxy:
   - "http://user:password@proxy.example.com:8080"
   - "socks5://127.0.0.1:1080"
 strategy:
-  - direct
   - personal_proxy
   - random_proxy
+vk_strategy:
+  - direct
 ```
 
 - `direct`: explicitly use a direct connection. If it is the only strategy,
@@ -191,12 +195,16 @@ strategy:
   TheSpeedX, without silently falling back to a direct connection. Despite its
   name, selection uses LRU with HTTP 429 cooldowns, not random selection.
   The old name `proxy` is accepted as an alias.
-- In the example, a request first uses a direct connection. On a technical
-  error, personal proxies are tried, then the public pool. Strategies can be
+- In the example, Spotify first tries personal proxies, then the public pool.
+  There is no direct fallback when `direct` is absent. Strategies can be
   ordered arbitrarily. An empty search result, cancellation, or an exhausted
   overall timeout does not trigger the next route. Each new operation starts
   with the first strategy. If the public pool is unavailable, other configured
   strategies remain available.
+- `vk_strategy: [direct]` makes VK FFmpeg transfers directly,
+  independently of Spotify's proxies. This is currently the only supported VK
+  route; configuring a proxy there produces an error instead of silently using
+  a direct connection. VK does not initialize YouTube's proxy pool.
 - Only `version: 1` is accepted. Unknown settings, other versions, an empty
   strategy list, duplicate strategies, and unknown strategies are rejected.
   The `--strategy` flag has been replaced by YAML configuration; `fallback`

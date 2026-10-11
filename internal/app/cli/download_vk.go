@@ -50,7 +50,7 @@ func downloadVKTracks(repo *repository.VKRepository, store *repository.Downloade
 		}
 		pending = append(pending, query)
 	}
-	fmt.Fprintf(out, "VK: already downloaded %d; remaining %d (direct FFmpeg, no YouTube).\n", skipped, len(pending))
+	fmt.Fprintf(out, "VK strategy: direct. Already downloaded: %d; remaining: %d (FFmpeg, no YouTube).\n", skipped, len(pending))
 	if unavailable > 0 {
 		fmt.Fprintf(out, "VK: %d tracks have no usable audio URL and will be skipped (no YouTube fallback).\n", unavailable)
 	}
