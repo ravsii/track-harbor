@@ -66,14 +66,14 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
   </aside>
 	  <main id="content" data-source="{{.Source}}" hx-history-elt>
 	    {{if ne .Source "music"}}
-	    <div class="topline"><span>LIBRARY / {{.Name}}</span><span class="label">EARLY ACCESS</span></div>
-		    <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>{{if eq .Source "downloads"}}See what is queued, downloading, saved, or failed. Sync a source to check and download missing tracks.{{else}}Connect your account, sync your library, and explore what you love. Each source has its own collection.{{end}}</p></header>
+	    <header class="page-heading"><h1>{{.Name}}</h1></header>
 	    {{end}}
 	    {{if and (ne .Source "music") (ne .Source "downloads")}}
     <section class="grid">
         <div class="panel connect"><div class="panel-top"><span class="index">01 / CONNECTION</span><span class="pill {{if .Connected}}connected{{end}}">{{if .Connected}}{{template "icon" "checkmark-circle-02"}} Connected{{else}}{{template "icon" "circle"}} Not connected{{end}}</span></div>
-        <h2>Connect {{.Name}}</h2>
-        {{if eq .Source "spotify"}}
+	        <h2>{{if .Connected}}Connection{{else}}Connect {{.Name}}{{end}}</h2>
+	        {{if .Connected}}<details class="credential-details"><summary>Update credentials</summary>{{end}}
+	        {{if eq .Source "spotify"}}
         <p>Paste the full request headers from a Spotify Web Player request. Only <code>authorization</code> and <code>client-token</code> are saved; other headers and cookies are discarded.</p>
         <form action="/connect" method="post" autocomplete="off"><input type="hidden" name="source" value="spotify">
           <label>REQUEST HEADERS<textarea name="headers" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="authorization: Bearer …&#10;client-token: …" required></textarea></label>
@@ -85,8 +85,9 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
           <label>ACCESS TOKEN OR REDIRECT URL<input name="token" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste token or redirect URL" required></label>
           <button type="submit">Save credentials <span>{{template "icon" "arrow-right-01"}}</span></button>
         </form>
-        {{end}}
-        <form action="/ping" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Check connection <span>{{template "icon" "arrow-right-01"}}</span></button></form>
+	        {{end}}
+	        {{if .Connected}}</details>{{end}}
+	        <form action="/ping" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Check connection <span>{{template "icon" "arrow-right-01"}}</span></button></form>
         <div class="status" aria-live="polite">CONNECTION <span hx-get="/ping-status?source={{.Source}}" hx-trigger="every 10s" hx-swap="innerHTML">{{if .PingStatus}}{{.PingStatus}}{{else}}Not checked yet.{{end}}</span></div>
       </div>
       <div class="panel sync"><div class="panel-top"><span class="index">02 / SYNC</span><span class="mini-mark">{{template "icon" "reload"}}</span></div>
@@ -98,8 +99,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     </section>
     {{end}}
 	    {{if eq .Source "downloads"}}
-	    <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOAD STATUS</span></div>
-	      <h2>Downloads</h2><p>Synced tracks are checked and saved automatically. Statuses update while this page is open.</p>
+	    <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOAD CONTROL</span></div>
 	      <button type="button" id="download-toggle" disabled><span class="download-toggle-label">Start downloads</span>{{template "icon" "play"}}</button>
 	      <div id="download-state" class="status" role="status" aria-live="polite">Loading download status…</div>
 	    </section>
