@@ -14,7 +14,8 @@ make run
 
 Open <http://127.0.0.1:8787>. Connect a source on its tab and click **Sync
 library** to import tracks and check or download missing MP3s in the background.
-The **Downloads** tab shows per-track status. The top bar shows overall status
+The **Downloads** tab shows tracks still waiting, downloading, or failed; saved
+MP3s leave the queue. The top bar shows overall status
 and keeps the player running as you navigate. Use `make run-server-watch` to
 rebuild and restart automatically when server source changes; failed builds
 are retried every second without stopping the previous server.
@@ -36,8 +37,8 @@ Server database migrations in `internal/store/migrations/` run on startup.
 Server logs are structured JSON on stderr at Info level. Downloads use
 `downloads/youtube/<video-id>.mp3` for Spotify library tracks and
 `downloads/vk/<owner-id>_<audio-id>.mp3` for VK. Existing MP3 paths recorded in
-the server database remain playable. The browser receives download progress
-over SSE, and MP3 seeking uses HTTP range requests.
+the server database remain playable. SSE notifies the browser only when a new
+MP3 is saved; the Downloads tab polls for status. MP3 seeking uses HTTP range requests.
 The player remembers the last played track in this browser. On reload it shows
 that track paused if its MP3 is available, or the most recently added
 available track otherwise; playback never starts automatically.

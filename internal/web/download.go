@@ -73,7 +73,14 @@ func (d *downloadJob) publishLocked(update downloadState) {
 	if update.Title != "" {
 		d.tracks[trackKey(update.Source, update.Artist, update.Title)] = update
 	}
-	data, _ := json.Marshal(update)
+	if update.Stage != "done" {
+		return
+	}
+	data, _ := json.Marshal(struct {
+		Source string `json:"source"`
+		Artist string `json:"artist"`
+		Title  string `json:"title"`
+	}{update.Source, update.Artist, update.Title})
 	for ch := range d.listeners {
 		select {
 		case ch <- data:
@@ -358,16 +365,26 @@ func (s *Server) downloadStatus(w http.ResponseWriter, r *http.Request) {
 		Bytes      int64  `json:"bytes,omitempty"`
 		TotalBytes int64  `json:"total_bytes,omitempty"`
 	}
+	pending := make([]store.Track, 0, len(tracks))
+	for _, t := range tracks {
+		if t.FilePath != "" {
+			info, err := os.Stat(t.FilePath)
+			if err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+				continue
+			}
+		}
+		pending = append(pending, t)
+	}
 	d := s.downloads
 	d.mu.Lock()
-	items := make([]item, 0, len(tracks))
-	for _, t := range tracks {
+	items := make([]item, 0, len(pending))
+	for _, t := range pending {
 		stage := "waiting"
 		if t.FilePath != "" {
-			stage = "saved"
+			stage = "missing"
 		}
 		status := d.tracks[trackKey(t.Source, t.Artist, t.Title)]
-		if status.Stage != "" {
+		if status.Stage != "" && status.Stage != "done" && status.Stage != "skipped" {
 			stage = status.Stage
 		}
 		items = append(items, item{Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: stage, Message: status.Message, Bytes: status.Bytes, TotalBytes: status.TotalBytes})
@@ -379,10 +396,11 @@ func (s *Server) downloadStatus(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(struct {
-		State   downloadState `json:"state"`
-		Tracks  []item        `json:"tracks"`
-		Syncing bool          `json:"syncing"`
-	}{state, items, syncing}); err != nil {
+		State        downloadState `json:"state"`
+		Tracks       []item        `json:"tracks"`
+		LibraryCount int           `json:"library_count"`
+		Syncing      bool          `json:"syncing"`
+	}{state, items, len(tracks), syncing}); err != nil {
 		s.logger.Error("write download status failed")
 	}
 }
@@ -428,15 +446,12 @@ func (s *Server) downloadEvents(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("X-Accel-Buffering", "no")
 	d := s.downloads
-	ch := make(chan []byte, 1)
+	ch := make(chan []byte, 256)
 	d.mu.Lock()
 	d.listeners[ch] = struct{}{}
-	snapshot, _ := json.Marshal(d.state)
 	d.mu.Unlock()
 	defer func() { d.mu.Lock(); delete(d.listeners, ch); d.mu.Unlock() }()
-	if _, err := fmt.Fprintf(w, "data: %s\n\n", snapshot); err != nil {
-		return
-	}
+	_, _ = io.WriteString(w, ": connected\n\n")
 	f.Flush()
 	ticker := time.NewTicker(20 * time.Second)
 	defer ticker.Stop()

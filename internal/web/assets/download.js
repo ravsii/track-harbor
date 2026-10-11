@@ -6,7 +6,7 @@
   const ripples = new WeakMap();
   let syncMessage = document.getElementById('sync-state')?.textContent;
   const key = track => `${track.source}\0${track.artist}\0${track.title}`;
-  const rows = new Map();
+  const missing = new Set();
 
   function ripple(element, event) {
     const bounds = element.getBoundingClientRect();
@@ -41,9 +41,9 @@
     } else if (snapshot.tracks.some(track => track.stage === 'failed')) {
       text = 'Syncing needs attention';
       kind = 'attention';
-    } else if (!snapshot.tracks.length) {
+    } else if (!snapshot.library_count) {
       text = 'Sync a library to begin';
-    } else if (snapshot.tracks.every(track => ['done', 'skipped'].includes(track.stage))) {
+    } else if (!snapshot.tracks.length) {
       text = 'All tracks ready to play';
       kind = 'ready';
     } else {
@@ -82,6 +82,22 @@
     field.title = track.stage === 'failed' ? track.message || 'Download failed' : '';
   }
 
+  function availability(track, playable) {
+    for (const row of document.querySelectorAll('.library .tracks li[data-source]')) {
+      if (row.dataset.source !== track.source || row.dataset.artist !== track.artist || row.dataset.title !== track.title) continue;
+      if (row.dataset.playable === String(playable)) continue;
+      row.dataset.playable = String(playable);
+      const button = row.querySelector('.play-track');
+      if (button) button.disabled = !playable;
+      const link = row.querySelector('.download-track');
+      if (link) {
+        link.classList.toggle('unavailable', !playable);
+        if (playable) { link.removeAttribute('aria-disabled'); link.removeAttribute('tabindex'); }
+        else { link.setAttribute('aria-disabled', 'true'); link.tabIndex = -1; }
+      }
+    }
+  }
+
   async function load() {
     const list = document.getElementById('download-tracks');
     try {
@@ -89,13 +105,21 @@
       if (!response.ok) throw new Error('download status unavailable');
       snapshot = await response.json();
       state = snapshot.state;
+      const unavailable = new Set();
+      for (const track of snapshot.tracks) {
+        if (track.stage !== 'missing') continue;
+        unavailable.add(key(track));
+        availability(track, false);
+        if (!missing.has(key(track))) document.dispatchEvent(new CustomEvent('download:missing', {detail: track}));
+      }
+      missing.clear();
+      for (const id of unavailable) missing.add(id);
       systemStatus();
       control();
       if (!list || document.getElementById('download-tracks') !== list) return;
       summary();
-      rows.clear();
       list.replaceChildren();
-      document.getElementById('download-count').textContent = `${snapshot.tracks.length} TRACKS`;
+      document.getElementById('download-count').textContent = `${snapshot.tracks.length} REMAINING`;
       for (const track of snapshot.tracks) {
         const row = document.createElement('li');
         const title = document.createElement('strong');
@@ -111,12 +135,11 @@
         row.append(title, artist, source, stage);
         status(row, track);
         list.append(row);
-        rows.set(key(track), row);
       }
       if (!snapshot.tracks.length) {
         const empty = document.createElement('li');
         empty.className = 'download-empty';
-        empty.textContent = 'No tracks yet. Connect a source and sync its library.';
+        empty.textContent = snapshot.library_count ? 'All tracks are already downloaded.' : 'No tracks yet. Connect a source and sync its library.';
         list.append(empty);
       }
     } catch (_) {
@@ -129,44 +152,11 @@
 
   stream.onmessage = event => {
     try {
-      state = JSON.parse(event.data);
-      if (snapshot && state.title) {
-        const track = snapshot.tracks.find(item => key(item) === key(state));
-        if (track) Object.assign(track, {stage: state.stage, message: state.message, bytes: state.bytes, total_bytes: state.total_bytes});
-      }
-      systemStatus();
-      control();
-      summary();
-      if (state.stage === 'queued' && !state.title) load();
-      if (state.title && document.getElementById('download-tracks')) {
-        const row = rows.get(key(state));
-        if (row) status(row, state);
-        else load();
-      }
-      if (state.stage === 'done') {
-        document.dispatchEvent(new CustomEvent('download:done', {detail: state}));
-        for (const row of document.querySelectorAll('.library .tracks li[data-source]')) {
-          if (row.dataset.source === state.source && row.dataset.artist === state.artist && row.dataset.title === state.title) {
-            row.dataset.playable = 'true';
-            const button = row.querySelector('.play-track');
-            if (button) button.disabled = false;
-            const link = row.querySelector('.download-track');
-            if (link) { link.classList.remove('unavailable'); link.removeAttribute('aria-disabled'); link.removeAttribute('tabindex'); }
-          }
-        }
-      }
-      if (state.stage === 'missing') {
-        document.dispatchEvent(new CustomEvent('download:missing', {detail: state}));
-        for (const row of document.querySelectorAll('.library .tracks li[data-source]')) {
-          if (row.dataset.source === state.source && row.dataset.artist === state.artist && row.dataset.title === state.title) {
-            row.dataset.playable = 'false';
-            const button = row.querySelector('.play-track');
-            if (button) button.disabled = true;
-            const link = row.querySelector('.download-track');
-            if (link) { link.classList.add('unavailable'); link.setAttribute('aria-disabled', 'true'); link.tabIndex = -1; }
-          }
-        }
-      }
+      const track = JSON.parse(event.data);
+      missing.delete(key(track));
+      availability(track, true);
+      document.dispatchEvent(new CustomEvent('download:done', {detail: track}));
+      load();
     } catch (_) { /* wait for next event */ }
   };
   stream.onerror = () => {
