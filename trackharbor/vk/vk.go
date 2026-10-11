@@ -24,6 +24,7 @@ type Track struct {
 	Artist  string `json:"artist"`
 	Title   string `json:"title"`
 	URL     string `json:"url"`
+	Date    int64  `json:"date"` // VK upload timestamp; may be absent.
 }
 
 type Client struct {

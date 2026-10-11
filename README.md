@@ -32,10 +32,11 @@ redirect URL. Each source has its own Sync button and track list. Sync runs in
 the background and does not erase the previous library on failure. Playback and
 downloads in the web app are not implemented yet; the CLI still supports downloading.
 
-Spotify sync saves the date supplied for each liked track. VK does not provide
-a reliable library-add date, so each new VK track gets its first sync time;
-later syncs retain that date. Server track lists show the newest additions first.
-Existing VK tracks receive an initial date at their next sync.
+Spotify sync saves the date supplied for each liked track. VK sync uses the
+optional `date` field (VK describes it as the audio upload date, not necessarily
+the date added to My Music). If `date` is missing, it retains the previously
+stored date or uses the first sync time for a new track. Server track lists
+show the newest dates first.
 
 The server keeps `config.json` and `library.db` beside its executable by default.
 For local development, `make run-server` builds the server in the Git-ignored

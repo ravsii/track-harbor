@@ -117,8 +117,11 @@ func (r *VKRepository) ReplaceAll(songs []VKSong) (int, error) {
 	}
 	saved := 0
 	for _, song := range songs {
-		if previous, ok := addedAt[song.Artists+"\x00"+song.Title]; ok {
-			song.CreatedAt = previous
+		if song.CreatedAt.IsZero() {
+			song.CreatedAt = addedAt[song.Artists+"\x00"+song.Title]
+			if song.CreatedAt.IsZero() {
+				song.CreatedAt = time.Now()
+			}
 		}
 		result, err := tx.Exec(`INSERT INTO vk_songs (artists, title, created_at, owner_id, audio_id, audio_url)
 			VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (artists, title) DO NOTHING`, song.Artists, song.Title, song.CreatedAt, song.OwnerID, song.AudioID, song.URL)

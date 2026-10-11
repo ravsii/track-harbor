@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -160,8 +161,11 @@ func (s *Store) Replace(source string, tracks []Track) (int, error) {
 	}
 	count := 0
 	for _, track := range tracks {
-		if addedAt, ok := previous[track.Artist+"\x00"+track.Title]; ok && (source == "vk" || track.AddedAt == 0) {
+		if addedAt, ok := previous[track.Artist+"\x00"+track.Title]; ok && track.AddedAt == 0 {
 			track.AddedAt = addedAt
+		}
+		if source == "vk" && track.AddedAt == 0 {
+			track.AddedAt = time.Now().Unix()
 		}
 		result, err := tx.Exec(`INSERT OR IGNORE INTO tracks(source, artist, title, added_at) VALUES(?, ?, ?, ?)`, source, track.Artist, track.Title, track.AddedAt)
 		if err != nil {

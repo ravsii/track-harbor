@@ -126,8 +126,12 @@ var vkSyncCmd = &cobra.Command{
 			if err != nil {
 				return fmt.Errorf("encode VK artist: %w", err)
 			}
+			var addedAt time.Time
+			if track.Date > 0 {
+				addedAt = time.Unix(track.Date, 0)
+			}
 			songs = append(songs, repository.VKSong{
-				Song:    repository.Song{Artists: string(artists), Title: title, CreatedAt: time.Now()},
+				Song:    repository.Song{Artists: string(artists), Title: title, CreatedAt: addedAt},
 				OwnerID: track.OwnerID, AudioID: track.ID, URL: track.URL,
 			})
 		}
