@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
@@ -38,7 +39,8 @@ func DatabasePath() (string, error) {
 	return filepath.Join(dir, "vault.db"), nil
 }
 
-// Load creates the default configuration only when no user file exists.
+// Load creates the configuration and persists missing default fields without
+// replacing explicitly configured values.
 func Load() (Config, error) {
 	dir, err := Directory()
 	if err != nil {
@@ -58,12 +60,15 @@ func Load() (Config, error) {
 	} else if !errors.Is(err, os.ErrExist) {
 		return Config{}, fmt.Errorf("create %s: %w", path, err)
 	}
-	f, err = os.Open(path)
+	original, err := os.ReadFile(path)
 	if err != nil {
 		return Config{}, err
 	}
-	defer f.Close()
-	decoder := yaml.NewDecoder(f)
+	data, changed, err := completeDefaults(original)
+	if err != nil {
+		return Config{}, fmt.Errorf("read %s: %w", path, err)
+	}
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
 	decoder.KnownFields(true)
 	var cfg Config
 	if err := decoder.Decode(&cfg); err != nil {
@@ -140,5 +145,10 @@ func Load() (Config, error) {
 		cfg.DownloadDir = filepath.Join(dir, cfg.DownloadDir)
 	}
 	cfg.DownloadDir = filepath.Clean(cfg.DownloadDir)
+	if changed {
+		if err := saveCompletedConfig(path, original, data); err != nil {
+			return Config{}, err
+		}
+	}
 	return cfg, nil
 }
