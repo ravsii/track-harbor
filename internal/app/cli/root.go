@@ -8,7 +8,7 @@ import (
 
 // Without a subcommand Cobra displays help; it does not start a download.
 var rootCmd = &cobra.Command{
-	Use:   "meshvault",
+	Use:   "trackharbor",
 	Short: "Sync Spotify playlists and download music from YouTube",
 }
 

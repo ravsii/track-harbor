@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"meshvault/internal/config"
-	"meshvault/internal/download"
+	"trackharbor/internal/config"
+	"trackharbor/internal/download"
 )
 
 // Only a successfully completed yt-dlp output is published in the source cache.

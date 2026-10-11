@@ -1,6 +1,6 @@
 package main
 
-import "meshvault/internal/app/cli"
+import "trackharbor/internal/app/cli"
 
 func main() {
 	cli.Execute()

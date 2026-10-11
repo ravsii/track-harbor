@@ -1,6 +1,6 @@
-# Meshvault
+# TrackHarbor
 
-Sync Spotify tracks to SQLite and download music to `~/.meshvault/downloaded`.
+Sync Spotify tracks to SQLite and download music to `~/.trackharbor/downloaded`.
 
 ```sh
 go run ./cmd/cli spotify auth
@@ -26,7 +26,7 @@ Spotify commands are available only under the `spotify` group:
   run `spotify auth` separately.
 
 The old top-level `auth` and `sync` commands have been removed. Existing tokens,
-tracks, and download history in `~/.meshvault/vault.db` are reused; no additional
+tracks, and download history in `~/.trackharbor/vault.db` are reused; no additional
 database migration is required. No user-specific playlist ID is hardcoded.
 
 `spotify sync` diagnostics are written to `logs/spotify-sync.jsonl`, relative to
@@ -46,15 +46,15 @@ response must have `format: liked-songs`; the collection URI is never passed to
 
 ## Database and configuration
 
-The database is stored at `~/.meshvault/vault.db`, and settings are stored at
-`~/.meshvault/config.yaml`. The home directory is resolved through the operating
+The database is stored at `~/.trackharbor/vault.db`, and settings are stored at
+`~/.trackharbor/config.yaml`. The home directory is resolved through the operating
 system, independently of the current working directory. The directory and
 configuration are created automatically on the first operational run:
 
 ```yaml
 version: 1
 
-download_dir: ~/.meshvault/downloaded
+download_dir: ~/.trackharbor/downloaded
 personal_proxy: []
 strategy:
   - direct
@@ -81,12 +81,12 @@ temporary file with `0600` permissions.
 Override the download directory with `download_dir`:
 
 ```yaml
-download_dir: ~/Music/MeshVault
+download_dir: ~/Music/TrackHarbor
 ```
 
-If this setting is missing or empty, `~/.meshvault/downloaded` is used.
+If this setting is missing or empty, `~/.trackharbor/downloaded` is used.
 Absolute paths and `~/…` are supported. Relative paths are resolved against
-`~/.meshvault`, not the working directory. Before processing tracks, the output
+`~/.trackharbor`, not the working directory. Before processing tracks, the output
 directory and its parents are created automatically. The path must be a writable
 directory; otherwise, the command exits with a clear error before making network
 requests. Old files in `tmp_music` are not moved automatically. To keep using
@@ -95,12 +95,12 @@ them, set `download_dir` to the absolute path of the old directory.
 ## Connection strategies
 
 `strategy` is a non-empty priority list applied separately to each search and
-download. For example, in `~/.meshvault/config.yaml`:
+download. For example, in `~/.trackharbor/config.yaml`:
 
 ```yaml
 version: 1
 
-download_dir: ~/.meshvault/downloaded
+download_dir: ~/.trackharbor/downloaded
 personal_proxy:
   - "http://user:password@proxy.example.com:8080"
   - "socks5://127.0.0.1:1080"
@@ -153,7 +153,7 @@ go run ./cmd/cli proxy test
 ```
 
 Checks all personal addresses in `personal_proxy`, regardless of the enabled
-strategies, followed by unexpired public addresses in `~/.meshvault/vault.db`.
+strategies, followed by unexpired public addresses in `~/.trackharbor/vault.db`.
 Checks use HTTPS requests to YouTube with TLS verification: a five-second
 timeout for personal proxies, a one-second timeout for public proxies, and up
 to 1000 concurrent checks. Availability and check duration are displayed for
@@ -171,7 +171,7 @@ is loaded. This command does not download tracks and does not require
 ## YouTube dependencies
 
 **Install `yt-dlp` and `ffmpeg` separately and make them available in `PATH`.**
-Meshvault does not install them automatically. Check your installation with:
+TrackHarbor does not install them automatically. Check your installation with:
 
 ```sh
 yt-dlp --version
@@ -199,7 +199,7 @@ is ignored so it cannot change the format or output path.
 
 The download display shows percentage, speed, and remaining time, followed by
 the `Converting to MP3` status. The completed MP3 is copied to
-`~/.meshvault/downloaded/Artist — Track title [video-id].mp3`, or the configured
+`~/.trackharbor/downloaded/Artist — Track title [video-id].mp3`, or the configured
 `download_dir`, with size verification and SHA-256 recording. Artist and title
 are taken from the YouTube search result; the artist may be the channel name.
 Unsafe filename characters are replaced, long names are shortened, and the
@@ -248,7 +248,7 @@ the hash is registered for the new path. Untracked old files are left untouched.
 - The terminal displays HTTP 429 as a search or download pause with a countdown
   to the automatic retry.
 - Download history and query-to-file mappings are stored in
-  `~/.meshvault/vault.db`, independently of Spotify synchronization.
+  `~/.trackharbor/vault.db`, independently of Spotify synchronization.
 
 Download only material for which you have the necessary rights.
 
@@ -259,7 +259,7 @@ real search and download of the Rick Astley test video (`dQw4w9WgXcQ`), with MP3
 verification using `ffprobe`:
 
 ```sh
-MESHVAULT_YOUTUBE_LIVE=1 go test ./internal/download/youtube -run TestLiveYouTubeSearchAndDownload -v -count=1
+TRACKHARBOR_YOUTUBE_LIVE=1 go test ./internal/download/youtube -run TestLiveYouTubeSearchAndDownload -v -count=1
 ```
 
 This check also requires `ffprobe`, which is distributed with FFmpeg.
@@ -271,7 +271,7 @@ If `strategy` includes `random_proxy`, `download` prepares the public pool
 before processing pending tracks. This step is not used for `direct` or
 `personal_proxy`:
 
-1. Read unexpired `verified_proxies` entries from `~/.meshvault/vault.db` if
+1. Read unexpired `verified_proxies` entries from `~/.trackharbor/vault.db` if
    the cache was created by a complete check using the current sources and
    timeout. Old ProxyScrape-only caches or caches created with an eight-second
    timeout are refreshed on the first run. A fresh, complete cache skips source
@@ -339,5 +339,5 @@ To perform a live API and proxy check using a temporary SQLite database rather
 than the main library:
 
 ```sh
-MESHVAULT_PROXY_LIVE=1 go test ./internal/proxy -run TestLiveProxyScrapePreparation -v -count=1
+TRACKHARBOR_PROXY_LIVE=1 go test ./internal/proxy -run TestLiveProxyScrapePreparation -v -count=1
 ```

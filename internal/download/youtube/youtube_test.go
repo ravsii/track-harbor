@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"meshvault/internal/download"
+	"trackharbor/internal/download"
 )
 
 func fakeTools(t *testing.T, script string) string {

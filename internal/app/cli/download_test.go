@@ -36,7 +36,7 @@ func TestProviderFlagIsRemoved(t *testing.T) {
 }
 
 func TestBareCommandShowsHelpWithoutSideEffects(t *testing.T) {
-	if os.Getenv("MESHVAULT_TEST_BARE_COMMAND") == "1" {
+	if os.Getenv("TRACKHARBOR_TEST_BARE_COMMAND") == "1" {
 		rootCmd.SetArgs([]string{})
 		if err := rootCmd.Execute(); err != nil {
 			t.Fatal(err)
@@ -46,7 +46,7 @@ func TestBareCommandShowsHelpWithoutSideEffects(t *testing.T) {
 	dir := t.TempDir()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestBareCommandShowsHelpWithoutSideEffects$")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "MESHVAULT_TEST_BARE_COMMAND=1")
+	cmd.Env = append(os.Environ(), "TRACKHARBOR_TEST_BARE_COMMAND=1")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("bare command failed: %v\n%s", err, output)
@@ -93,7 +93,7 @@ func TestDownloadCommandHandlesEmptyDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{path, "Tracks in database: 0", "No tracks in the database", "meshvault sync"} {
+	for _, want := range []string{path, "Tracks in database: 0", "No tracks in the database", "trackharbor sync"} {
 		if !strings.Contains(output.String(), want) {
 			t.Errorf("empty database output missing %q: %s", want, output.String())
 		}
@@ -108,7 +108,7 @@ func TestDownloadCommandHandlesEmptyDatabase(t *testing.T) {
 }
 
 func TestDownloadLogsStartupFailure(t *testing.T) {
-	if os.Getenv("MESHVAULT_TEST_STARTUP_FAILURE") == "1" {
+	if os.Getenv("TRACKHARBOR_TEST_STARTUP_FAILURE") == "1" {
 		cmd, _, err := rootCmd.Find([]string{"download"})
 		if err != nil {
 			t.Fatal(err)
@@ -119,7 +119,7 @@ func TestDownloadLogsStartupFailure(t *testing.T) {
 	dir := t.TempDir()
 	cmd := exec.Command(os.Args[0], "-test.run=^TestDownloadLogsStartupFailure$")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "MESHVAULT_TEST_STARTUP_FAILURE=1")
+	cmd.Env = append(os.Environ(), "TRACKHARBOR_TEST_STARTUP_FAILURE=1")
 	output, err := cmd.CombinedOutput()
 	if err == nil {
 		t.Fatalf("missing database schema did not fail: %s", output)

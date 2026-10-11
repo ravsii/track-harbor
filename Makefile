@@ -5,7 +5,7 @@ GOOSE=goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH)
 
 build: clean
 	mkdir -p bin
-	go build -o ./bin/meshvault ./cmd/cli/
+	go build -o ./bin/trackharbor ./cmd/cli/
 
 clean:
 	rm -rf ./bin/
@@ -27,4 +27,3 @@ migrate-dry-run:
 	@echo ""
 
 .PHONY: build clean run migrate-up migrate-down migrate-status migrate-up-one migrate-reset migrate-dry-run
-

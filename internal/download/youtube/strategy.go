@@ -7,7 +7,7 @@ import (
 	"net"
 	"strings"
 
-	"meshvault/internal/download"
+	"trackharbor/internal/download"
 )
 
 // DownloadStrategy controls the connection used by a search or audio request.

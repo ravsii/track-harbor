@@ -12,7 +12,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
-	"meshvault/internal/repository"
+	"trackharbor/internal/repository"
 )
 
 // Only the external music provider is replaced; SQLite, hashes and files are real.

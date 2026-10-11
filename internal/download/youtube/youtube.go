@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"meshvault/internal/download"
+	"trackharbor/internal/download"
 )
 
 var videoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
@@ -227,7 +227,7 @@ func (p *Provider) DownloadWithProgress(track download.Track, onProxy func(strin
 }
 
 func (p *Provider) convertSource(ctx context.Context, source string, onProgress func(download.DownloadProgress)) (download.DownloadResponse, error) {
-	dir, err := os.MkdirTemp("", "meshvault-youtube-*")
+	dir, err := os.MkdirTemp("", "trackharbor-youtube-*")
 	if err != nil {
 		return download.DownloadResponse{}, err
 	}

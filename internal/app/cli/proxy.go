@@ -11,11 +11,11 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"meshvault/internal/config"
-	"meshvault/internal/db"
-	"meshvault/internal/download"
-	"meshvault/internal/proxy"
-	"meshvault/internal/repository"
+	"trackharbor/internal/config"
+	"trackharbor/internal/db"
+	"trackharbor/internal/download"
+	"trackharbor/internal/proxy"
+	"trackharbor/internal/repository"
 )
 
 var proxyCmd = &cobra.Command{

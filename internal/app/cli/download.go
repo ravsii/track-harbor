@@ -15,12 +15,12 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/spf13/cobra"
-	"meshvault/internal/config"
-	"meshvault/internal/db"
-	"meshvault/internal/download"
-	"meshvault/internal/download/youtube"
-	"meshvault/internal/proxy"
-	"meshvault/internal/repository"
+	"trackharbor/internal/config"
+	"trackharbor/internal/db"
+	"trackharbor/internal/download"
+	"trackharbor/internal/download/youtube"
+	"trackharbor/internal/proxy"
+	"trackharbor/internal/repository"
 )
 
 const (
@@ -30,7 +30,7 @@ const (
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Download all tracks from the database",
-	Long:  "Download all tracks from ~/.meshvault/vault.db using YouTube. Set download_dir in ~/.meshvault/config.yaml to choose the output directory (default: ~/.meshvault/downloaded). The strategy list controls connection priority. Use --workers to set concurrency (default: 50), capped by the available proxy pool size when using proxies.",
+	Long:  "Download all tracks from ~/.trackharbor/vault.db using YouTube. Set download_dir in ~/.trackharbor/config.yaml to choose the output directory (default: ~/.trackharbor/downloaded). The strategy list controls connection priority. Use --workers to set concurrency (default: 50), capped by the available proxy pool size when using proxies.",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if _, err := downloadWorkerLimit(cmd); err != nil {
 			return err
@@ -67,7 +67,7 @@ var downloadCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 		if allocsEnabled, _ := cmd.Flags().GetBool("allocs"); allocsEnabled {
-			allocF, err := os.Create("meshvault_allocs.pprof")
+			allocF, err := os.Create("trackharbor_allocs.pprof")
 			if err != nil {
 				log.Printf("create allocs profile: %v", err)
 			} else {
@@ -75,22 +75,22 @@ var downloadCmd = &cobra.Command{
 				if err := pprof.Lookup("allocs").WriteTo(allocF, 0); err != nil {
 					log.Printf("write allocs profile: %v", err)
 				} else {
-					log.Println("pprof: allocs profile saved to meshvault_allocs.pprof")
+					log.Println("pprof: allocs profile saved to trackharbor_allocs.pprof")
 				}
 			}
 		}
 
 		if pprofEnabled, _ := cmd.Flags().GetBool("pprof"); pprofEnabled {
-			f, err := os.Create("meshvault_cpu.pprof")
+			f, err := os.Create("trackharbor_cpu.pprof")
 			if err != nil {
 				fatal(fmt.Errorf("create cpu profile: %w", err))
 			}
 			defer func() {
 				pprof.StopCPUProfile()
 				f.Close()
-				log.Println("pprof: cpu profile saved to meshvault_cpu.pprof")
+				log.Println("pprof: cpu profile saved to trackharbor_cpu.pprof")
 
-				memF, err := os.Create("meshvault_mem.pprof")
+				memF, err := os.Create("trackharbor_mem.pprof")
 				if err != nil {
 					log.Printf("create mem profile: %v", err)
 					return
@@ -100,7 +100,7 @@ var downloadCmd = &cobra.Command{
 					log.Printf("write mem profile: %v", err)
 					return
 				}
-				log.Println("pprof: mem profile saved to meshvault_mem.pprof")
+				log.Println("pprof: mem profile saved to trackharbor_mem.pprof")
 			}()
 			pprof.StartCPUProfile(f)
 		}
@@ -126,7 +126,7 @@ var downloadCmd = &cobra.Command{
 		fmt.Fprintln(out, "Log: logs/download.jsonl")
 		logger.Info("database_loaded", zap.String("database", databasePath), zap.Int("total", len(songList)))
 		if len(songList) == 0 {
-			fmt.Fprintln(out, "No tracks in the database. Run meshvault spotify sync first.")
+			fmt.Fprintln(out, "No tracks in the database. Run trackharbor spotify sync first.")
 			return
 		}
 
@@ -293,8 +293,8 @@ func buildQueriesLogged(songs []repository.Song, logger *zap.Logger) []string {
 
 func init() {
 	downloadCmd.Flags().Int("workers", defaultDownloadWorkers, "Concurrent job limit (>0); capped by the available proxy pool size")
-	downloadCmd.Flags().Bool("pprof", false, "Save cpu+mem profile to meshvault_{cpu,mem}.pprof")
-	downloadCmd.Flags().Bool("allocs", false, "Save allocs profile to meshvault_allocs.pprof")
+	downloadCmd.Flags().Bool("pprof", false, "Save cpu+mem profile to trackharbor_{cpu,mem}.pprof")
+	downloadCmd.Flags().Bool("allocs", false, "Save allocs profile to trackharbor_allocs.pprof")
 	rootCmd.AddCommand(downloadCmd)
 }
 

@@ -11,10 +11,10 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"meshvault/internal/db"
-	"meshvault/internal/download"
-	"meshvault/internal/repository"
-	"meshvault/internal/source/spotify"
+	"trackharbor/internal/db"
+	"trackharbor/internal/download"
+	"trackharbor/internal/repository"
+	"trackharbor/internal/source/spotify"
 )
 
 var spotifyCmd = &cobra.Command{
@@ -30,7 +30,7 @@ func init() {
 var authCmd = &cobra.Command{
 	Use:          "auth",
 	Short:        "Save Spotify Web Player request tokens",
-	Long:         "Paste authorization and client-token headers from Spotify Web Player. Existing tokens are replaced in ~/.meshvault/vault.db; other headers and cookies are not stored.",
+	Long:         "Paste authorization and client-token headers from Spotify Web Player. Existing tokens are replaced in ~/.trackharbor/vault.db; other headers and cookies are not stored.",
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -50,7 +50,7 @@ var authCmd = &cobra.Command{
 		if err := repo.Save(*headers); err != nil {
 			return err
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "Spotify tokens saved. Run meshvault spotify sync to verify them and import Liked Songs.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Spotify tokens saved. Run trackharbor spotify sync to verify them and import Liked Songs.")
 		return nil
 	},
 }
@@ -79,7 +79,7 @@ var syncCmd = &cobra.Command{
 				fmt.Fprintf(cmd.ErrOrStderr(), "Spotify sync log error: %v\n", err)
 			}
 		}()
-		fmt.Fprintln(out, "[1/4] Checking saved headers in ~/.meshvault/vault.db…")
+		fmt.Fprintln(out, "[1/4] Checking saved headers in ~/.trackharbor/vault.db…")
 		database, err := db.New()
 		if err != nil {
 			return fmt.Errorf("[1/4] open database: %w", err)
@@ -95,7 +95,7 @@ var syncCmd = &cobra.Command{
 		}
 
 		if headers == nil {
-			return fmt.Errorf("no saved Spotify tokens; run meshvault spotify auth first")
+			return fmt.Errorf("no saved Spotify tokens; run trackharbor spotify auth first")
 		}
 		logger.Info("spotify_saved_headers_loaded", zap.Bool("authorization_present", headers.Authorization != ""), zap.Bool("client_token_present", headers.ClientToken != ""))
 		fmt.Fprintln(out, "[2/4] Discovering Liked Songs in your Spotify library…")
@@ -179,7 +179,7 @@ var syncCmd = &cobra.Command{
 			})
 		}
 
-		fmt.Fprintln(out, "[3/4] Replacing the track list in ~/.meshvault/vault.db…")
+			fmt.Fprintln(out, "[3/4] Replacing the track list in ~/.trackharbor/vault.db…")
 		logger.Info("spotify_tracks_prepared", zap.Int("tracks", len(ss)), zap.Int("unavailable", unavailable))
 		repo := repository.NewSongRepository(database)
 		saved, err := repo.ReplaceAll(ss)

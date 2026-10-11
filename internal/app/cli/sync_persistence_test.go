@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
-	"meshvault/internal/source/spotify"
+	"trackharbor/internal/source/spotify"
 )
 
 func syncResponse(t *testing.T, response spotify.PlaylistResponse) *http.Response {

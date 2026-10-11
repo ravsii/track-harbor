@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"meshvault/internal/repository"
+	"trackharbor/internal/repository"
 )
 
 func TestEffectiveDownloadWorkersNeverExceedsProxyPool(t *testing.T) {
@@ -125,7 +125,7 @@ func TestDownloadWorkersFlagDefaultsTo50AndAcceptsOverride(t *testing.T) {
 }
 
 func TestInvalidDownloadWorkersHaveNoSideEffects(t *testing.T) {
-	if value := os.Getenv("MESHVAULT_TEST_INVALID_WORKERS"); value != "" {
+	if value := os.Getenv("TRACKHARBOR_TEST_INVALID_WORKERS"); value != "" {
 		rootCmd.SetArgs([]string{"download", "--workers", value})
 		err := rootCmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "workers") {
@@ -138,7 +138,7 @@ func TestInvalidDownloadWorkersHaveNoSideEffects(t *testing.T) {
 			dir := t.TempDir()
 			cmd := exec.Command(os.Args[0], "-test.run=^TestInvalidDownloadWorkersHaveNoSideEffects$")
 			cmd.Dir = dir
-			cmd.Env = append(os.Environ(), "MESHVAULT_TEST_INVALID_WORKERS="+value)
+			cmd.Env = append(os.Environ(), "TRACKHARBOR_TEST_INVALID_WORKERS="+value)
 			if output, err := cmd.CombinedOutput(); err != nil {
 				t.Fatalf("validation failed: %v\n%s", err, output)
 			}

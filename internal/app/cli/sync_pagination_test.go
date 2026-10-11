@@ -13,7 +13,7 @@ import (
 	"testing"
 
 	"github.com/klauspost/compress/zstd"
-	"meshvault/internal/source/spotify"
+	"trackharbor/internal/source/spotify"
 )
 
 func playlistPageResponse(t *testing.T, offset, count, total int) *http.Response {

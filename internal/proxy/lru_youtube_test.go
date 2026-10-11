@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"meshvault/internal/download"
-	"meshvault/internal/download/youtube"
+	"trackharbor/internal/download"
+	"trackharbor/internal/download/youtube"
 )
 
 func TestYouTube429MakesNextRequestUseAnotherLRUProxy(t *testing.T) {

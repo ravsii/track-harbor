@@ -8,7 +8,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
-	"meshvault/internal/config"
+	"trackharbor/internal/config"
 )
 
 func New() (*sqlx.DB, error) {

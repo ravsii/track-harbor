@@ -9,13 +9,13 @@ import (
 	"strings"
 	"testing"
 
-	"meshvault/internal/download"
+	"trackharbor/internal/download"
 )
 
 // Opt-in: this invokes real tools, accesses YouTube and downloads audio.
 func TestLiveYouTubeSearchAndDownload(t *testing.T) {
-	if os.Getenv("MESHVAULT_YOUTUBE_LIVE") != "1" {
-		t.Skip("set MESHVAULT_YOUTUBE_LIVE=1 to download the test video")
+	if os.Getenv("TRACKHARBOR_YOUTUBE_LIVE") != "1" {
+		t.Skip("set TRACKHARBOR_YOUTUBE_LIVE=1 to download the test video")
 	}
 	p, err := NewProvider()
 	if err != nil {

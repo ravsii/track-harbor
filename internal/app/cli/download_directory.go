@@ -17,7 +17,7 @@ func prepareDownloadDirectory(path string) error {
 		return fmt.Errorf("download path %q is not a directory", path)
 	}
 	// Actually attempt a write: permission bits alone are unreliable across OSes.
-	f, err := os.CreateTemp(path, ".meshvault-write-check-*")
+	f, err := os.CreateTemp(path, ".trackharbor-write-check-*")
 	if err != nil {
 		return fmt.Errorf("download directory %q is not writable: %w", path, err)
 	}

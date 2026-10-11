@@ -8,8 +8,8 @@ import (
 )
 
 func TestLiveProxyScrapePreparation(t *testing.T) {
-	if os.Getenv("MESHVAULT_PROXY_LIVE") != "1" {
-		t.Skip("set MESHVAULT_PROXY_LIVE=1 for real ProxyScrape/YouTube probes")
+	if os.Getenv("TRACKHARBOR_PROXY_LIVE") != "1" {
+		t.Skip("set TRACKHARBOR_PROXY_LIVE=1 for real ProxyScrape/YouTube probes")
 	}
 	_, store := proxyDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)

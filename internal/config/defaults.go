@@ -158,7 +158,7 @@ func saveCompletedConfig(path string, original, data []byte) error {
 		return err
 	}
 	if !bytes.Equal(current, original) {
-		// Another MeshVault process may have completed the same file already.
+		// Another TrackHarbor process may have completed the same file already.
 		if bytes.Equal(current, data) {
 			return nil
 		}

@@ -14,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const defaultYAML = "version: 1\n\ndownload_dir: ~/.meshvault/downloaded\npersonal_proxy: []\nstrategy:\n  - direct\n"
+const defaultYAML = "version: 1\n\ndownload_dir: ~/.trackharbor/downloaded\npersonal_proxy: []\nstrategy:\n  - direct\n"
 
 type Config struct {
 	Version       int      `yaml:"version"`
@@ -28,7 +28,7 @@ func Directory() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve home directory: %w", err)
 	}
-	return filepath.Join(home, ".meshvault"), nil
+	return filepath.Join(home, ".trackharbor"), nil
 }
 
 func DatabasePath() (string, error) {

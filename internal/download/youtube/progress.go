@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"meshvault/internal/download"
+	"trackharbor/internal/download"
 )
 
-const progressPrefix = "meshvault-progress:"
-const progressTemplate = `download:meshvault-progress:{"downloaded":%(progress.downloaded_bytes|0)s,"total":%(progress.total_bytes,progress.total_bytes_estimate|0)s,"speed":%(progress.speed|0)s,"eta":%(progress.eta|0)s,"status":%(progress.status)j}`
+const progressPrefix = "trackharbor-progress:"
+const progressTemplate = `download:trackharbor-progress:{"downloaded":%(progress.downloaded_bytes|0)s,"total":%(progress.total_bytes,progress.total_bytes_estimate|0)s,"speed":%(progress.speed|0)s,"eta":%(progress.eta|0)s,"status":%(progress.status)j}`
 
 // Consume subprocess stdout incrementally without exposing URLs or raw output.
 // exec.Cmd serializes calls to this writer and joins them before Run returns.
