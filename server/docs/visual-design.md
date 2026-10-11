@@ -54,6 +54,17 @@ The interface must offer **Light**, **Dark**, and **System** theme options.
 System follows OS settings, including changes while the page is open.
 Explicit choices are saved in the browser.
 
+## Icons
+
+Use [Font Awesome Free](https://fontawesome.com/) icons throughout the server
+web interface instead of Unicode symbols or emoji for navigation, playback,
+downloads, and status actions. Keep the selected SVG icons self-hosted so the
+local server does not depend on an external CDN. The icons are licensed under
+CC BY 4.0; retain the attribution and license in
+`server/docs/fontawesome-license.txt`. Decorative icons must be hidden from
+assistive technology; icon-only buttons must have descriptive accessible
+labels. Icons inherit the surrounding text color and must work in both themes.
+
 Every existing and future visual element must work in both themes: text,
 backgrounds, borders, buttons, forms, hover and focus states, errors,
 indicators, and the player. Use semantic theme color variables rather than
