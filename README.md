@@ -1,6 +1,6 @@
 # Meshvault
 
-Синхронизация списка треков Spotify в SQLite и скачивание музыки в `~/.meshvault/downloaded`.
+Sync Spotify tracks to SQLite and download music to `~/.meshvault/downloaded`.
 
 ```sh
 go run ./cmd/cli spotify auth
@@ -8,314 +8,335 @@ go run ./cmd/cli spotify sync
 go run ./cmd/cli download
 ```
 
-Источник скачивания — всегда YouTube, выбора провайдера нет.
-Без подкоманды CLI показывает справку и не запускает скачивание.
+Downloads always use YouTube; there is no provider selection.
+Running the CLI without a subcommand displays help and does not start downloads.
 
 ## Spotify
 
-Команды Spotify находятся только в группе `spotify`:
+Spotify commands are available only under the `spotify` group:
 
-- `spotify auth` просит вставить заголовки `authorization` и `client-token`
-  из Spotify Web Player и заменяет сохранённые токены в БД. Завершите ввод
-  пустой строкой. Cookies и прочие заголовки не сохраняются. Проверка доступа
-  выполняется при следующем `spotify sync`.
-- `spotify sync` использует сохранённые токены, получает страницы библиотеки
-  и ищет Liked Songs по `format: liked-songs` или URI
-  `spotify:collection:tracks`, независимо от языка названия. Затем получает
-  содержимое коллекции постранично и атомарно заменяет список треков.
-  При отсутствии или истечении токенов выполните `spotify auth` отдельно.
+- `spotify auth` prompts for the `authorization` and `client-token` headers
+  from Spotify Web Player and replaces the saved tokens in the database.
+  Finish input with a blank line. Cookies and other headers are not stored.
+  Access is checked during the next `spotify sync`.
+- `spotify sync` uses saved tokens, fetches library pages, and identifies
+  Liked Songs by `format: liked-songs` or the `spotify:collection:tracks` URI,
+  regardless of the display language. It then fetches all collection pages
+  and atomically replaces the track list. If tokens are missing or expired,
+  run `spotify auth` separately.
 
-Старые корневые команды `auth` и `sync` удалены. Существующие токены, треки
-и история скачиваний в `~/.meshvault/vault.db` продолжают использоваться;
-дополнительная миграция БД не требуется. Пользовательский playlist ID больше
-не зашит в коде.
+The old top-level `auth` and `sync` commands have been removed. Existing tokens,
+tracks, and download history in `~/.meshvault/vault.db` are reused; no additional
+database migration is required. No user-specific playlist ID is hardcoded.
 
-Диагностика `spotify sync` записывается в `logs/spotify-sync.jsonl` относительно
-рабочей папки. Каждый запуск имеет `run_id`; журнал содержит операции API,
-URI, параметры страниц, HTTP-статусы, найденные признаки Liked Songs и
-очищенные сообщения ошибок API. Токены, cookies, полные запросы и ответы
-не записываются. Файл создаётся с правами `0600` и дополняется при повторных
-запусках.
+`spotify sync` diagnostics are written to `logs/spotify-sync.jsonl`, relative to
+the working directory. Each run has a `run_id`. The log includes API operations,
+URIs, pagination parameters, HTTP statuses, Liked Songs identification details,
+and sanitized API error messages. Tokens, cookies, and full requests or responses
+are not logged. The file is created with `0600` permissions and appended to on
+subsequent runs.
 
-Используется внутренний API веб-плеера: он может меняться. Библиотека запрашивается
-с флагом `LIKED_SONGS`. Найденный URI `spotify:collection:tracks` переводится
-во встроенный URI Liked Songs `spotify:playlist:37i9dQZF1F5p3rmiWPIYgZ`,
-который Spotify сам задаёт в публичном JS веб-плеера. Это не извлечённый из
-библиотеки пользовательский ID. Ответ обязательно проверяется по
-`format: liked-songs`; URI коллекции не передаётся в `fetchPlaylist`.
-При ошибке прежний список треков сохраняется.
+The application uses the web player's internal API, which may change. The
+library is requested with the `LIKED_SONGS` feature flag. The discovered
+`spotify:collection:tracks` URI is mapped to the built-in Liked Songs URI,
+`spotify:playlist:37i9dQZF1F5p3rmiWPIYgZ`, defined in Spotify's public web-player
+JavaScript. This is not a user-specific ID extracted from the library. The
+response must have `format: liked-songs`; the collection URI is never passed to
+`fetchPlaylist`. If synchronization fails, the previous track list is preserved.
 
-## База данных и конфигурация
+## Database and configuration
 
-База находится в `~/.meshvault/vault.db`, настройки — в
-`~/.meshvault/config.yaml`. Домашняя папка определяется средствами ОС,
-независимо от текущей рабочей директории. При первом `spotify sync` или `download`
-директория и конфигурация создаются автоматически:
+The database is stored at `~/.meshvault/vault.db`, and settings are stored at
+`~/.meshvault/config.yaml`. The home directory is resolved through the operating
+system, independently of the current working directory. The directory and
+configuration are created automatically on the first operational run:
 
 ```yaml
 version: 1
+
+download_dir: ~/.meshvault/downloaded
+personal_proxy: []
 strategy:
   - direct
-personal_proxy: []
-download_dir: ~/.meshvault/downloaded
 ```
 
-При отсутствии новой БД программа переносит содержимое `meshtune.db` из текущей
-папки, включая историю скачиваний, заголовки Spotify и кеш прокси. Исходная БД
-остаётся как резервная копия; существующая `vault.db` никогда не заменяется.
-Для такого переноса первый запуск выполните из папки со старой БД.
-На системах с POSIX-правами директория создаётся с правами `0700`, БД и config — `0600`.
+If the new database does not exist, the application copies the contents of
+`meshtune.db` from the working directory, including download history, Spotify
+headers, and the proxy cache. The original database is retained as a backup;
+an existing `vault.db` is never replaced. To migrate, run the application for
+the first time from the directory containing the old database.
+On systems with POSIX permissions, the application directory is created with
+`0700` permissions, and the database and configuration use `0600`.
 
-При загрузке конфигурации отсутствующие поля автоматически добавляются
-в `config.yaml` с текущими значениями по умолчанию: `version`, `strategy`,
-`personal_proxy`, `download_dir`. Заданные значения и YAML-комментарии
-сохраняются. Ключ `version` всегда первый, после него одна пустая строка;
-остальные ключи верхнего уровня сортируются по алфавиту. Порядок элементов
-`strategy` и `personal_proxy` не меняется. Если поля и формат уже актуальны,
-файл не переписывается. Явно указанные неверные
-значения не исправляются молча, а вызывают ошибку. Дополнение сохраняется
-через временный файл с правами `0600`.
+When configuration is loaded, missing fields are automatically added to
+`config.yaml` with their current defaults: `version`, `strategy`,
+`personal_proxy`, and `download_dir`. Existing values and YAML comments are
+preserved. The `version` key always comes first, followed by one blank line;
+other top-level keys are sorted alphabetically. The order of items in
+`strategy` and `personal_proxy` is unchanged. If all fields and formatting are
+already up to date, the file is not rewritten. Explicitly invalid values cause
+an error rather than being silently corrected. Updates are saved through a
+temporary file with `0600` permissions.
 
-Папку скачивания можно переопределить через `download_dir`:
+Override the download directory with `download_dir`:
 
 ```yaml
 download_dir: ~/Music/MeshVault
 ```
 
-Если параметр отсутствует или пустой, используется `~/.meshvault/downloaded`.
-Поддерживаются абсолютные пути и `~/…`; относительные пути считаются от
-`~/.meshvault`, а не от рабочей папки. Перед обработкой треков папка и её
-родители создаются автоматически. Путь должен быть директорией, доступной
-для записи; иначе команда завершается с понятной ошибкой до сетевых запросов.
-Старые файлы из `tmp_music` автоматически не перемещаются. Для продолжения
-работы с ними укажите абсолютный путь к прежней папке в `download_dir`.
+If this setting is missing or empty, `~/.meshvault/downloaded` is used.
+Absolute paths and `~/…` are supported. Relative paths are resolved against
+`~/.meshvault`, not the working directory. Before processing tracks, the output
+directory and its parents are created automatically. The path must be a writable
+directory; otherwise, the command exits with a clear error before making network
+requests. Old files in `tmp_music` are not moved automatically. To keep using
+them, set `download_dir` to the absolute path of the old directory.
 
-## Стратегии соединения
+## Connection strategies
 
-`strategy` — непустой список приоритетов, применяемый отдельно к каждому поиску
-и скачиванию. Например, в `~/.meshvault/config.yaml`:
+`strategy` is a non-empty priority list applied separately to each search and
+download. For example, in `~/.meshvault/config.yaml`:
 
 ```yaml
 version: 1
+
+download_dir: ~/.meshvault/downloaded
+personal_proxy:
+  - "http://user:password@proxy.example.com:8080"
+  - "socks5://127.0.0.1:1080"
 strategy:
   - direct
   - personal_proxy
   - random_proxy
-personal_proxy:
-  - "http://user:password@proxy.example.com:8080"
-  - "socks5://127.0.0.1:1080"
 ```
 
-- `direct`: явно прямое соединение; при единственном `direct` списки прокси
-  не загружаются и не проверяются.
-- `personal_proxy`: личные прокси из `personal_proxy`, пробуются по порядку до первого
-  успеха. После ошибок всех личных прокси используется следующая стратегия.
-  При каждом старте скачивания проверяется HTTPS-доступ к YouTube `robots.txt`
-  через каждый личный прокси, с таймаутом 5 секунд и проверкой TLS. Это не ICMP-пинг:
-  проверяется именно маршрут через прокси, включая авторизацию SOCKS5/HTTP.
-  Недоступные адреса исключаются на текущий запуск, список в YAML не изменяется;
-  при следующем запуске проверяются снова. Статус каждого адреса выводится
-  без логина и пароля. Если все недоступны, используется следующая стратегия;
-  если доступных маршрутов вообще нет, команда завершится с понятной ошибкой.
-  Допустимы доменные имена и локальные адреса.
-  Поддерживаются HTTP, HTTPS, SOCKS4 и SOCKS5, в том числе URL с логином
-  и паролем. Для записи `host:port` используется HTTP. Список должен быть непустым,
-  если выбрана эта стратегия. Пароли не отображаются в UI и журнале соединений.
-- `random_proxy`: проверенные публичные прокси из ProxyScrape, Proxifly и TheSpeedX,
-  без скрытого прямого подключения. Несмотря на название, выбор остаётся LRU
-  с паузами HTTP 429, а не случайным. Старое имя `proxy` принимается как его алиас.
-- В примере запрос сначала идёт напрямую, при технической ошибке пробуется
-  личные прокси, затем публичный пул. Можно задать любой порядок этих стратегий.
-  Пустой результат поиска, отмена и исчерпание общего таймаута не запускают
-  следующий маршрут. Каждая новая операция начинается с первого элемента списка.
-  Если публичный пул недоступен, остальные настроенные стратегии остаются доступны.
-- Принимается только `version: 1`. Неизвестные настройки, другие версии,
-  пустой список, повторяющиеся и неизвестные стратегии отклоняются с ошибкой.
-  Флаг `--strategy` заменён настройкой в YAML; значение `fallback` больше не нужно.
+- `direct`: explicitly use a direct connection. If it is the only strategy,
+  proxy lists are neither fetched nor checked.
+- `personal_proxy`: use addresses from `personal_proxy`, trying them in order
+  until one succeeds. If all personal proxies fail, the next strategy is used.
+  At download startup, HTTPS access to YouTube's `robots.txt` is checked through
+  each personal proxy with a five-second timeout and TLS verification. This is
+  not an ICMP ping: it checks the actual proxy route, including SOCKS5/HTTP
+  authentication. Unavailable addresses are excluded for the current run without
+  changing the YAML list, and checked again on the next run. Each address's
+  status is displayed without its username or password. If all are unavailable,
+  the next strategy is used; if no routes are available at all, the command exits
+  with a clear error. Domain names and local addresses are allowed. HTTP, HTTPS,
+  SOCKS4, and SOCKS5 are supported, including URLs with credentials. Bare
+  `host:port` entries use HTTP. The list must be non-empty when this strategy is
+  enabled. Passwords are not shown in the UI or connection log.
+- `random_proxy`: use verified public proxies from ProxyScrape, Proxifly, and
+  TheSpeedX, without silently falling back to a direct connection. Despite its
+  name, selection uses LRU with HTTP 429 cooldowns, not random selection.
+  The old name `proxy` is accepted as an alias.
+- In the example, a request first uses a direct connection. On a technical
+  error, personal proxies are tried, then the public pool. Strategies can be
+  ordered arbitrarily. An empty search result, cancellation, or an exhausted
+  overall timeout does not trigger the next route. Each new operation starts
+  with the first strategy. If the public pool is unavailable, other configured
+  strategies remain available.
+- Only `version: 1` is accepted. Unknown settings, other versions, an empty
+  strategy list, duplicate strategies, and unknown strategies are rejected.
+  The `--strategy` flag has been replaced by YAML configuration; `fallback`
+  is no longer needed.
 
-Для всех режимов `yt-dlp` получает явный маршрут и не наследует HTTP_PROXY,
-HTTPS_PROXY, ALL_PROXY или NO_PROXY. UI показывает `напрямую` либо адрес прокси.
-В коде политика реализована интерфейсом `DownloadStrategy` и реализациями
-`Direct`, `PersonalProxy`, `RandomProxy` и упорядоченной цепочкой `Priority` в
-`internal/download/youtube/strategy.go`.
+In all modes, `yt-dlp` receives an explicit route and does not inherit
+`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, or `NO_PROXY`. The UI displays `direct`
+or the proxy address. In code, this policy is implemented by `DownloadStrategy`,
+its `Direct`, `PersonalProxy`, and `RandomProxy` implementations, and the ordered
+`Priority` chain in `internal/download/youtube/strategy.go`.
 
-## Проверка прокси
+## Proxy checks
 
 ```sh
 go run ./cmd/cli proxy test
 ```
 
-Проверяет все личные адреса из `personal_proxy`, независимо от выбранного списка
-стратегий, затем актуальные публичные адреса в `~/.meshvault/vault.db`.
-Проверка — HTTPS-запрос к YouTube с проверкой TLS: таймаут личных 5 секунд,
-публичных 1 секунда, до 1000 параллельных проверок. Для каждого адреса показываются
-доступность и время проверки; логины и пароли скрыты.
+Checks all personal addresses in `personal_proxy`, regardless of the enabled
+strategies, followed by unexpired public addresses in `~/.meshvault/vault.db`.
+Checks use HTTPS requests to YouTube with TLS verification: a five-second
+timeout for personal proxies, a one-second timeout for public proxies, and up
+to 1000 concurrent checks. Availability and check duration are displayed for
+each address; usernames and passwords are hidden.
 
-Если хотя бы один адрес из кеша доступен, источники не запрашиваются и срок кеша
-не продлевается. Если кеш пуст, просрочен или все его адреса недоступны,
-загружает и проверяет свежие списки ProxyScrape, Proxifly и TheSpeedX,
-сохраняет рабочие адреса в обычный часовой кеш. Личные адреса не сохраняются
-в публичном кеше; результаты проверок не меняют настройки в `config.yaml`
-(отсутствующие поля дополняются при загрузке). Команда не скачивает треки
-и не требует `yt-dlp`/`ffmpeg`. Журнал: `logs/proxy-test.jsonl`.
+If at least one cached address works, source lists are not fetched and cache
+expiry is not extended. If the cache is empty, expired, or contains no working
+addresses, fresh ProxyScrape, Proxifly, and TheSpeedX lists are fetched and
+checked, and working addresses are saved to the usual one-hour cache. Personal
+addresses are not stored in the public cache. Check results do not change
+`config.yaml` settings, although missing fields are added when the configuration
+is loaded. This command does not download tracks and does not require
+`yt-dlp` or `ffmpeg`. Log: `logs/proxy-test.jsonl`.
 
-## YouTube: зависимости
+## YouTube dependencies
 
-**`yt-dlp` и `ffmpeg` должны быть установлены отдельно и доступны в `PATH`.**
-Meshvault не устанавливает их автоматически. Проверка:
+**Install `yt-dlp` and `ffmpeg` separately and make them available in `PATH`.**
+Meshvault does not install them automatically. Check your installation with:
 
 ```sh
 yt-dlp --version
 ffmpeg -version
 ```
 
-Используйте актуальный `yt-dlp`. Для современных YouTube JS challenges также
-могут понадобиться поддерживаемый JavaScript runtime (например, Deno) и
-компоненты `yt-dlp-ejs`: см. [инструкцию yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
+Use an up-to-date `yt-dlp`. Modern YouTube JavaScript challenges may also require
+a supported JavaScript runtime, such as Deno, and `yt-dlp-ejs` components. See
+the [yt-dlp instructions](https://github.com/yt-dlp/yt-dlp/wiki/EJS).
 
-Поиск выполняется через `ytsearch1:исполнитель название`: берётся первый результат
-YouTube, без гарантии точного совпадения с оригиналом. `yt-dlp` получает лучший
-аудиопоток (`bestaudio`, до 5 фрагментов параллельно), без конвертации.
-Исходник сохраняется в `download_dir/.sources/<video-id>/source` в оригинальном
-формате (расширение не требуется: FFmpeg определяет формат по содержимому).
-Затем отдельный локальный запуск FFmpeg преобразует его в MP3 с битрейтом
-192 кбит/с. Ошибка конвертации не переключает сетевой маршрут; исходник
-сохраняется и используется при повторной обработке без скачивания аудио заново.
-После успешной конвертации и проверки ненулевого размера MP3 исходник удаляется.
-При ошибке конвертации он остаётся для повторной обработки. Старые исходники
-для ранее готовых MP3 автоматически не очищаются. Уже готовые MP3 по-прежнему
-пропускаются без поиска.
-Пользовательский
-конфиг `yt-dlp` игнорируется, чтобы не менять формат и путь вывода.
+Search uses `ytsearch1:artist title` and selects the first YouTube result, which
+is not guaranteed to match the original recording. `yt-dlp` downloads the best
+audio stream (`bestaudio`, with up to five concurrent fragments), without
+conversion. The source is cached at `download_dir/.sources/<video-id>/source`
+in its original format. No extension is needed: FFmpeg detects the format from
+the file contents. A separate local FFmpeg invocation then converts it to MP3
+at 192 kbit/s. Conversion errors do not switch network routes; the source is
+retained and reused on retries without downloading the audio again.
 
-Скачивание показывает процент, скорость и оставшееся время, затем статус
-«Конвертация MP3». Готовый MP3
-копируется в `~/.meshvault/downloaded/Исполнитель — Название трека [video-id].mp3`
-(или в указанную `download_dir`)
-с проверкой размера и записью SHA-256. Исполнитель и название берутся из результата
-поиска YouTube (исполнителем может быть имя канала). Небезопасные символы заменяются,
-длинные имена сокращаются; ID защищает от совпадения названий разных видео.
-Временные файлы конвертации удаляются после обработки; исходники сохраняются
-только при ошибке конвертации.
-Перед поиском проверяется сохранённая
-в БД связь исходного запроса с локальным файлом: обычный файл существует и его
-размер больше нуля — поиск и скачивание пропускаются. SHA-256 записывается при
-загрузке, но больше не проверяется для пропуска. Отсутствующие и пустые файлы
-скачиваются заново. Учитывается текущая папка вывода, поэтому файл из другой
-папки не мешает скачиванию в новую. Если всё уже скачано, не нужны даже подготовка
-прокси или установленные `yt-dlp`/`ffmpeg`.
+After successful conversion and verification that the MP3 is non-empty, the
+source is deleted. Failed conversions retain their source for retries. Old
+cached sources for previously completed MP3s are not automatically cleaned up.
+Completed MP3s are still skipped without searching. User `yt-dlp` configuration
+is ignored so it cannot change the format or output path.
 
-Для старых скачиваний связи восстанавливаются из успешных событий в
-`logs/download.jsonl`. Если такой информации не осталось, для старого файла
-может понадобиться один поиск; после него связь сохраняется для следующих запусков.
-Старые файлы `<video-id>.mp3` автоматически переименовываются при следующей
-обработке трека, если файл отмечен в истории и имеет ненулевой размер. Повторная загрузка при этом
-не нужна; хеш регистрируется для нового пути. Непроверенные старые файлы не трогаются.
+The download display shows percentage, speed, and remaining time, followed by
+the `Converting to MP3` status. The completed MP3 is copied to
+`~/.meshvault/downloaded/Artist — Track title [video-id].mp3`, or the configured
+`download_dir`, with size verification and SHA-256 recording. Artist and title
+are taken from the YouTube search result; the artist may be the channel name.
+Unsafe filename characters are replaced, long names are shortened, and the
+video ID prevents collisions between identically named videos. Temporary
+conversion files are removed after processing; sources are retained only if
+conversion fails.
 
-## Очередь и диагностика
+Before searching, the database's mapping between the original query and the
+local file is checked. If a regular file exists and is larger than zero bytes,
+both search and download are skipped. SHA-256 is recorded during downloads but
+is no longer checked when deciding whether to skip. Missing and empty files
+are downloaded again. The current output directory is respected: a file in
+another directory does not prevent downloading to a new one. If every track
+is already downloaded, neither proxy preparation nor installed `yt-dlp` and
+`ffmpeg` binaries are needed.
 
-- Общий пул обработчиков поиска и скачивания: 50 по умолчанию в `direct`,
-  `min(число личных и подготовленных публичных прокси, 50)`, если используются
-  прокси-стратегии с доступными адресами.
-  Флаг `--workers N` меняет лимит 50 на N (положительное число).
-  Например: `go run ./cmd/cli download --workers 20`.
-  Выбранное число выводится при запуске и записывается в журнал.
-  Поиск выполняется параллельно без секундной задержки;
-  только старты скачивания аудио разнесены минимум на 1 секунду.
-- Первый HTTP 429 приостанавливает новые запросы соответствующего этапа у всех обработчиков:
-  ошибки скачивания не приостанавливают поиск, и наоборот.
-  Паузы между волнами: 5, 10, 15, 20, 25, затем 30 секунд (максимум).
-  Несколько 429 от уже запущенных запросов считаются одной волной.
-  Уже работающие операции не прерываются. После паузы скачивания снова стартуют
-  с секундным интервалом; поиск остаётся параллельным.
-- Треки с HTTP 429 остаются в очереди без ограничения количества повторов,
-  пока не будут обработаны или программа не будет остановлена.
-- У остальных технических ошибок 5 повторов через 1, 2, 4, 8 и 16 секунд.
-- Успешный поиск без результатов не повторяется и показывается отдельно.
-- Структурированный журнал `zap`: `logs/download.jsonl`.
-- В терминале HTTP 429 показывается как пауза поиска или скачивания
-  с обратным отсчётом до автоматического повтора.
-- История скачиваний и связи запросов с файлами хранятся в `~/.meshvault/vault.db`,
-  независимо от синхронизации Spotify.
+For older downloads, query mappings are recovered from successful events in
+`logs/download.jsonl`. If this information is unavailable, an old file may
+require one search; the mapping is then saved for future runs. Old
+`<video-id>.mp3` files are automatically renamed during the next track processing
+if they are recorded in history and non-empty. No new download is needed, and
+the hash is registered for the new path. Untracked old files are left untouched.
 
-Скачивайте только материалы, на которые у вас есть необходимые права.
+## Queue and diagnostics
 
-## Проверки
+- Searches and downloads share a worker pool. The default is 50 workers in
+  `direct` mode, or `min(available personal and prepared public proxies, 50)`
+  when proxy strategies have available addresses. `--workers N` replaces the
+  default limit of 50 with a positive number. For example:
+  `go run ./cmd/cli download --workers 20`.
+  The selected worker count is displayed at startup and logged. Searches run
+  concurrently without a one-second delay; only audio download starts are
+  spaced at least one second apart.
+- The first HTTP 429 pauses new requests for the affected stage across all
+  workers. Download errors do not pause searches, and vice versa. Cooldowns
+  increase in waves: 5, 10, 15, 20, 25, then 30 seconds maximum. Multiple 429s
+  from already running requests count as one wave. Running operations are not
+  interrupted. After a download pause, starts resume at one-second intervals;
+  searches remain concurrent.
+- Tracks receiving HTTP 429 stay queued with unlimited retries until processed
+  or the application is stopped.
+- Other technical errors receive five retries after 1, 2, 4, 8, and 16 seconds.
+- Successful searches with no results are not retried and are displayed
+  separately.
+- Structured `zap` log: `logs/download.jsonl`.
+- The terminal displays HTTP 429 as a search or download pause with a countdown
+  to the automatic retry.
+- Download history and query-to-file mappings are stored in
+  `~/.meshvault/vault.db`, independently of Spotify synchronization.
 
-Обычные тесты не требуют YouTube и установленных внешних программ.
-Для реального поиска и скачивания тестового видео Rick Astley
-(`dQw4w9WgXcQ`) с проверкой MP3 через `ffprobe`:
+Download only material for which you have the necessary rights.
+
+## Tests
+
+Regular tests do not require YouTube or installed external tools. To perform a
+real search and download of the Rick Astley test video (`dQw4w9WgXcQ`), with MP3
+verification using `ffprobe`:
 
 ```sh
 MESHVAULT_YOUTUBE_LIVE=1 go test ./internal/download/youtube -run TestLiveYouTubeSearchAndDownload -v -count=1
 ```
 
-Для этой проверки нужен также `ffprobe` (поставляется вместе с FFmpeg).
-Скачанный тестовый файл удаляется после проверки.
+This check also requires `ffprobe`, which is distributed with FFmpeg.
+The downloaded test file is removed after the check.
 
-## Бесплатные прокси
+## Free proxies
 
-Если в списке стратегий есть `random_proxy`, перед скачиванием непустой библиотеки
-`download` готовит публичный пул. Для `direct` и `personal_proxy` этот этап отсутствует:
+If `strategy` includes `random_proxy`, `download` prepares the public pool
+before processing pending tracks. This step is not used for `direct` or
+`personal_proxy`:
 
-1. Берёт из `~/.meshvault/vault.db` ещё действующие записи `verified_proxies`, если кеш
-   сформирован после полной проверки с текущими источниками и таймаутом.
-   Старый кеш только ProxyScrape или проверки с таймаутом 8 секунд обновляется
-   при первом запуске; свежий полный кеш пропускает API и проверки.
-2. Иначе получает **все доступные страницы** HTTP-, SOCKS4- и SOCKS5-прокси из
-   [ProxyScrape](https://docs.proxyscrape.com/api-reference/public-api/get-proxy-list).
-   Для каждого протокола использует `limit=2000` и `skip`, пока не получена
-   последняя страница; 2000 — размер страницы, а не ограничение общего пула.
-   Фильтр `ssl=yes` убран: поддержку HTTPS проверяет сама программа.
-   Дополнительно получает полный [список Proxifly](https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.txt)
-   (HTTP, HTTPS, SOCKS4, SOCKS5), объединяет адреса и удаляет дубликаты.
-   Дополнительно загружает `http.txt`, `socks4.txt` и `socks5.txt` из
-   [TheSpeedX/PROXY-List](https://github.com/TheSpeedX/PROXY-List), назначая
-   адресам протокол соответствующего файла. Все списки объединяются без дублей.
-   Если источник или отдельный файл недоступен, использует остальные и пишет
-    предупреждение в журнал; если ни один не дал адресов, подготовка пула
-    завершается с ошибкой. Кеш без TheSpeedX обновляется при первом запуске новой версии.
-3. Проверяет их в **1000 потоков**: HTTPS-запрос к YouTube `robots.txt` через
-   прокси, общий таймаут **1 секунда** на соединение, TLS и получение ответа,
-   проверка сертификата TLS, ожидаемый ответ HTTP 200.
-   Это проверка доступности YouTube, а не ICMP-пинг и не гарантия скачивания аудио.
-   Рабочие, но медленные прокси не попадут в пул. 1000 одновременных проверок
-   также требуют достаточного лимита открытых файлов и сетевых ресурсов.
-4. Сохраняет только успешно проверенные адреса на **1 час** с момента проверки.
-   Просроченные записи очищаются при чтении кеша.
-5. Для каждого поиска, скачивания и повторной попытки передаёт выбранный
-   адрес в `yt-dlp --proxy`. Выбор **LRU**: среди доступных прокси выдаётся тот,
-   который дольше всего не использовался (выдача сразу обновляет его очередь).
-   После HTTP 429 конкретный адрес исключается на 5, 10, 15, 20, 25, затем
-   максимум 30 секунд при следующих волнах 429. Пауза адреса общая для поиска
-   и скачивания; ответы во время уже действующей паузы не удлиняют её.
-   После окончания паузы адрес снова участвует в LRU. Если весь пул на паузе,
-   запрос ждёт ближайшего окончания и повторно проверяет пул, с учётом
-   общего таймаута операции. Окончание паузы — оценка, не гарантия снятия блока
-   YouTube. LRU и паузы хранятся в памяти текущего запуска.
+1. Read unexpired `verified_proxies` entries from `~/.meshvault/vault.db` if
+   the cache was created by a complete check using the current sources and
+   timeout. Old ProxyScrape-only caches or caches created with an eight-second
+   timeout are refreshed on the first run. A fresh, complete cache skips source
+   API requests and verification.
+2. Otherwise, fetch **all available pages** of HTTP, SOCKS4, and SOCKS5 proxies
+   from [ProxyScrape](https://docs.proxyscrape.com/api-reference/public-api/get-proxy-list).
+   For each protocol, use `limit=2000` and `skip` until the last page is reached.
+   The value 2000 is a page size, not a total pool limit. The `ssl=yes` filter
+   has been removed; the application checks HTTPS support itself.
+   Also fetch the complete [Proxifly list](https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.txt)
+   of HTTP, HTTPS, SOCKS4, and SOCKS5 addresses, then merge and deduplicate them.
+   Fetch `http.txt`, `socks4.txt`, and `socks5.txt` from
+   [TheSpeedX/PROXY-List](https://github.com/TheSpeedX/PROXY-List), assigning the
+   protocol indicated by each file. All lists are merged without duplicates.
+   If a source or individual file is unavailable, use the remaining sources
+   and log a warning. If no source returns addresses, pool preparation fails.
+   Caches created without TheSpeedX are refreshed on the first run of the new
+   version.
+3. Check proxies with **1000 workers** using an HTTPS request to YouTube's
+   `robots.txt` through each proxy. The overall timeout is **one second** for
+   connection establishment, TLS, and receiving the response. TLS certificates
+   are verified, and HTTP 200 is required. This checks YouTube access, not ICMP
+   reachability, and does not guarantee that audio downloads will work.
+   Working but slow proxies are excluded. Running 1000 simultaneous checks
+   also requires sufficient open-file limits and network resources.
+4. Save only successfully verified addresses for **one hour** from verification.
+   Expired entries are removed when the cache is read.
+5. For every search, download, and retry, pass the selected address to
+   `yt-dlp --proxy`. Selection uses **LRU**: among available proxies, choose the
+   one that has gone unused the longest; selection immediately updates its
+   position. After HTTP 429, that address is excluded for 5, 10, 15, 20, 25,
+   then at most 30 seconds on subsequent waves. The per-address cooldown is
+   shared between search and download, and responses received during an
+   existing cooldown do not extend it. Once the cooldown expires, the address
+   re-enters LRU selection. If the whole pool is cooling down, the request waits
+   for the earliest expiry and checks the pool again, within the overall
+   operation timeout. Cooldown expiry is an estimate, not a guarantee that
+   YouTube has lifted the block. LRU state and cooldowns exist only in memory
+   for the current run.
 
-В активных строках поиска и скачивания показывается выбранный адрес прокси
-этого соединения (например, `прокси: socks5://203.0.113.1:1080`). При повторе
-он обновляется; до выбора адреса прокси не показывается. В JSON-журнале событие
-`request_started` содержит поля `job_id`, `attempt`, `stage`, `connection`,
-`connection_attempt` и `proxy` (`direct` для прямого подключения), а ошибки
-содержат адрес неудачного соединения. Логин, пароль и параметры URL скрываются.
+Active search and download rows display the proxy selected for that connection,
+for example, `proxy: socks5://203.0.113.1:1080`. The address is updated on retries
+and not displayed before selection. In the JSON log, `request_started` includes
+`job_id`, `attempt`, `stage`, `connection`, `connection_attempt`, and `proxy`
+(`direct` for direct connections). Errors include the failed connection's
+address. Usernames, passwords, and URL parameters are hidden.
 
-Если доступен лишь один прокси, он используется повторно. Разные адреса прокси
-не обязательно означают разные выходные IP. На время текущего запуска используется
-подготовленный пул; проверка кеша выполняется при следующем запуске.
+If only one proxy is available, it is reused. Different proxy addresses do not
+necessarily mean different exit IPs. The prepared pool is used for the current
+run; the cache is checked again on the next run.
 
-Для списка `[random_proxy]`, если валидных прокси нет или подготовка завершилась ошибкой, команда завершится
-с диагностикой: скрытого перехода на прямое соединение нет. Унаследованные
-`HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` и `NO_PROXY` не переопределяют выбранный
-прокси в дочернем `yt-dlp`. Текущие задержки скачивания и обработка HTTP 429 сохраняются.
+With `[random_proxy]`, the command exits with diagnostics if no valid proxies
+are available or preparation fails. There is no silent fallback to a direct
+connection. Inherited `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, and `NO_PROXY`
+do not override the selected route in the child `yt-dlp` process. Existing
+download spacing and HTTP 429 handling remain in effect.
 
-Списки недоверенные: локальные/служебные IP исключаются, TLS не отключается,
-cookies и токены Spotify через эти прокси не передаются. Бесплатный прокси может
-перестать работать даже в течение часа; успешный пинг не гарантирует стабильную
-скорость и доступ к медиасерверам YouTube.
+Source lists are untrusted: local and reserved IP addresses are excluded, TLS
+verification stays enabled, and Spotify cookies or tokens are never sent
+through these proxies. A free proxy can stop working even within the cache's
+one-hour lifetime; a successful probe does not guarantee stable speed or access
+to YouTube media servers.
 
-Реальная проверка API и прокси (использует временную SQLite, не основную библиотеку):
+To perform a live API and proxy check using a temporary SQLite database rather
+than the main library:
 
 ```sh
 MESHVAULT_PROXY_LIVE=1 go test ./internal/proxy -run TestLiveProxyScrapePreparation -v -count=1
