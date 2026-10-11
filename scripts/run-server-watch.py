@@ -1,4 +1,4 @@
-"""Rebuild and restart the local server when anything under server/ changes."""
+"""Rebuild and restart the local server when server source changes."""
 
 import hashlib
 import os
@@ -10,7 +10,10 @@ import time
 
 
 ROOT = Path(__file__).resolve().parent.parent
-SOURCE = ROOT / "server"
+SOURCES = [ROOT / name for name in (
+    "cmd", "internal", "audio", "download", "spotify", "vk", "youtube",
+    "go.mod", "go.sum",
+)]
 OUTPUT = ROOT / ".local-server"
 BINARY = OUTPUT / "trackharbor-server"
 
@@ -21,13 +24,16 @@ def fingerprint():
     def fail(error):
         raise error
 
-    for directory, children, files in os.walk(SOURCE, onerror=fail):
-        children.sort()
-        files.sort()
-        for name in children + files:
-            path = Path(directory) / name
+    for source in SOURCES:
+        paths = [source]
+        if source.is_dir():
+            for directory, children, files in os.walk(source, onerror=fail):
+                children.sort()
+                files.sort()
+                paths.extend(Path(directory) / name for name in children + files)
+        for path in paths:
             info = path.lstat()
-            digest.update(str(path.relative_to(SOURCE)).encode() + b"\0")
+            digest.update(str(path.relative_to(ROOT)).encode() + b"\0")
             digest.update(f"{info.st_mode}:{info.st_mtime_ns}:{info.st_size}".encode() + b"\0")
             if path.is_symlink():
                 digest.update(os.readlink(path).encode())
@@ -54,7 +60,7 @@ def build():
     os.close(fd)
     try:
         result = subprocess.run(
-            ["go", "build", "-o", path, "./server/cmd/server/"], cwd=ROOT
+            ["go", "build", "-o", path, "./cmd/server/"], cwd=ROOT
         )
         if result.returncode != 0:
             return False
@@ -75,7 +81,7 @@ def main():
     signal.signal(signal.SIGTERM, interrupt)
     process = None
     built_from = None
-    print("Watching server/ for changes. Press Ctrl+C to stop.", flush=True)
+    print("Watching server source for changes. Press Ctrl+C to stop.", flush=True)
     try:
         while True:
             try:

@@ -18,9 +18,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"trackharbor/server/internal/config"
-	"trackharbor/server/internal/library"
-	"trackharbor/server/internal/store"
+	"trackharbor/internal/config"
+	"trackharbor/internal/library"
+	"trackharbor/internal/store"
 	"trackharbor/spotify"
 	"trackharbor/vk"
 )

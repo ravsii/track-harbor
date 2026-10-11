@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"trackharbor/server/internal/store"
+	"trackharbor/internal/store"
 	"trackharbor/vk"
 )
 

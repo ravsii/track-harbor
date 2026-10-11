@@ -10,9 +10,9 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	"trackharbor/server/internal/config"
-	"trackharbor/server/internal/store"
-	"trackharbor/server/internal/web"
+	"trackharbor/internal/config"
+	"trackharbor/internal/store"
+	"trackharbor/internal/web"
 )
 
 func main() {

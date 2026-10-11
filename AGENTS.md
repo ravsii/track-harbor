@@ -8,21 +8,17 @@ playlists or YouTube video/audio without requiring a subscription.
 
 ## Project boundaries
 
-- The project is no longer an MVP. Keep the CLI and server as independent
-  applications, each with its own configuration, credentials, database, and
-  synchronization state. Never point the server at the CLI's local database.
-- `cli` is a local fire-and-forget tool; preserve its current commands and
-  `~/.trackharbor` data. `server` is a separate web application intended for
-  eventual multi-device deployment. The web UI has no user login yet: bind it
-  to loopback by default and do not expose it publicly without access control.
-- `trackharbor` contains only reusable source authorization/integration and
-  file-download mechanics. CLI and server own their separate storage, config,
-  orchestration, and presentation. Shared code must not import either app.
+- The server is the only supported application. Its Go module, command,
+  configuration, database, and source integrations live at the repository root.
+  The old CLI is archived in `.deprecated/cli/` and is not maintained or built.
+  Never point the server at the CLI's `~/.trackharbor/vault.db`.
+- The web UI has no user login yet: bind it to loopback by default and do not
+  expose it publicly without access control. Multi-device access needs login.
 
 ## Development
 
 - Before changing the server web UI's visual elements, read
-  `server/docs/visual-design.md` and follow its palette and light/dark theme
+  `docs/visual-design.md` and follow its palette and light/dark theme
   requirements for every new or changed element.
 - Prioritize the core workflow over speculative features, but keep application
   boundaries explicit and deployment/security constraints visible.

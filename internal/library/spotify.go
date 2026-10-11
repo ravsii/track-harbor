@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"trackharbor/server/internal/store"
+	"trackharbor/internal/store"
 	"trackharbor/spotify"
 )
 

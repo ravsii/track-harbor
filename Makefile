@@ -1,37 +1,13 @@
-DB_PATH?=$(HOME)/.trackharbor/vault.db
-MIGRATIONS_DIR=./cli/migrations
+.PHONY: build run run-server run-server-watch
 
-GOOSE=goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH)
-
-build: clean
-	mkdir -p bin
-	go build -o ./bin/trackharbor ./cmd/cli/
-
-clean:
-	rm -rf ./bin/
-	rm -rf ./tmp_music/*
-
-run: clean
-	go run ./cmd/cli/
-
-run-server:
+build:
 	mkdir -p .local-server
-	go build -o .local-server/trackharbor-server ./server/cmd/server/
+	go build -o .local-server/trackharbor-server ./cmd/server/
+
+run: run-server
+
+run-server: build
 	./.local-server/trackharbor-server
 
 run-server-watch:
 	python3 scripts/run-server-watch.py
-
-migrate-up:
-	$(GOOSE) up
-
-migrate-down:
-	$(GOOSE) down
-
-
-migrate-dry-run:
-	@echo "=== CURRENT STATUS ==="
-	$(GOOSE) status
-	@echo ""
-
-.PHONY: build clean run run-server run-server-watch migrate-up migrate-down migrate-status migrate-up-one migrate-reset migrate-dry-run

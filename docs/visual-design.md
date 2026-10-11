@@ -68,8 +68,8 @@ Use the free [Hugeicons](https://hugeicons.com/) **Stroke Rounded** icons
 throughout the server web interface instead of Unicode symbols or emoji for
 navigation, playback, downloads, and status actions. Use the MIT-licensed
 `@hugeicons/core-free-icons` set, not Pro assets. Keep the selected SVG icons
-self-hosted so the local server does not depend on an external CDN. Retain the
-MIT notice in `server/docs/hugeicons-license.txt`. Decorative icons must be
+  self-hosted so the local server does not depend on an external CDN. Retain the
+  MIT notice in `docs/hugeicons-license.txt`. Decorative icons must be
 hidden from assistive technology; icon-only buttons must have descriptive
 accessible labels. Icons inherit the surrounding text color and must work in
 both themes.
