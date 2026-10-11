@@ -5,3 +5,4 @@
 *.before-trackharbor.bak
 *.pprof
 /logs
+/.codegraph/

@@ -24,3 +24,8 @@ playlists or YouTube video/audio without requiring a subscription.
 
 During the MVP phase, these rules override default design, planning, and
 test-driven development workflows.
+
+## Commits
+
+- When asked to create a commit, keep the human as the primary author and add
+  the assistant as a co-author using a `Co-authored-by:` commit-message trailer.
