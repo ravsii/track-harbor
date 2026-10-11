@@ -70,8 +70,9 @@ confirmation before deletion. Never render credentials in the initial HTML:
 Show URL fetches and displays the original URL only in the row, where its text
 can be selected and copied; Hide restores the mask. Do not add a second field.
 Public proxies retain an empty replacement field, saved count and explicit
-clearing control. Saving settings must not interrupt the
-persistent player.
+clearing control. The import button confirms before starting and reports its
+background check progress and result alongside the saved count. Saving
+settings must not interrupt the persistent player.
 
 ## Color palette
 

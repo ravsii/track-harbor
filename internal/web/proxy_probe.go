@@ -17,17 +17,21 @@ import (
 // direct network access. Never include transport errors in responses or logs:
 // proxy authentication data can appear in their text.
 func probePersonalProxy(ctx context.Context, address string) error {
+	return probeYouTube(ctx, address, 6*time.Second)
+}
+
+func probeYouTube(ctx context.Context, address string, timeout time.Duration) error {
 	u, err := url.Parse(address)
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	transport := &http.Transport{
 		Proxy:                 http.ProxyURL(u),
-		DialContext:           (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   5 * time.Second,
-		ResponseHeaderTimeout: 5 * time.Second,
+		DialContext:           (&net.Dialer{Timeout: timeout}).DialContext,
+		TLSHandshakeTimeout:   timeout,
+		ResponseHeaderTimeout: timeout,
 		DisableKeepAlives:     true,
 	}
 	if u.Scheme == "socks4" || u.Scheme == "socks4a" {

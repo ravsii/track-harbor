@@ -1,6 +1,73 @@
 (() => {
+  let importTimer;
+  const refreshImport = async () => {
+    const status = document.getElementById('public-proxy-import-status');
+    if (!status) {
+      clearInterval(importTimer);
+      importTimer = undefined;
+      return;
+    }
+    try {
+      const response = await fetch('/settings/public/import/status', {cache: 'no-store'});
+      if (!response.ok) throw new Error();
+      const state = await response.json();
+      status.textContent = state.message;
+      status.dataset.running = state.running;
+      status.dataset.error = 'false';
+      const button = document.querySelector('#public-proxy-import-form button');
+      if (button) button.disabled = state.running;
+      const count = document.getElementById('public-proxy-count');
+      if (count) count.textContent = state.count;
+      if (!state.running) {
+        clearInterval(importTimer);
+        importTimer = undefined;
+      }
+    } catch (_) {
+      status.textContent = 'Could not check import status. Reopen Settings to retry.';
+      status.dataset.error = 'true';
+      clearInterval(importTimer);
+      importTimer = undefined;
+    }
+  };
+  const watchImport = () => {
+    const status = document.getElementById('public-proxy-import-status');
+    if (!status || status.dataset.running !== 'true' || importTimer) return;
+    refreshImport();
+    importTimer = setInterval(refreshImport, 2000);
+  };
+  document.addEventListener('DOMContentLoaded', watchImport);
+  document.addEventListener('htmx:afterSwap', watchImport);
   document.addEventListener('submit', async event => {
     const form = event.target;
+    if (form.id === 'public-proxy-import-form') {
+      event.preventDefault();
+      if (!window.confirm('Import and check public proxies? Matching host:port entries that fail the check will be removed.')) return;
+      const button = form.querySelector('button[type="submit"]');
+      const status = document.getElementById('public-proxy-import-status');
+      button.disabled = true;
+      status.textContent = 'Starting public proxy import…';
+      status.dataset.error = 'false';
+      try {
+        const response = await fetch(form.action, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json'},
+          body: new URLSearchParams({confirm: 'yes'})
+        });
+        if (!response.ok) {
+          status.textContent = (await response.text()).trim() || 'Could not start public proxy import.';
+          status.dataset.error = 'true';
+          button.disabled = false;
+          return;
+        }
+        status.dataset.running = 'true';
+        watchImport();
+      } catch (_) {
+        status.textContent = 'Could not start public proxy import. Try again.';
+        status.dataset.error = 'true';
+        button.disabled = false;
+      }
+      return;
+    }
     if (form.id !== 'settings-form' && form.id !== 'personal-proxy-form' && !form.classList.contains('proxy-delete')) return;
     event.preventDefault();
     const removing = form.classList.contains('proxy-delete');

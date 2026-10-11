@@ -105,11 +105,16 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	      <form id="settings-form" action="/settings" method="post">
 	        <label>SPOTIFY / YOUTUBE ROUTE ORDER<textarea name="strategy" required spellcheck="false">{{.SettingsStrategy}}</textarea></label>
 	        <p>One per line, in priority order: <code>direct</code>, <code>personal_proxy</code>, <code>random_proxy</code>.</p>
-	        <label>PUBLIC PROXIES<textarea name="public_proxy" spellcheck="false" autocomplete="off" placeholder="One proxy URL per line. Leave empty to keep saved values."></textarea></label><p>{{.PublicProxyCount}} saved. Addresses are never shown again; enter new URLs to replace the entire list.</p><label class="clear-option"><input type="checkbox" name="clear_public_proxy"> Remove saved public proxies</label>
+	        <label>PUBLIC PROXIES<textarea name="public_proxy" spellcheck="false" autocomplete="off" placeholder="One proxy URL per line. Leave empty to keep saved values."></textarea></label><p><span id="public-proxy-count">{{.PublicProxyCount}}</span> saved. Addresses are never shown again; enter new URLs to replace the entire list.</p><label class="clear-option"><input type="checkbox" name="clear_public_proxy"> Remove saved public proxies</label>
 	        <p>VK always uses <code>direct</code> (the only supported route). Set <code>listen</code> and <code>download_dir</code> in <code>config.yaml</code>; changing either requires a restart.</p>
 	        <button type="submit"><span>{{template "icon" "checkmark-circle-02"}}</span> Save settings</button>
 	      </form>
 	      <div id="settings-feedback" class="status" role="status" aria-live="polite">{{if .SettingsSaved}}Settings saved. New download batches will use them.{{end}}</div>
+	      <form id="public-proxy-import-form" action="/settings/public/import" method="post">
+	        <button type="submit" class="secondary" {{if .ProxyImport.Running}}disabled{{end}}>{{template "icon" "reload"}}<span>Import random proxies</span></button>
+	      </form>
+	      <p>Import from ProxyScrape, Proxifly and TheSpeedX. Check every discovered host:port against YouTube; replace matching entries if working, remove them if not. Other saved proxies stay unchanged.</p>
+	      <div id="public-proxy-import-status" class="status" role="status" aria-live="polite" data-running="{{.ProxyImport.Running}}">{{.ProxyImport.Message}}</div>
 	    </section>
 	    <section class="panel settings-panel personal-proxies">
 	      <h2>Personal proxies</h2>

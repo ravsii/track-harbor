@@ -40,7 +40,14 @@ HTTPS through that proxy before it is saved. The list masks credentials as
 `socks5://********:********@host:port`; Show URL reveals them and provides the complete
 proxy URL for copying. Removing an entry requires confirmation. Public proxy
 URLs are not shown again: a blank list leaves its current values unchanged,
-and the removal checkbox clears them. On upgrade,
+and the removal checkbox clears them. The Settings import button fetches public
+proxies from ProxyScrape, Proxifly and TheSpeedX and checks every discovered
+host:port for HTTPS access to YouTube in the background (up to 500 checks
+concurrently, with a one-second timeout per proxy). It adds working addresses;
+when an imported
+host:port matches a saved public proxy, the saved entry is replaced if working
+or removed if none of that host's protocols work. Other entries are kept;
+there is no fixed limit on the number of imported working addresses. On upgrade,
 the server imports existing `strategy`, `personal_proxy`, and `public_proxy`
 values from `config.yaml` into `library.db` and removes those keys from YAML.
 `vk_strategy` is fixed to `direct`. Keep `listen` and optional `download_dir`

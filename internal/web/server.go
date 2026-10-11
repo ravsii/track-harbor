@@ -30,13 +30,15 @@ import (
 var assets embed.FS
 
 type Server struct {
-	store      *store.Store
-	logger     *zap.Logger
-	mu         sync.Mutex
-	settingsMu sync.Mutex
-	status     map[string]string
-	pingStatus map[string]string
-	downloads  *downloadJob
+	store       *store.Store
+	logger      *zap.Logger
+	mu          sync.Mutex
+	settingsMu  sync.Mutex
+	importMu    sync.Mutex
+	proxyImport proxyImportState
+	status      map[string]string
+	pingStatus  map[string]string
+	downloads   *downloadJob
 }
 
 func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Handler {
@@ -76,6 +78,8 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("POST /download/stop", s.stopDownloads)
 	mux.HandleFunc("GET /download/events", s.downloadEvents)
 	mux.HandleFunc("POST /settings", s.saveSettings)
+	mux.HandleFunc("POST /settings/public/import", s.importPublicProxies)
+	mux.HandleFunc("GET /settings/public/import/status", s.publicProxyImportStatus)
 	mux.HandleFunc("POST /settings/personal", s.addPersonalProxy)
 	mux.HandleFunc("POST /settings/personal/{id}/delete", s.deletePersonalProxy)
 	mux.HandleFunc("GET /settings/personal/{id}/address", s.personalProxyAddress)
@@ -159,6 +163,7 @@ type pageData struct {
 	SettingsStrategy                          string
 	PersonalProxies                           []personalProxyView
 	PublicProxyCount                          int
+	ProxyImport                               proxyImportState
 	SettingsSaved                             bool
 }
 
@@ -181,6 +186,9 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		}
 		data.SettingsStrategy = strings.Join(settings.Strategy, "\n")
 		data.PublicProxyCount = len(settings.PublicProxy)
+		s.importMu.Lock()
+		data.ProxyImport = s.proxyImport
+		s.importMu.Unlock()
 		proxies, proxyErr := s.store.PersonalProxies()
 		if proxyErr != nil {
 			http.Error(w, "unable to read personal proxies", http.StatusInternalServerError)
