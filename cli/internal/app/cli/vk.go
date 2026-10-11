@@ -132,8 +132,11 @@ var vkSyncCmd = &cobra.Command{
 			}
 			songs = append(songs, repository.VKSong{
 				Song:    repository.Song{Artists: string(artists), Title: title, CreatedAt: addedAt},
-				OwnerID: track.OwnerID, AudioID: track.ID, URL: track.URL,
+				OwnerID: track.OwnerID, AudioID: track.ID, URL: track.URL, CoverURL: track.Album.Thumb.Photo600,
 			})
+			if songs[len(songs)-1].CoverURL == "" {
+				songs[len(songs)-1].CoverURL = track.Album.Thumb.Photo300
+			}
 		}
 		if err := cmd.Context().Err(); err != nil {
 			return err

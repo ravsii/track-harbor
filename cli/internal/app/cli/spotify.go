@@ -182,6 +182,20 @@ var syncCmd = &cobra.Command{
 				Title:     title,
 				CreatedAt: addedAt,
 			})
+			cover := ""
+			for _, image := range song.ItemV2.Data.AlbumOfTrack.CoverArt.Sources {
+				if image.URL != "" && (cover == "" || image.Width >= 300) {
+					cover = image.URL
+				}
+			}
+			if cover == "" {
+				for _, image := range song.ItemV3.Data.VisualIdentityTrait.SquareCoverImage.Image.Data.Sources {
+					if image.URL != "" && (cover == "" || image.MaxWidth >= 300) {
+						cover = image.URL
+					}
+				}
+			}
+			ss[len(ss)-1].CoverURL = cover
 		}
 
 		fmt.Fprintln(out, "[3/4] Replacing the track list in ~/.trackharbor/vault.db…")

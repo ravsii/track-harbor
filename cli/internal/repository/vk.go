@@ -17,9 +17,10 @@ type VKRepository struct {
 
 type VKSong struct {
 	Song
-	OwnerID int64  `db:"owner_id"`
-	AudioID int64  `db:"audio_id"`
-	URL     string `db:"audio_url"`
+	OwnerID  int64  `db:"owner_id"`
+	AudioID  int64  `db:"audio_id"`
+	URL      string `db:"audio_url"`
+	CoverURL string `db:"cover_url"`
 }
 
 func NewVKRepository(db *sqlx.DB) (*VKRepository, error) {
@@ -37,7 +38,7 @@ func NewVKRepository(db *sqlx.DB) (*VKRepository, error) {
 	}
 	// Existing VK libraries predate audio URLs. Keep their tracks and request a
 	// fresh sync before attempting direct downloads.
-	for _, column := range []string{"owner_id INTEGER NOT NULL DEFAULT 0", "audio_id INTEGER NOT NULL DEFAULT 0", "audio_url TEXT NOT NULL DEFAULT ''"} {
+	for _, column := range []string{"owner_id INTEGER NOT NULL DEFAULT 0", "audio_id INTEGER NOT NULL DEFAULT 0", "audio_url TEXT NOT NULL DEFAULT ''", "cover_url TEXT NOT NULL DEFAULT ''"} {
 		name := strings.Fields(column)[0]
 		var present int
 		rows, err := db.Queryx("PRAGMA table_info(vk_songs)")
@@ -94,7 +95,7 @@ func (r *VKRepository) GetAll() ([]Song, error) {
 
 func (r *VKRepository) GetAudio() ([]VKSong, error) {
 	var songs []VKSong
-	err := r.db.Select(&songs, "SELECT id, artists, title, created_at, owner_id, audio_id, audio_url FROM vk_songs ORDER BY id")
+	err := r.db.Select(&songs, "SELECT id, artists, title, created_at, owner_id, audio_id, audio_url, cover_url FROM vk_songs ORDER BY id")
 	return songs, err
 }
 
@@ -104,27 +105,32 @@ func (r *VKRepository) ReplaceAll(songs []VKSong) (int, error) {
 		return 0, err
 	}
 	defer tx.Rollback()
-	var existing []Song
-	if err := tx.Select(&existing, "SELECT artists, title, created_at FROM vk_songs"); err != nil {
+	var existing []VKSong
+	if err := tx.Select(&existing, "SELECT artists, title, created_at, cover_url FROM vk_songs"); err != nil {
 		return 0, err
 	}
 	addedAt := make(map[string]time.Time, len(existing))
+	previousCovers := make(map[string]string, len(existing))
 	for _, song := range existing {
 		addedAt[song.Artists+"\x00"+song.Title] = song.CreatedAt
+		previousCovers[song.Artists+"\x00"+song.Title] = song.CoverURL
 	}
 	if _, err := tx.Exec("DELETE FROM vk_songs"); err != nil {
 		return 0, err
 	}
 	saved := 0
 	for _, song := range songs {
+		if song.CoverURL == "" {
+			song.CoverURL = previousCovers[song.Artists+"\x00"+song.Title]
+		}
 		if song.CreatedAt.IsZero() {
 			song.CreatedAt = addedAt[song.Artists+"\x00"+song.Title]
 			if song.CreatedAt.IsZero() {
 				song.CreatedAt = time.Now()
 			}
 		}
-		result, err := tx.Exec(`INSERT INTO vk_songs (artists, title, created_at, owner_id, audio_id, audio_url)
-			VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (artists, title) DO NOTHING`, song.Artists, song.Title, song.CreatedAt, song.OwnerID, song.AudioID, song.URL)
+		result, err := tx.Exec(`INSERT INTO vk_songs (artists, title, created_at, owner_id, audio_id, audio_url, cover_url)
+			VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (artists, title) DO NOTHING`, song.Artists, song.Title, song.CreatedAt, song.OwnerID, song.AudioID, song.URL, song.CoverURL)
 		if err != nil {
 			return 0, err
 		}

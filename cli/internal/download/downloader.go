@@ -63,6 +63,13 @@ type Downloader struct {
 	downloadGate   *requestGate
 	fileLocks      sync.Map // absolute file path → *sync.Mutex
 	initialSkipped int
+	coverURLs      map[string]string // search query → source artwork URL
+}
+
+// WithCoverURLs supplies artwork discovered during source synchronization.
+func (d *Downloader) WithCoverURLs(urls map[string]string) *Downloader {
+	d.coverURLs = urls
+	return d
 }
 
 // New создаёт Downloader.
@@ -360,6 +367,22 @@ func (d *Downloader) downloadQuery(jobID, query string, retry, attempt int) (ret
 	}
 	if err == nil && written == 0 {
 		err = fmt.Errorf("downloaded file is empty")
+	}
+	if err == nil && (d.provider.Name() != "vk" || d.coverURLs[query] != "") {
+		if coverErr := embedCover(f.Name(), d.coverURLs[query], d.provider.Name(), track.ID); coverErr != nil {
+			logger.Warn("cover_unavailable", zap.String("reason", coverErr.Error()))
+		} else {
+			// The embedded picture changes the file bytes and therefore its cache hash.
+			file, openErr := os.Open(f.Name())
+			if openErr == nil {
+				hash.Reset()
+				_, openErr = io.Copy(hash, file)
+				openErr = errors.Join(openErr, file.Close())
+			}
+			if openErr != nil {
+				err = fmt.Errorf("hash MP3 with cover: %w", openErr)
+			}
+		}
 	}
 	if err == nil {
 		failureStage = "saving"

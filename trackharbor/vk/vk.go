@@ -29,6 +29,12 @@ type Track struct {
 	Title   string `json:"title"`
 	URL     string `json:"url"`
 	Date    int64  `json:"date"` // VK upload timestamp; may be absent.
+	Album   struct {
+		Thumb struct {
+			Photo600 string `json:"photo_600"`
+			Photo300 string `json:"photo_300"`
+		} `json:"thumb"`
+	} `json:"album"` // Optional in some VK audio responses.
 }
 
 type Client struct {

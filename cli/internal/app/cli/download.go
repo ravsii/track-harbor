@@ -166,6 +166,13 @@ var downloadCmd = &cobra.Command{
 			return // VK-only downloads do not initialize YouTube or its proxies.
 		}
 		queries := buildQueriesLogged(songList, logger)
+		covers := make(map[string]string, len(songList))
+		for _, song := range songList {
+			query := buildQueries([]repository.Song{song})
+			if len(query) == 1 && song.CoverURL != "" {
+				covers[query[0]] = song.CoverURL
+			}
+		}
 		pending := make([]string, 0, len(queries))
 		skipped := 0
 		for _, query := range queries {
@@ -285,7 +292,7 @@ var downloadCmd = &cobra.Command{
 		provider.WithStrategy(connection)
 		fmt.Fprintf(out, "Search and download concurrency: %d (--workers limit: %d).\n", workers, workerLimit)
 		logger.Info("workers_configured", zap.String("strategy", strategyName), zap.Int("workers", workers), zap.Int("proxy_count", proxyCount), zap.Int("workers_limit", workerLimit))
-		downloader := download.New(provider, workers, cfg.DownloadDir).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp).WithInitialSkipped(skipped)
+		downloader := download.New(provider, workers, cfg.DownloadDir).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp).WithInitialSkipped(skipped).WithCoverURLs(covers)
 
 		downloader.Run(pending)
 	},

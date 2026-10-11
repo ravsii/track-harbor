@@ -36,6 +36,12 @@ without importing tracks and distinguishes rejected tokens from temporary errors
 VK's check requests one item from `audio.get` after resolving the current user;
 an empty VK library also counts as a successful check.
 
+For CLI downloads, syncing stores artwork URLs when Spotify or VK supplies
+them. New Spotify MP3 downloads use the source artwork, falling back to the
+matching YouTube video's thumbnail. VK MP3 downloads use only artwork returned
+by VK; without it, they are saved without a cover. Already downloaded MP3s
+are not modified; server downloads are not implemented yet.
+
 Spotify sync saves the date supplied for each liked track. VK sync uses the
 optional `date` field (VK describes it as the audio upload date, not necessarily
 the date added to My Music). If `date` is missing, it retains the previously
