@@ -172,7 +172,7 @@ func Save(ctx context.Context, t Track, directory, trackedPath string, routes *R
 			return "", "", fmt.Errorf("invalid VK audio ID")
 		}
 		event(Event{Stage: "downloading"})
-		f, _, closeFile, err := vk.DownloadMP3(t.AudioURL)
+		f, _, closeFile, err := vk.DownloadMP3(ctx, t.AudioURL)
 		if err != nil {
 			return "", "", err
 		}
@@ -296,6 +296,9 @@ func Save(ctx context.Context, t Track, directory, trackedPath string, routes *R
 		if err := tag(ctx, stage.Name(), t.Title, t.Artist, nil); err != nil {
 			return "", "", err
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return "", "", err
 	}
 	f, err := os.Open(stage.Name())
 	if err != nil {

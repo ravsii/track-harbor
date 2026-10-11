@@ -41,6 +41,14 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	s := &Server{store: db, logger: logger, status: map[string]string{}, pingStatus: map[string]string{}}
 	if len(configs) != 0 {
 		s.downloads = newDownloadJob(db, configs[0], logger)
+		go func() {
+			tracks, err := db.ListAll()
+			if err != nil {
+				logger.Error("load library for startup download check failed")
+				return
+			}
+			s.downloads.enqueue(tracks)
+		}()
 	}
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(assets, "assets")
@@ -52,6 +60,8 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("POST /ping", s.pingSource)
 	mux.HandleFunc("POST /sync", s.syncSource)
 	mux.HandleFunc("GET /download/status", s.downloadStatus)
+	mux.HandleFunc("POST /download/start", s.startDownloads)
+	mux.HandleFunc("POST /download/stop", s.stopDownloads)
 	mux.HandleFunc("GET /download/events", s.downloadEvents)
 	mux.HandleFunc("GET /audio", s.playAudio)
 	mux.HandleFunc("GET /audio/tracks", s.playableTracks)
@@ -370,6 +380,11 @@ func (s *Server) syncSource(w http.ResponseWriter, r *http.Request) {
 					s.logger.Error("queue synced tracks failed", zap.String("source", source))
 				} else {
 					s.downloads.enqueue(tracks)
+					s.downloads.mu.Lock()
+					if s.downloads.stopped {
+						message = fmt.Sprintf("Synced %d tracks. Downloads are stopped; start them from Downloads.", count)
+					}
+					s.downloads.mu.Unlock()
 				}
 			}
 		}

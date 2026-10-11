@@ -23,6 +23,7 @@ import (
 
 type downloadState struct {
 	Running    bool   `json:"running"`
+	Stopped    bool   `json:"stopped"`
 	Total      int    `json:"total"`
 	Finished   int    `json:"finished"`
 	Message    string `json:"message"`
@@ -46,6 +47,8 @@ type downloadJob struct {
 	tracks    map[string]downloadState
 	finished  int
 	failed    int
+	stopped   bool
+	cancel    context.CancelFunc
 }
 
 func newDownloadJob(db *store.Store, cfg config.Config, logger *zap.Logger) *downloadJob {
@@ -59,6 +62,7 @@ func (d *downloadJob) publish(update downloadState) {
 }
 
 func (d *downloadJob) publishLocked(update downloadState) {
+	update.Stopped = d.stopped
 	if update.Running && update.Total < d.state.Total {
 		update.Total = d.state.Total
 	}
@@ -92,10 +96,16 @@ func trackKey(source, artist, title string) string {
 
 func (d *downloadJob) enqueue(tracks []store.Track) {
 	d.mu.Lock()
+	if d.stopped {
+		d.mu.Unlock()
+		return
+	}
 	start := !d.state.Running
+	var ctx context.Context
 	if start {
 		d.finished, d.failed = 0, 0
 		d.state = downloadState{Message: "Checking downloaded files."}
+		ctx, d.cancel = context.WithCancel(context.Background())
 	}
 	added := 0
 	for _, t := range tracks {
@@ -109,6 +119,8 @@ func (d *downloadJob) enqueue(tracks []store.Track) {
 		added++
 	}
 	if added == 0 && !d.state.Running {
+		d.cancel()
+		d.cancel = nil
 		d.publishLocked(downloadState{Message: "No tracks to download."})
 		d.mu.Unlock()
 		return
@@ -117,14 +129,29 @@ func (d *downloadJob) enqueue(tracks []store.Track) {
 	d.mu.Unlock()
 	if start {
 		d.logger.Info("download check started", zap.Int("tracks", added))
-		go d.runQueue()
+		go d.runQueue(ctx)
 	}
 }
 
-func (d *downloadJob) runQueue() {
+func (d *downloadJob) runQueue(ctx context.Context) {
 	for {
 		d.mu.Lock()
+		if d.stopped {
+			for _, t := range d.queue {
+				key := trackKey(t.Source, t.Artist, t.Title)
+				d.tracks[key] = downloadState{Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: "stopped", Message: "Stopped"}
+			}
+			d.queue = nil
+			clear(d.active)
+			d.cancel = nil
+			d.publishLocked(downloadState{Total: d.state.Total, Finished: d.finished, Stage: "stopped", Message: "Downloads stopped."})
+			d.mu.Unlock()
+			d.logger.Info("downloads stopped")
+			return
+		}
 		if len(d.queue) == 0 {
+			d.cancel()
+			d.cancel = nil
 			message := fmt.Sprintf("Checked %d tracks; %d failed.", d.finished, d.failed)
 			d.publishLocked(downloadState{Total: d.finished, Finished: d.finished, Stage: "finished", Message: message})
 			failed, total := d.failed, d.finished
@@ -139,22 +166,31 @@ func (d *downloadJob) runQueue() {
 		tracks := d.queue
 		d.queue = nil
 		d.mu.Unlock()
-		d.runBatch(tracks)
+		d.runBatch(ctx, tracks)
 	}
 }
 
-func (d *downloadJob) runBatch(tracks []store.Track) {
-	ctx := context.Background()
+func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 	routes := &download.Routes{Order: d.config.Strategy, Personal: d.config.PersonalProxy, Public: d.config.PublicProxy}
 	process := func(t store.Track) {
 		state := downloadState{Running: true}
 		state.Source, state.Artist, state.Title = t.Source, t.Artist, t.Title
+		if ctx.Err() != nil {
+			state.Stage, state.Message = "stopped", "Stopped"
+			d.mu.Lock()
+			d.publishLocked(state)
+			delete(d.active, trackKey(t.Source, t.Artist, t.Title))
+			d.mu.Unlock()
+			return
+		}
 		state.Bytes, state.TotalBytes = 0, 0
 		state.Stage = "checking"
 		state.Message = "Checking saved file"
 		d.publish(state)
 		valid, err := d.saved(t)
-		if err == nil && valid {
+		if ctx.Err() != nil {
+			state.Stage, state.Message = "stopped", "Stopped"
+		} else if err == nil && valid {
 			state.Stage = "skipped"
 			state.Message = "Already downloaded"
 		} else {
@@ -164,6 +200,8 @@ func (d *downloadJob) runBatch(tracks []store.Track) {
 				directory = filepath.Join(d.config.DownloadDir, "vk")
 				id = fmt.Sprintf("%d_%d", t.OwnerID, t.AudioID)
 			}
+			fields := []zap.Field{zap.String("source", t.Source), zap.String("artist", t.Artist), zap.String("title", t.Title)}
+			d.logger.Info("track download started", fields...)
 			path, hash, saveErr := download.Save(ctx, download.Track{Source: t.Source, SourceID: id, Artist: t.Artist, Title: t.Title, AudioURL: t.AudioURL, CoverURL: t.CoverURL}, directory, t.FilePath, routes, func(e download.Event) {
 				state.Stage, state.Bytes, state.TotalBytes = e.Stage, e.Bytes, e.Total
 				state.Message = "Downloading " + t.Source
@@ -172,7 +210,10 @@ func (d *downloadJob) runBatch(tracks []store.Track) {
 			if saveErr == nil {
 				saveErr = d.store.SaveDownload(t, path, hash)
 			}
-			if saveErr != nil {
+			if ctx.Err() != nil && saveErr != nil {
+				state.Stage = "stopped"
+				state.Message = "Stopped"
+			} else if saveErr != nil {
 				state.Stage = "failed"
 				state.Message = "YouTube download failed: check yt-dlp, FFmpeg and server proxy settings."
 				if t.Source == "vk" {
@@ -183,12 +224,22 @@ func (d *downloadJob) runBatch(tracks []store.Track) {
 				state.Stage = "done"
 				state.Message = "Saved MP3"
 			}
+			switch state.Stage {
+			case "done":
+				d.logger.Info("track download finished", fields...)
+			case "stopped":
+				d.logger.Info("track download stopped", fields...)
+			case "failed":
+				d.logger.Warn("track download failed", fields...)
+			}
 		}
 		d.mu.Lock()
 		if state.Stage == "failed" {
 			d.failed++
 		}
-		d.finished++
+		if state.Stage != "stopped" {
+			d.finished++
+		}
 		state.Finished = d.finished
 		state.Total = d.state.Total
 		d.publishLocked(state)
@@ -221,6 +272,49 @@ func (d *downloadJob) runBatch(tracks []store.Track) {
 		}(source, queue)
 	}
 	wg.Wait()
+}
+
+func (s *Server) startDownloads(w http.ResponseWriter, r *http.Request) {
+	if s.downloads == nil {
+		http.Error(w, "downloads unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	tracks, err := s.store.ListAll()
+	if err != nil {
+		http.Error(w, "unable to read library", http.StatusInternalServerError)
+		return
+	}
+	d := s.downloads
+	d.mu.Lock()
+	if d.state.Running {
+		d.mu.Unlock()
+		http.Error(w, "downloads are already running or stopping", http.StatusConflict)
+		return
+	}
+	d.stopped = false
+	d.mu.Unlock()
+	d.enqueue(tracks)
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) stopDownloads(w http.ResponseWriter, r *http.Request) {
+	if s.downloads == nil {
+		http.Error(w, "downloads unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	d := s.downloads
+	d.mu.Lock()
+	d.stopped = true
+	if d.cancel != nil {
+		d.cancel()
+	}
+	stage, message := "stopped", "Downloads stopped."
+	if d.state.Running {
+		stage, message = "stopping", "Stopping downloads…"
+	}
+	d.publishLocked(downloadState{Running: d.state.Running, Total: d.state.Total, Finished: d.finished, Stage: stage, Message: message})
+	d.mu.Unlock()
+	w.WriteHeader(http.StatusAccepted)
 }
 
 func (s *Server) downloadStatus(w http.ResponseWriter, r *http.Request) {

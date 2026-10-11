@@ -18,6 +18,11 @@ The **Downloads** tab shows per-track status. The top bar shows overall status
 and keeps the player running as you navigate. Use `make run-server-watch` to
 rebuild and restart automatically when server source changes; failed builds
 are retried every second without stopping the previous server.
+The global **Stop downloads** button on Downloads cancels ongoing transfers and
+blocks automatic downloads after further syncs. **Start downloads** checks the
+entire current library and resumes downloading missing tracks.
+On server startup, downloads are enabled and the saved library is checked in
+the background for missing MP3s. Restarting the server resets a previous stop.
 
 The server writes `config.yaml`, `library.db`, and `downloads/` beside its
 executable. `make run` builds the executable in the Git-ignored `.local-server/`

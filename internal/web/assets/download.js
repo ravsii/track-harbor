@@ -2,9 +2,24 @@
   const stream = new EventSource('/download/events');
   let state;
   let snapshot;
+  let changing = false;
+  const ripples = new WeakMap();
   let syncMessage = document.getElementById('sync-state')?.textContent;
   const key = track => `${track.source}\0${track.artist}\0${track.title}`;
   const rows = new Map();
+
+  function ripple(element, event) {
+    const bounds = element.getBoundingClientRect();
+    const x = event.detail ? event.clientX - bounds.left : bounds.width / 2;
+    const y = event.detail ? event.clientY - bounds.top : bounds.height / 2;
+    element.style.setProperty('--ripple-x', `${x}px`);
+    element.style.setProperty('--ripple-y', `${y}px`);
+    element.classList.remove('rippling');
+    void element.offsetWidth;
+    element.classList.add('rippling');
+    clearTimeout(ripples.get(element));
+    ripples.set(element, setTimeout(() => element.classList.remove('rippling'), 600));
+  }
 
   function systemStatus() {
     const link = document.getElementById('system-status');
@@ -12,14 +27,19 @@
     if (!link || !label || !snapshot) return;
     let text;
     let kind = 'idle';
-    if (state?.running) {
-      text = `Downloads ${state.finished}/${state.total}`;
+    if (state?.stopped && state?.running) {
+      text = 'Stopping…';
+      kind = 'active';
+    } else if (state?.running) {
+      text = `Syncing ${state.finished}/${state.total}`;
       kind = 'active';
     } else if (snapshot.syncing) {
       text = 'Syncing library…';
       kind = 'active';
+    } else if (state?.stopped) {
+      text = 'Syncing stopped';
     } else if (snapshot.tracks.some(track => track.stage === 'failed')) {
-      text = 'Downloads need attention';
+      text = 'Syncing needs attention';
       kind = 'attention';
     } else if (!snapshot.tracks.length) {
       text = 'Sync a library to begin';
@@ -27,12 +47,22 @@
       text = 'All tracks ready to play';
       kind = 'ready';
     } else {
-      text = 'Sync to check tracks';
+      text = 'Syncing is not active';
     }
     label.textContent = text;
     link.dataset.state = kind;
     link.dataset.syncing = snapshot.syncing ? 'true' : 'false';
+    link.dataset.active = snapshot.syncing || (state?.running && !state.stopped) ? 'true' : 'false';
     link.title = `${text} · Open Downloads`;
+  }
+
+  function control() {
+    const button = document.getElementById('download-toggle');
+    if (!button || !state) return;
+    const enabled = !state.stopped;
+    button.disabled = changing || (state.running && state.stopped);
+    button.querySelector('.download-toggle-label').textContent = enabled ? 'Stop downloads' : 'Start downloads';
+    button.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${enabled ? 'pause' : 'play'}`);
   }
 
   function summary() {
@@ -45,7 +75,7 @@
 
   function status(row, track) {
     const labels = {waiting: 'Waiting for sync', queued: 'Queued', checking: 'Checking', searching: 'Searching', downloading: 'Downloading', converting: 'Converting', metadata: 'Saving', retrying: 'Retrying', skipped: 'Saved', done: 'Saved', saved: 'Saved', failed: 'Failed'};
-    const progress = track.total_bytes > 0 ? ` · ${Math.round(track.bytes / track.total_bytes * 100)}%` : '';
+    const progress = track.total_bytes > 0 && !['stopped', 'failed'].includes(track.stage) ? ` · ${Math.round(track.bytes / track.total_bytes * 100)}%` : '';
     const field = row.querySelector('.download-stage');
     field.textContent = (labels[track.stage] || track.stage || 'Waiting') + progress;
     field.dataset.stage = track.stage;
@@ -60,6 +90,7 @@
       snapshot = await response.json();
       state = snapshot.state;
       systemStatus();
+      control();
       if (!list || document.getElementById('download-tracks') !== list) return;
       summary();
       rows.clear();
@@ -104,6 +135,7 @@
         if (track) Object.assign(track, {stage: state.stage, message: state.message, bytes: state.bytes, total_bytes: state.total_bytes});
       }
       systemStatus();
+      control();
       summary();
       if (state.stage === 'queued' && !state.title) load();
       if (state.title && document.getElementById('download-tracks')) {
@@ -127,6 +159,31 @@
     const target = document.getElementById('download-state');
     if (target) target.textContent = 'Connection lost; reconnecting to download status…';
   };
+  document.addEventListener('click', async event => {
+    const button = event.target.closest('#download-toggle');
+    if (!button || button.disabled || !state || changing) return;
+    ripple(button, event);
+    const action = state.stopped ? 'start' : 'stop';
+    changing = true;
+    control();
+    try {
+      const response = await fetch(`/download/${action}`, {method: 'POST'});
+      if (!response.ok && response.status !== 409) throw new Error('request failed');
+      await load();
+    } catch (_) {
+      const target = document.getElementById('download-state');
+      if (target) target.textContent = `Could not ${action} downloads. Try again.`;
+    } finally {
+      changing = false;
+      control();
+    }
+  });
+  document.addEventListener('click', event => {
+    const link = event.target.closest('#system-status');
+    if (!link) return;
+    const indicator = link.querySelector('.system-indicator');
+    if (indicator) ripple(indicator, {detail: 0});
+  });
   document.addEventListener('htmx:afterSwap', event => {
     if (event.detail.target.id === 'content') {
       syncMessage = document.getElementById('sync-state')?.textContent;

@@ -68,6 +68,7 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 }
 
 .download-library { overflow-x: auto; }
+.download-panel #download-toggle { position: relative; display: inline-flex; align-items: center; gap: 8px; margin: 12px 0; overflow: hidden; }
 .download-library .track-head, .download-library .tracks { min-width: 620px; }
 .download-library .track-head, .download-library .tracks li { grid-template-columns: minmax(160px, 1.3fr) minmax(130px, 1fr) 100px minmax(130px, 1fr); }
 .download-library .tracks li { gap: 12px; }
@@ -107,10 +108,21 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 .topbar .player-progress strong:empty { visibility: hidden; }
 .topbar .player-progress-row { display: flex; align-items: center; gap: 8px; }
 .topbar-actions { grid-column: 3; justify-self: end; display: flex; align-items: center; gap: 10px; min-width: 0; }
-#system-status { display: inline-flex; align-items: center; gap: 8px; max-width: clamp(60px, calc((100vw - 1020px) / 2), 155px); color: var(--ink); text-decoration: none; font-size: 12px; line-height: 1.3; }
+#system-status { position: relative; display: inline-flex; align-items: center; gap: 8px; max-width: clamp(60px, calc((100vw - 1020px) / 2), 155px); padding: 6px; overflow: hidden; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 12px; line-height: 1.3; }
+.system-indicator { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 24px; height: 24px; overflow: hidden; border-radius: 50%; }
+.system-waves { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.system-waves::before, .system-waves::after { content: ''; position: absolute; top: 50%; left: 50%; width: 12px; height: 12px; border: 2px solid var(--accent); border-radius: 50%; opacity: 0; transform: translate(-50%, -50%) scale(.5); }
+#system-status[data-active="true"] .system-waves::before, #system-status[data-active="true"] .system-waves::after { animation: system-status-wave 2.4s ease-out infinite; }
+#system-status[data-active="true"] .system-waves::after { animation-delay: 1.2s; }
+@keyframes system-status-wave { 0% { opacity: .7; transform: translate(-50%, -50%) scale(.5); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(2.5); } }
+.system-indicator::after, #download-toggle::after { content: ''; position: absolute; top: var(--ripple-y, 50%); left: var(--ripple-x, 50%); width: 220px; height: 220px; border-radius: 50%; background: var(--accent); opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(0); }
+.system-indicator::after { top: 50%; left: 50%; width: 24px; height: 24px; }
+#download-toggle::after { background: var(--accent-ink); }
+.system-indicator.rippling::after, #download-toggle.rippling::after { animation: system-status-ripple .6s ease-out; }
+@keyframes system-status-ripple { 45% { opacity: .28; } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1); } }
 #system-status:hover { color: var(--accent-label); }
 #system-status:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-#system-status-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#system-status-text { position: relative; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .system-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--edge); }
 .system-sync-icon { display: none; flex: none; width: 16px; height: 16px; color: var(--accent-label); font-size: 16px; line-height: 1; }
 #system-status[data-syncing="true"] .system-dot { display: none; }
@@ -118,6 +130,8 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 @keyframes system-sync-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   #system-status[data-syncing="true"] .system-sync-icon { animation: none; }
+  #system-status[data-active="true"] .system-waves::before, #system-status[data-active="true"] .system-waves::after { animation: none; }
+  .system-indicator.rippling::after, #download-toggle.rippling::after { animation: none; }
 }
 #system-status[data-state="active"] .system-dot { background: var(--accent); }
 #system-status[data-state="ready"] .system-dot { background: var(--accent); }

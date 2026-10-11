@@ -47,7 +47,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
         <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume">
       </div>
 	      <div class="topbar-actions">
-	        <a id="system-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" title="Open Downloads"><span class="system-dot" aria-hidden="true"></span><span class="system-sync-icon">{{template "icon" "reload"}}</span><span id="system-status-text">Checking downloads…</span></a>
+	        <a id="system-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" title="Open Downloads"><span class="system-indicator" aria-hidden="true"><span class="system-waves"></span><span class="system-dot"></span><span class="system-sync-icon">{{template "icon" "reload"}}</span></span><span id="system-status-text">Checking status…</span></a>
 	        <button type="button" id="theme-choice" class="theme-toggle" aria-label="Theme: system" title="Theme: system">{{template "icon" "computer"}}</button>
 	      </div>
       <div id="player-error" role="status" aria-live="polite"></div>
@@ -97,6 +97,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	    {{if eq .Source "downloads"}}
 	    <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOAD STATUS</span></div>
 	      <h2>Downloads</h2><p>Synced tracks are checked and saved automatically. Statuses update while this page is open.</p>
+	      <button type="button" id="download-toggle" disabled><span class="download-toggle-label">Start downloads</span>{{template "icon" "play"}}</button>
 	      <div id="download-state" class="status" role="status" aria-live="polite">Loading download status…</div>
 	    </section>
 	    <section class="library download-library"><div class="library-heading"><div><span class="index">TRACKS</span><h2>Download queue</h2></div><span class="count" id="download-count"></span></div>
