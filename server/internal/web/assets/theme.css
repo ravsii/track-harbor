@@ -21,7 +21,7 @@
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
 
-.icon { display: inline-block; width: 1em; height: 1em; fill: currentColor; flex: none; vertical-align: -.125em; }
+.icon { display: inline-block; width: 1em; height: 1em; fill: none; stroke: currentColor; flex: none; vertical-align: -.125em; }
 .mark, .panel button { color: var(--accent-ink); }
 a { color: var(--accent-label); text-decoration-color: var(--accent); }
 .label, .eyebrow, .index, .sidebar-bottom, .source-tag { color: var(--accent-label); }

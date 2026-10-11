@@ -28,12 +28,12 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand"><span class="mark">{{template "icon" "record-vinyl"}}</span><div><strong>TrackHarbor</strong><small>Your music, your harbor.</small></div></div>
+    <div class="brand"><span class="mark">{{template "icon" "disc-album"}}</span><div><strong>TrackHarbor</strong><small>Your music, your harbor.</small></div></div>
     <div class="nav-label">YOUR LIBRARY</div>
     <nav aria-label="Sources">
-      <a class="{{if eq .Source "music"}}active{{end}}" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "music"}}</span> Music <span class="arrow">{{template "icon" "arrow-right"}}</span></a>
-      <a class="{{if eq .Source "spotify"}}active{{end}}" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "spotify"}}</span> Spotify <span class="arrow">{{template "icon" "arrow-right"}}</span></a>
-      <a class="{{if eq .Source "vk"}}active{{end}}" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "vk"}}</span> VK Music <span class="arrow">{{template "icon" "arrow-right"}}</span></a>
+      <a class="{{if eq .Source "music"}}active{{end}}" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "music-note-01"}}</span> Music <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
+      <a class="{{if eq .Source "spotify"}}active{{end}}" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "spotify"}}</span> Spotify <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
+      <a class="{{if eq .Source "vk"}}active{{end}}" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "vk"}}</span> VK Music <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
     </nav>
     <label class="theme-control" for="theme-choice">THEME
       <select id="theme-choice" aria-label="Color theme">
@@ -52,14 +52,14 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     </div>
     <audio id="player-audio" preload="none"></audio>
     <div class="player-controls">
-      <button type="button" id="player-prev" class="secondary" aria-label="Previous track">{{template "icon" "backward-step"}}</button>
+      <button type="button" id="player-prev" class="secondary" aria-label="Previous track">{{template "icon" "previous"}}</button>
       <button type="button" id="player-toggle" class="secondary" aria-label="Play">{{template "icon" "play"}}</button>
-      <button type="button" id="player-next" class="secondary" aria-label="Next track">{{template "icon" "forward-step"}}</button>
+      <button type="button" id="player-next" class="secondary" aria-label="Next track">{{template "icon" "next"}}</button>
       <label>Position <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek"></label>
       <span id="player-time">0:00 / 0:00</span>
       <label>Volume <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume"></label>
       <label><input type="checkbox" id="player-shuffle"> {{template "icon" "shuffle"}} Shuffle</label>
-      <label><input type="checkbox" id="player-repeat"> {{template "icon" "repeat"}} Repeat one</label>
+      <label><input type="checkbox" id="player-repeat"> {{template "icon" "repeat-one-01"}} Repeat one</label>
     </div>
     <div id="player-error" role="status" aria-live="polite"></div>
   </header>
@@ -68,35 +68,35 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     <header class="hero"><div class="eyebrow">YOUR COLLECTION, IN ONE PLACE</div><h1>{{.Name}}</h1><p>{{if eq .Source "music"}}All your tracks from Spotify and VK Music, together and ordered by when they were added.{{else}}Connect your account, sync your library, and explore what you love. Each source has its own collection.{{end}}</p></header>
     {{if ne .Source "music"}}
     <section class="grid">
-        <div class="panel connect"><div class="panel-top"><span class="index">01 / CONNECTION</span><span class="pill {{if .Connected}}connected{{end}}">{{if .Connected}}{{template "icon" "circle-check"}} Connected{{else}}{{template "icon" "circle"}} Not connected{{end}}</span></div>
+        <div class="panel connect"><div class="panel-top"><span class="index">01 / CONNECTION</span><span class="pill {{if .Connected}}connected{{end}}">{{if .Connected}}{{template "icon" "checkmark-circle-02"}} Connected{{else}}{{template "icon" "circle"}} Not connected{{end}}</span></div>
         <h2>Connect {{.Name}}</h2>
         {{if eq .Source "spotify"}}
         <p>Paste the full request headers from a Spotify Web Player request. Only <code>authorization</code> and <code>client-token</code> are saved; other headers and cookies are discarded.</p>
         <form action="/connect" method="post" autocomplete="off"><input type="hidden" name="source" value="spotify">
           <label>REQUEST HEADERS<textarea name="headers" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="authorization: Bearer …&#10;client-token: …" required></textarea></label>
-          <button type="submit">Save credentials <span>{{template "icon" "arrow-right"}}</span></button>
+          <button type="submit">Save credentials <span>{{template "icon" "arrow-right-01"}}</span></button>
         </form>
         {{else}}
-        <p><a href="{{.AuthURL}}" target="_blank" rel="noopener noreferrer">Open VK authorization {{template "icon" "arrow-up-right-from-square"}}</a>, then paste the token or full redirect URL below. The redirect fragment stays in your browser until you paste it.</p>
+        <p><a href="{{.AuthURL}}" target="_blank" rel="noopener noreferrer">Open VK authorization {{template "icon" "external-link"}}</a>, then paste the token or full redirect URL below. The redirect fragment stays in your browser until you paste it.</p>
         <form action="/connect" method="post" autocomplete="off"><input type="hidden" name="source" value="vk">
           <label>ACCESS TOKEN OR REDIRECT URL<input name="token" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste token or redirect URL" required></label>
-          <button type="submit">Save credentials <span>{{template "icon" "arrow-right"}}</span></button>
+          <button type="submit">Save credentials <span>{{template "icon" "arrow-right-01"}}</span></button>
         </form>
         {{end}}
-        <form action="/ping" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Check connection <span>{{template "icon" "arrow-right"}}</span></button></form>
+        <form action="/ping" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Check connection <span>{{template "icon" "arrow-right-01"}}</span></button></form>
         <div class="status" aria-live="polite">CONNECTION <span hx-get="/ping-status?source={{.Source}}" hx-trigger="every 10s" hx-swap="innerHTML">{{if .PingStatus}}{{.PingStatus}}{{else}}Not checked yet.{{end}}</span></div>
       </div>
-      <div class="panel sync"><div class="panel-top"><span class="index">02 / SYNC</span><span class="mini-mark">{{template "icon" "rotate"}}</span></div>
+      <div class="panel sync"><div class="panel-top"><span class="index">02 / SYNC</span><span class="mini-mark">{{template "icon" "reload"}}</span></div>
         <h2>Bring your tracks in</h2>
         <p>Fetch your latest liked tracks. Your current list stays available if a sync fails.</p>
-        <form action="/sync" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Sync library <span>{{template "icon" "arrow-right"}}</span></button></form>
+        <form action="/sync" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Sync library <span>{{template "icon" "arrow-right-01"}}</span></button></form>
         <div class="status" aria-live="polite">STATUS <span id="sync-state" hx-get="/status?source={{.Source}}" hx-trigger="every 10s" hx-swap="innerHTML">{{if .Status}}{{.Status}}{{else}}Ready to sync.{{end}}</span></div>
       </div>
     </section>
     {{end}}
     <section class="panel download-panel"><div class="panel-top"><span class="index">DOWNLOADS / MANUAL START</span></div>
       <h2>Save tracks locally</h2><p>Downloads start only when you press a button. Existing MP3s are skipped.</p>
-      <form action="/download" method="post"><input type="hidden" name="mode" value="all"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" {{if not .Tracks}}disabled{{end}}>Download missing tracks <span>{{template "icon" "download"}}</span></button></form>
+      <form action="/download" method="post"><input type="hidden" name="mode" value="all"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" {{if not .Tracks}}disabled{{end}}>Download missing tracks <span>{{template "icon" "download-01"}}</span></button></form>
       <div id="download-state" class="status" role="status" aria-live="polite">Ready to download.</div>
     </section>
     <dialog id="download-dialog" aria-labelledby="download-dialog-message"><p id="download-dialog-message"></p><button type="button" id="download-dialog-close">OK</button></dialog>
@@ -105,10 +105,10 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
         <div class="track-head"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span>FILE</span></div>
         <ol class="tracks">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="number">{{add $i 1}}</span><strong>{{$t.Title}}</strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<div class="track-actions"><button type="button" class="play-track secondary" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button><form action="/download" method="post"><input type="hidden" name="mode" value="one"><input type="hidden" name="view" value="{{$.Source}}"><input type="hidden" name="source" value="{{$t.Source}}"><input type="hidden" name="artist" value="{{$t.Artist}}"><input type="hidden" name="title" value="{{$t.Title}}"><button class="secondary" type="submit">{{if $t.FilePath}}Saved{{else}}Download{{end}}</button></form></div></li>{{end}}</ol>
       {{else}}
-        <div class="empty"><span>{{template "icon" "compact-disc"}}</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
+        <div class="empty"><span>{{template "icon" "disc"}}</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
       {{end}}
     </section>
     <footer>LOCAL DOWNLOADS · TRACKHARBOR</footer>
   </main>
 </div>
-</body></html>{{define "icon"}}<svg class="icon" aria-hidden="true" focusable="false"><use href="/assets/icons.svg#fa-{{.}}"></use></svg>{{end}}`))
+</body></html>{{define "icon"}}<svg class="icon" aria-hidden="true" focusable="false"><use href="/assets/icons.svg#hg-{{.}}"></use></svg>{{end}}`))

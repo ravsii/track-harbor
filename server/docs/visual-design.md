@@ -56,14 +56,15 @@ Explicit choices are saved in the browser.
 
 ## Icons
 
-Use [Font Awesome Free](https://fontawesome.com/) icons throughout the server
-web interface instead of Unicode symbols or emoji for navigation, playback,
-downloads, and status actions. Keep the selected SVG icons self-hosted so the
-local server does not depend on an external CDN. The icons are licensed under
-CC BY 4.0; retain the attribution and license in
-`server/docs/fontawesome-license.txt`. Decorative icons must be hidden from
-assistive technology; icon-only buttons must have descriptive accessible
-labels. Icons inherit the surrounding text color and must work in both themes.
+Use the free [Hugeicons](https://hugeicons.com/) **Stroke Rounded** icons
+throughout the server web interface instead of Unicode symbols or emoji for
+navigation, playback, downloads, and status actions. Use the MIT-licensed
+`@hugeicons/core-free-icons` set, not Pro assets. Keep the selected SVG icons
+self-hosted so the local server does not depend on an external CDN. Retain the
+MIT notice in `server/docs/hugeicons-license.txt`. Decorative icons must be
+hidden from assistive technology; icon-only buttons must have descriptive
+accessible labels. Icons inherit the surrounding text color and must work in
+both themes.
 
 Every existing and future visual element must work in both themes: text,
 backgrounds, borders, buttons, forms, hover and focus states, errors,

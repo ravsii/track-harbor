@@ -10,7 +10,7 @@
 
   function refresh() {
     $('player-toggle').querySelector('use').setAttribute('href',
-      audio.paused ? '/assets/icons.svg#fa-play' : '/assets/icons.svg#fa-pause');
+      audio.paused ? '/assets/icons.svg#hg-play' : '/assets/icons.svg#hg-pause');
     $('player-toggle').setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
     $('player-time').textContent = `${time(audio.currentTime)} / ${time(audio.duration)}`;
     $('player-seek').value = Number.isFinite(audio.duration) && audio.duration > 0
