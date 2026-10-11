@@ -230,7 +230,7 @@ func (p *Provider) downloadConnection(ctx context.Context, track download.Track,
 			os.RemoveAll(dir)
 		}
 	}()
-	_, err = p.runConnectionWithProgress(ctx, "download", onProxy, address, onProgress, "--no-playlist", "--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K", "--output", filepath.Join(dir, "audio.%(ext)s"), "--", "https://www.youtube.com/watch?v="+track.ID)
+	_, err = p.runConnectionWithProgress(ctx, "download", onProxy, address, onProgress, "--no-playlist", "--concurrent-fragments", "5", "--format", "bestaudio/best", "--extract-audio", "--audio-format", "mp3", "--audio-quality", "192K", "--output", filepath.Join(dir, "audio.%(ext)s"), "--", "https://www.youtube.com/watch?v="+track.ID)
 	if err != nil {
 		return download.DownloadResponse{}, err
 	}
