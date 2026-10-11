@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 
 	"trackharbor/server/internal/library"
 	"trackharbor/server/internal/store"
+	"trackharbor/spotify"
 	"trackharbor/vk"
 )
 
@@ -24,19 +26,22 @@ import (
 var assets embed.FS
 
 type Server struct {
-	store  *store.Store
-	mu     sync.Mutex
-	status map[string]string
+	store      *store.Store
+	mu         sync.Mutex
+	status     map[string]string
+	pingStatus map[string]string
 }
 
 func New(db *store.Store) http.Handler {
-	s := &Server{store: db, status: map[string]string{}}
+	s := &Server{store: db, status: map[string]string{}, pingStatus: map[string]string{}}
 	mux := http.NewServeMux()
 	static, _ := fs.Sub(assets, "assets")
 	mux.Handle("GET /assets/", http.StripPrefix("/assets/", http.FileServerFS(static)))
 	mux.HandleFunc("GET /", s.page)
 	mux.HandleFunc("GET /status", s.currentStatus)
+	mux.HandleFunc("GET /ping-status", s.currentPingStatus)
 	mux.HandleFunc("POST /connect", s.connect)
+	mux.HandleFunc("POST /ping", s.pingSource)
 	mux.HandleFunc("POST /sync", s.syncSource)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.Host)
@@ -79,9 +84,9 @@ func selectedSource(r *http.Request) (string, bool) {
 }
 
 type pageData struct {
-	Source, Name, Status, AuthURL string
-	Connected                     bool
-	Tracks                        []store.Track
+	Source, Name, Status, PingStatus, AuthURL string
+	Connected                                 bool
+	Tracks                                    []store.Track
 }
 
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
@@ -106,6 +111,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Lock()
 		data.Status = s.status[source]
+		data.PingStatus = s.pingStatus[source]
 		s.mu.Unlock()
 		data.AuthURL = vk.AuthorizationURL()
 	}
@@ -128,6 +134,18 @@ func (s *Server) currentStatus(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = "Ready to sync."
 	}
+	template.HTMLEscape(w, []byte(status))
+}
+
+func (s *Server) currentPingStatus(w http.ResponseWriter, r *http.Request) {
+	source := sourceName(r)
+	s.mu.Lock()
+	status := s.pingStatus[source]
+	s.mu.Unlock()
+	if status == "" {
+		status = "Not checked yet."
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	template.HTMLEscape(w, []byte(status))
 }
 
@@ -168,6 +186,62 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.status[source] = "Credentials saved. Click Sync library to import tracks."
+	s.pingStatus[source] = "Not checked yet."
+	http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
+}
+
+func (s *Server) pingSource(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1024)
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "invalid form", 400)
+		return
+	}
+	source, ok := selectedSource(r)
+	if !ok {
+		http.Error(w, "unknown source", 400)
+		return
+	}
+	first, second, err := s.store.Credentials(source)
+	if errors.Is(err, sql.ErrNoRows) {
+		http.Error(w, "connect source first", 400)
+		return
+	}
+	if err != nil {
+		http.Error(w, "unable to read credentials", 500)
+		return
+	}
+	s.mu.Lock()
+	if s.pingStatus[source] == "Checking…" {
+		s.mu.Unlock()
+		http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
+		return
+	}
+	s.pingStatus[source] = "Checking…"
+	s.mu.Unlock()
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+		var pingErr error
+		if source == "spotify" {
+			pingErr = spotify.Ping(ctx, first, second)
+		} else {
+			client := vk.NewClient(first)
+			defer client.Close()
+			pingErr = client.Ping(ctx)
+		}
+		message := "Connection verified."
+		switch {
+		case errors.Is(pingErr, spotify.ErrUnauthorized), errors.Is(pingErr, vk.ErrUnauthorized):
+			message = "Token rejected. Reconnect this source with fresh credentials."
+		case pingErr != nil:
+			message = "Could not verify connection. Try again later; the token may still be valid."
+		}
+		s.mu.Lock()
+		if s.pingStatus[source] == "Checking…" {
+			s.pingStatus[source] = message
+		}
+		s.mu.Unlock()
+	}()
 	http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
 }
 

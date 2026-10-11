@@ -31,6 +31,10 @@ are saved). On the VK tab, open the authorization link and paste its token or
 redirect URL. Each source has its own Sync button and track list. Sync runs in
 the background and does not erase the previous library on failure. Playback and
 downloads in the web app are not implemented yet; the CLI still supports downloading.
+Each source tab also has a Check connection button: it checks saved credentials
+without importing tracks and distinguishes rejected tokens from temporary errors.
+VK's check requests one item from `audio.get` after resolving the current user;
+an empty VK library also counts as a successful check.
 
 Spotify sync saves the date supplied for each liked track. VK sync uses the
 optional `date` field (VK describes it as the audio upload date, not necessarily

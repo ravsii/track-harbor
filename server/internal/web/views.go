@@ -53,6 +53,8 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
           <button type="submit">Save credentials <span>↗</span></button>
         </form>
         {{end}}
+        <form action="/ping" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Check connection <span>→</span></button></form>
+        <div class="status" aria-live="polite">CONNECTION <span hx-get="/ping-status?source={{.Source}}" hx-trigger="every 3s" hx-swap="innerHTML">{{if .PingStatus}}{{.PingStatus}}{{else}}Not checked yet.{{end}}</span></div>
       </div>
       <div class="panel sync"><div class="panel-top"><span class="index">02 / SYNC</span><span class="mini-mark">↻</span></div>
         <h2>Bring your tracks in</h2>

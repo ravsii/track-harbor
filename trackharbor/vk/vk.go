@@ -3,6 +3,7 @@ package vk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,9 @@ import (
 
 const apiVersion = "5.131"
 const pageSize = 50
+
+// ErrUnauthorized means VK rejected the saved access token.
+var ErrUnauthorized = errors.New("VK token rejected")
 
 // Match vkpymusic's VkMobileClient request header without changing token auth.
 const userAgent = "VKAndroidApp/4.13.1-1206 (Android 4.4.3; SDK 19; armeabi; ; ru)"
@@ -83,10 +87,11 @@ func (c *Client) request(ctx context.Context, method string, params url.Values, 
 		return fmt.Errorf("VK %s: invalid JSON response", method)
 	}
 	if envelope.Error != nil {
+		if envelope.Error.Code == 5 || envelope.Error.Code == 1117 {
+			return fmt.Errorf("VK %s: %w", method, ErrUnauthorized)
+		}
 		hint := "request rejected"
 		switch envelope.Error.Code {
-		case 5:
-			hint = "authorization failed; obtain a fresh token and run trackharbor vk auth"
 		case 6:
 			hint = "rate limit reached; retry sync later"
 		case 7, 15, 20, 23, 27, 28:
@@ -101,6 +106,39 @@ func (c *Client) request(ctx context.Context, method string, params url.Values, 
 	}
 	if err := json.Unmarshal(envelope.Response, result); err != nil {
 		return fmt.Errorf("VK %s: unexpected response format", method)
+	}
+	return nil
+}
+
+// Ping checks access to the current user's audio library without downloading
+// audio or changing stored tracks. An empty library is a valid response.
+func (c *Client) Ping(ctx context.Context) error {
+	var users []struct {
+		ID int64 `json:"id"`
+	}
+	if err := c.request(ctx, "users.get", url.Values{}, &users); err != nil {
+		return err
+	}
+	if len(users) != 1 || users[0].ID <= 0 {
+		return fmt.Errorf("VK users.get returned no current user")
+	}
+	var page struct {
+		Count *int `json:"count"`
+		Items *[]struct {
+			ID int64 `json:"id"`
+		} `json:"items"`
+	}
+	params := url.Values{
+		"owner_id": {strconv.FormatInt(users[0].ID, 10)},
+		"count":    {"1"}, "offset": {"0"},
+	}
+	if err := c.request(ctx, "audio.get", params, &page); err != nil {
+		return err
+	}
+	if page.Count == nil || page.Items == nil || *page.Count < 0 ||
+		len(*page.Items) > 1 || (*page.Count == 0 && len(*page.Items) != 0) ||
+		(*page.Count > 0 && len(*page.Items) != 1) {
+		return fmt.Errorf("VK audio.get returned an invalid audio page")
 	}
 	return nil
 }

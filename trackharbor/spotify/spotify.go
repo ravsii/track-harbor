@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,9 @@ import (
 )
 
 const playlistQueryHash = "8964e8eafb21aa992a7d951d256d83285c04be2105d209262901de70cb97584a"
+
+// ErrUnauthorized means Spotify rejected the saved Web Player credentials.
+var ErrUnauthorized = errors.New("Spotify credentials rejected")
 
 func GetSongInfo(
 	bearer string,
@@ -85,6 +89,10 @@ func fetchPlaylist(bearer, clientToken, uri string, offset int, operation string
 }
 
 func query(bearer, clientToken, operation, hash string, variables any, result any, loggers ...*zap.Logger) (queryErr error) {
+	return queryContext(context.Background(), bearer, clientToken, operation, hash, variables, result, loggers...)
+}
+
+func queryContext(ctx context.Context, bearer, clientToken, operation, hash string, variables any, result any, loggers ...*zap.Logger) (queryErr error) {
 	logger := spotifyLogger(loggers).With(zap.String("operation", operation), zap.String("query_hash", hash))
 	if values, ok := variables.(map[string]any); ok {
 		for _, key := range []string{"uri", "offset", "limit", "features", "flatten"} {
@@ -112,7 +120,7 @@ func query(bearer, clientToken, operation, hash string, variables any, result an
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, "POST", "https://api-partner.spotify.com/pathfinder/v2/query", bytes.NewReader(payload))
 	if err != nil {
@@ -144,6 +152,9 @@ func query(bearer, clientToken, operation, hash string, variables any, result an
 	defer resp.Body.Close()
 	logger.Info("spotify_http_response", zap.Int("status", resp.StatusCode), zap.String("encoding", diagnosticText(resp.Header.Get("Content-Encoding"), bearer, clientToken)), zap.Int64("content_length", resp.ContentLength))
 	if resp.StatusCode != http.StatusOK {
+		if resp.StatusCode == http.StatusUnauthorized {
+			return ErrUnauthorized
+		}
 		return fmt.Errorf("HTTP %d %s", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 
@@ -197,6 +208,12 @@ func query(bearer, clientToken, operation, hash string, variables any, result an
 				path = append(path, diagnosticText(fmt.Sprint(part), bearer, clientToken))
 			}
 			logger.Error("spotify_api_error", zap.String("message", diagnosticText(apiErr.Message, bearer, clientToken)), zap.String("code", diagnosticText(string(apiErr.Extensions.Code), bearer, clientToken)), zap.Strings("path", path))
+		}
+		for _, apiErr := range envelope.Errors {
+			var code string
+			if json.Unmarshal(apiErr.Extensions.Code, &code) == nil && (code == "UNAUTHENTICATED" || code == "UNAUTHORIZED") {
+				return ErrUnauthorized
+			}
 		}
 		return fmt.Errorf("Spotify returned a request error for %s", operation)
 	}
