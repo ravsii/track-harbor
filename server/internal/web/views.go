@@ -32,7 +32,6 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     <div class="topbar-content">
       <div class="topbar-track">
         <strong id="player-track" aria-live="polite"></strong>
-        <select id="player-track-choice" aria-label="Saved tracks"><option value="">Saved tracks</option></select>
       </div>
       <audio id="player-audio" preload="none"></audio>
       <div class="player-controls">

@@ -35,22 +35,11 @@
       ? Math.round(audio.currentTime / audio.duration * 1000) : 0;
   }
 
-  function updateChoices() {
-    const selector = $('player-track-choice');
-    selector.replaceChildren(new Option('Saved tracks', ''));
-    for (const [index, track] of tracks.entries()) {
-      selector.add(new Option(`${track.artist} — ${track.title}`, String(index)));
-    }
-    const selected = tracks.findIndex(track => stamp(track) === current);
-    selector.value = selected < 0 ? '' : String(selected);
-  }
-
   async function loadTracks() {
     try {
       const response = await fetch('/audio/tracks');
       if (!response.ok) throw new Error('unavailable');
       tracks = await response.json();
-      updateChoices();
     } catch (_) {
       $('player-error').textContent = 'Could not load saved tracks. Refresh the page to retry.';
     }
@@ -67,8 +56,6 @@
     audio.src = `/audio?${params}`;
     $('player-track').textContent = `${track.artist} — ${track.title}`;
     $('player-error').textContent = '';
-    const selected = tracks.findIndex(item => stamp(item) === current);
-    $('player-track-choice').value = selected < 0 ? '' : String(selected);
     try { await audio.play(); } catch (_) { $('player-error').textContent = 'Could not play this MP3. Check that it is still downloaded.'; }
     refresh();
   }
@@ -131,10 +118,6 @@
       if (audio.paused) audio.play().catch(() => { $('player-error').textContent = 'Could not play this MP3.'; });
       else audio.pause();
     }
-  });
-  $('player-track-choice').addEventListener('change', event => {
-    const track = tracks[Number(event.target.value)];
-    if (track) play(track);
   });
   document.addEventListener('input', event => {
     if (event.target.id === 'player-volume') {

@@ -94,17 +94,8 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
   padding: 12px clamp(24px, 5vw, 82px);
 }
 .topbar-track { min-width: 0; }
-.topbar-track strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; margin: 0 0 4px; font-size: 13px; }
+.topbar-track strong { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; }
 .topbar-track strong:empty { display: none; }
-.topbar-track select {
-  width: 100%;
-  padding: 4px 8px;
-  border: 1px solid var(--edge);
-  border-radius: 8px;
-  background: var(--field);
-  color: var(--ink);
-  font: 12px system-ui, sans-serif;
-}
 .topbar .player-controls { display: flex; align-items: center; flex-wrap: nowrap; gap: 6px; min-width: 0; }
 .topbar button {
   display: grid;

@@ -18,6 +18,8 @@ logo on the left, track and playback controls in the center, and the theme
 button on the far right. A single playback-mode button cycles through in order,
 shuffle, and repeat one. The volume icon toggles mute without losing the
 previous level. The theme button cycles through System, Light, and Dark.
+The top bar has no track dropdown: Play starts the first saved track, and
+individual tracks are selected from their Play actions in the library.
 
 ## Color palette
 
