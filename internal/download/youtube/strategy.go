@@ -81,15 +81,15 @@ type RandomProxy struct{ ProxyOnly }
 
 func (RandomProxy) Name() string { return "random_proxy" }
 
-// ConfigProxy tries available personal proxies in configuration order.
+// PersonalProxy tries available personal proxies in configuration order.
 // The caller supplies the addresses that passed startup HTTPS verification.
-type ConfigProxy struct{ Addresses []string }
+type PersonalProxy struct{ Addresses []string }
 
-func (ConfigProxy) Name() string { return "config_proxy" }
+func (PersonalProxy) Name() string { return "personal_proxy" }
 
-func (s ConfigProxy) Execute(ctx context.Context, request func(string) error) error {
+func (s PersonalProxy) Execute(ctx context.Context, request func(string) error) error {
 	if len(s.Addresses) == 0 {
-		return fmt.Errorf("config_proxy: no personal proxies configured")
+		return fmt.Errorf("personal_proxy: no personal proxies configured")
 	}
 	var lastErr error
 	for _, address := range s.Addresses {
@@ -97,14 +97,14 @@ func (s ConfigProxy) Execute(ctx context.Context, request func(string) error) er
 			return err
 		}
 		if address == "" {
-			return fmt.Errorf("config_proxy: empty proxy; direct connection forbidden")
+			return fmt.Errorf("personal_proxy: empty proxy; direct connection forbidden")
 		}
 		lastErr = request(address)
 		if lastErr == nil || errors.Is(lastErr, download.ErrNotFound) || errors.Is(lastErr, context.Canceled) {
 			return lastErr
 		}
 	}
-	return fmt.Errorf("config_proxy: personal proxies exhausted: %w", lastErr)
+	return fmt.Errorf("personal_proxy: personal proxies exhausted: %w", lastErr)
 }
 
 func (DirectWithProxyFallback) Name() string { return "fallback" }

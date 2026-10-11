@@ -150,17 +150,17 @@ var downloadCmd = &cobra.Command{
 		fmt.Fprintf(out, "Стратегии: %s\n", strategyName)
 		var proxyStrategy youtube.ProxyOnly
 		workers, proxyCount := workerLimit, 0
-		usesProxy, usesDirect, usesConfigProxy := false, false, false
+		usesProxy, usesDirect, usesPersonalProxy := false, false, false
 		for _, name := range cfg.Strategy {
 			usesProxy = usesProxy || name == "random_proxy"
 			usesDirect = usesDirect || name == "direct"
-			usesConfigProxy = usesConfigProxy || name == "config_proxy"
+			usesPersonalProxy = usesPersonalProxy || name == "personal_proxy"
 		}
-		if usesConfigProxy {
-			fmt.Fprintf(out, "Проверка личных прокси: %d (HTTPS к YouTube, таймаут 5 с на адрес)…\n", len(cfg.MyProxy))
+		if usesPersonalProxy {
+			fmt.Fprintf(out, "Проверка личных прокси: %d (HTTPS к YouTube, таймаут 5 с на адрес)…\n", len(cfg.PersonalProxy))
 			checker := proxy.NewPersonalHTTPSChecker()
-			available := make([]string, 0, len(cfg.MyProxy))
-			for _, address := range cfg.MyProxy {
+			available := make([]string, 0, len(cfg.PersonalProxy))
+			for _, address := range cfg.PersonalProxy {
 				started := time.Now()
 				err := checker.Check(cmd.Context(), address)
 				if cmd.Context().Err() != nil {
@@ -184,7 +184,7 @@ var downloadCmd = &cobra.Command{
 				fmt.Fprintf(out, "  %s: доступен (%s).\n", label, time.Since(started).Round(time.Millisecond))
 				logger.Info("personal_proxy_checked", fields...)
 			}
-			cfg.MyProxy = available // Do not change the user's YAML; recheck on every run.
+			cfg.PersonalProxy = available // Do not change the user's YAML; recheck on every run.
 			proxyCount = len(available)
 			fmt.Fprintf(out, "Доступных личных прокси: %d.\n", proxyCount)
 		}
@@ -227,8 +227,8 @@ var downloadCmd = &cobra.Command{
 			switch name {
 			case "direct":
 				connection.Strategies = append(connection.Strategies, youtube.Direct{})
-			case "config_proxy":
-				connection.Strategies = append(connection.Strategies, youtube.ConfigProxy{Addresses: cfg.MyProxy})
+			case "personal_proxy":
+				connection.Strategies = append(connection.Strategies, youtube.PersonalProxy{Addresses: cfg.PersonalProxy})
 			case "random_proxy":
 				connection.Strategies = append(connection.Strategies, youtube.RandomProxy{ProxyOnly: proxyStrategy})
 			}

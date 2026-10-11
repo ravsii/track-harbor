@@ -13,12 +13,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const defaultYAML = "version: 1\nstrategy:\n  - direct\nmy_proxy: []\n"
+const defaultYAML = "version: 1\nstrategy:\n  - direct\npersonal_proxy: []\n"
 
 type Config struct {
-	Version  int      `yaml:"version"`
-	Strategy []string `yaml:"strategy"`
-	MyProxy  []string `yaml:"my_proxy"`
+	Version       int      `yaml:"version"`
+	Strategy      []string `yaml:"strategy"`
+	PersonalProxy []string `yaml:"personal_proxy"`
 }
 
 func Directory() (string, error) {
@@ -76,7 +76,7 @@ func Load() (Config, error) {
 		return Config{}, fmt.Errorf("%s: version must be 1, got %d", path, cfg.Version)
 	}
 	if len(cfg.Strategy) == 0 {
-		return Config{}, fmt.Errorf("%s: strategy must be a non-empty list of direct/config_proxy/random_proxy", path)
+		return Config{}, fmt.Errorf("%s: strategy must be a non-empty list of direct/personal_proxy/random_proxy", path)
 	}
 	seen := make(map[string]bool)
 	for i, name := range cfg.Strategy {
@@ -85,17 +85,17 @@ func Load() (Config, error) {
 			name = "random_proxy"
 			cfg.Strategy[i] = name
 		}
-		if name != "direct" && name != "config_proxy" && name != "random_proxy" {
-			return Config{}, fmt.Errorf("%s: unknown strategy %q; expected direct, config_proxy or random_proxy", path, name)
+		if name != "direct" && name != "personal_proxy" && name != "random_proxy" {
+			return Config{}, fmt.Errorf("%s: unknown strategy %q; expected direct, personal_proxy or random_proxy", path, name)
 		}
 		if seen[name] {
 			return Config{}, fmt.Errorf("%s: repeated strategy %q", path, name)
 		}
 		seen[name] = true
 	}
-	addresses := make([]string, 0, len(cfg.MyProxy))
+	addresses := make([]string, 0, len(cfg.PersonalProxy))
 	unique := make(map[string]bool)
-	for i, address := range cfg.MyProxy {
+	for i, address := range cfg.PersonalProxy {
 		address = strings.TrimSpace(address)
 		if !strings.Contains(address, "://") {
 			address = "http://" + address
@@ -103,16 +103,16 @@ func Load() (Config, error) {
 		u, err := url.Parse(address)
 		// Do not include the supplied URL or parser error: it can contain a password.
 		if err != nil || u.Hostname() == "" || u.Path != "" && u.Path != "/" || u.RawQuery != "" || u.Fragment != "" {
-			return Config{}, fmt.Errorf("%s: my_proxy[%d]: expected proxy URL with host and port", path, i+1)
+			return Config{}, fmt.Errorf("%s: personal_proxy[%d]: expected proxy URL with host and port", path, i+1)
 		}
 		switch u.Scheme {
 		case "http", "https", "socks4", "socks5":
 		default:
-			return Config{}, fmt.Errorf("%s: my_proxy[%d]: supported protocols are http, https, socks4, socks5", path, i+1)
+			return Config{}, fmt.Errorf("%s: personal_proxy[%d]: supported protocols are http, https, socks4, socks5", path, i+1)
 		}
 		port, err := strconv.Atoi(u.Port())
 		if err != nil || port < 1 || port > 65535 {
-			return Config{}, fmt.Errorf("%s: my_proxy[%d]: port must be between 1 and 65535", path, i+1)
+			return Config{}, fmt.Errorf("%s: personal_proxy[%d]: port must be between 1 and 65535", path, i+1)
 		}
 		u.Path = ""
 		address = u.String()
@@ -121,9 +121,9 @@ func Load() (Config, error) {
 			addresses = append(addresses, address)
 		}
 	}
-	cfg.MyProxy = addresses
-	if seen["config_proxy"] && len(cfg.MyProxy) == 0 {
-		return Config{}, fmt.Errorf("%s: config_proxy requires a non-empty my_proxy list", path)
+	cfg.PersonalProxy = addresses
+	if seen["personal_proxy"] && len(cfg.PersonalProxy) == 0 {
+		return Config{}, fmt.Errorf("%s: personal_proxy requires a non-empty personal_proxy list", path)
 	}
 	return cfg, nil
 }

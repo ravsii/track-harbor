@@ -21,7 +21,7 @@ go run ./cmd/cli download
 version: 1
 strategy:
   - direct
-my_proxy: []
+personal_proxy: []
 ```
 
 При отсутствии новой БД программа переносит содержимое `meshtune.db` из текущей
@@ -39,16 +39,16 @@ my_proxy: []
 version: 1
 strategy:
   - direct
-  - config_proxy
+  - personal_proxy
   - random_proxy
-my_proxy:
+personal_proxy:
   - "http://user:password@proxy.example.com:8080"
   - "socks5://127.0.0.1:1080"
 ```
 
 - `direct`: явно прямое соединение; при единственном `direct` списки прокси
   не загружаются и не проверяются.
-- `config_proxy`: личные прокси из `my_proxy`, пробуются по порядку до первого
+- `personal_proxy`: личные прокси из `personal_proxy`, пробуются по порядку до первого
   успеха. После ошибок всех личных прокси используется следующая стратегия.
   При каждом старте скачивания проверяется HTTPS-доступ к YouTube `robots.txt`
   через каждый личный прокси, с таймаутом 5 секунд и проверкой TLS. Это не ICMP-пинг:
@@ -76,7 +76,7 @@ my_proxy:
 Для всех режимов `yt-dlp` получает явный маршрут и не наследует HTTP_PROXY,
 HTTPS_PROXY, ALL_PROXY или NO_PROXY. UI показывает `напрямую` либо адрес прокси.
 В коде политика реализована интерфейсом `DownloadStrategy` и реализациями
-`Direct`, `ConfigProxy`, `RandomProxy` и упорядоченной цепочкой `Priority` в
+`Direct`, `PersonalProxy`, `RandomProxy` и упорядоченной цепочкой `Priority` в
 `internal/download/youtube/strategy.go`.
 
 ## Проверка прокси
@@ -85,7 +85,7 @@ HTTPS_PROXY, ALL_PROXY или NO_PROXY. UI показывает `напряму�
 go run ./cmd/cli proxy test
 ```
 
-Проверяет все личные адреса из `my_proxy`, независимо от выбранного списка
+Проверяет все личные адреса из `personal_proxy`, независимо от выбранного списка
 стратегий, затем актуальные публичные адреса в `~/.meshvault/vault.db`.
 Проверка — HTTPS-запрос к YouTube с проверкой TLS: таймаут личных 5 секунд,
 публичных 1 секунда, до 1000 параллельных проверок. Для каждого адреса показываются
@@ -172,7 +172,7 @@ MESHVAULT_YOUTUBE_LIVE=1 go test ./internal/download/youtube -run TestLiveYouTub
 ## Бесплатные прокси
 
 Если в списке стратегий есть `random_proxy`, перед скачиванием непустой библиотеки
-`download` готовит публичный пул. Для `direct` и `config_proxy` этот этап отсутствует:
+`download` готовит публичный пул. Для `direct` и `personal_proxy` этот этап отсутствует:
 
 1. Берёт из `~/.meshvault/vault.db` ещё действующие записи `verified_proxies`, если кеш
    сформирован после полной проверки с текущими источниками и таймаутом.

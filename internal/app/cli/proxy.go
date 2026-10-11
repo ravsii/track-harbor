@@ -26,7 +26,7 @@ var proxyCmd = &cobra.Command{
 var proxyTestCmd = &cobra.Command{
 	Use:          "test",
 	Short:        "Проверить личные прокси и публичный кеш",
-	Long:         "Проверить HTTPS-доступ к YouTube через все my_proxy и актуальные адреса в кеше. Если рабочие кешированные адреса есть, источники не запрашиваются. Иначе публичный пул обновляется.",
+	Long:         "Проверить HTTPS-доступ к YouTube через все personal_proxy и актуальные адреса в кеше. Если рабочие кешированные адреса есть, источники не запрашиваются. Иначе публичный пул обновляется.",
 	Args:         cobra.NoArgs,
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -47,7 +47,7 @@ var proxyTestCmd = &cobra.Command{
 		ctx := cmd.Context()
 		out := cmd.OutOrStdout()
 		fmt.Fprintln(out, "Проверка HTTPS-доступа к YouTube. Журнал: logs/proxy-test.jsonl")
-		personal, err := checkProxyGroup(ctx, out, logger, "Личные", cfg.MyProxy, proxy.NewPersonalHTTPSChecker())
+		personal, err := checkProxyGroup(ctx, out, logger, "Личные", cfg.PersonalProxy, proxy.NewPersonalHTTPSChecker())
 		if err != nil {
 			return err
 		}
@@ -79,7 +79,7 @@ var proxyTestCmd = &cobra.Command{
 			})
 			if err != nil {
 				logger.Error("proxy_test_refresh_failed", zap.Error(err))
-				fmt.Fprintf(out, "Личных доступно: %d/%d.\n", personal, len(cfg.MyProxy))
+				fmt.Fprintf(out, "Личных доступно: %d/%d.\n", personal, len(cfg.PersonalProxy))
 				return fmt.Errorf("обновление публичных прокси: %w", err)
 			}
 			public = pool.Len()
@@ -87,7 +87,7 @@ var proxyTestCmd = &cobra.Command{
 				fmt.Fprintf(out, "  Публичный: %s — доступен\n", download.ProxyLabel(address))
 			}
 		}
-		fmt.Fprintf(out, "Итого доступных: личных %d/%d, публичных %d.\n", personal, len(cfg.MyProxy), public)
+		fmt.Fprintf(out, "Итого доступных: личных %d/%d, публичных %d.\n", personal, len(cfg.PersonalProxy), public)
 		logger.Info("proxy_test_finished", zap.Int("personal_available", personal), zap.Int("public_available", public))
 		return nil
 	},
