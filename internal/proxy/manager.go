@@ -75,6 +75,15 @@ func (m *Manager) Prepare(ctx context.Context, progress func(checked, total, val
 		}
 		return NewPool(cached)
 	}
+	return m.Refresh(ctx, progress)
+}
+
+// Refresh bypasses cache reuse after an explicit probe found no working entries.
+// It preserves the old cache until fetching the source lists succeeds.
+func (m *Manager) Refresh(ctx context.Context, progress func(checked, total, valid int)) (*Pool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	addresses, err := m.source.Fetch(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("получение списка прокси: %w", err)
