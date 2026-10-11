@@ -32,7 +32,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     <div class="topbar-content">
       <audio id="player-audio" preload="none"></audio>
       <div class="player-controls">
-        <button type="button" id="player-mode" aria-label="Playback mode: in order" title="Playback mode: in order">{{template "icon" "list-ordered"}}</button>
+        <button type="button" id="player-shuffle" aria-label="Shuffle" aria-pressed="false" title="Shuffle off">{{template "icon" "shuffle"}}</button>
         <button type="button" id="player-prev" aria-label="Previous track">{{template "icon" "previous"}}</button>
         <button type="button" id="player-toggle" class="primary" aria-label="Play">{{template "icon" "play"}}</button>
         <button type="button" id="player-next" aria-label="Next track">{{template "icon" "next"}}</button>

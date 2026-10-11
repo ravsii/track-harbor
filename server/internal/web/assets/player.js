@@ -5,7 +5,7 @@
   const $ = id => document.getElementById(id);
   const stamp = track => `${track.source}\0${track.artist}\0${track.title}`;
   const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '0:00';
-  let tracks = [], current, history = [], mode = 0, previousVolume = 0.8;
+  let tracks = [], current, history = [], previousVolume = 0.8;
   audio.volume = 0.8;
 
   function icon(id, name) {
@@ -18,13 +18,6 @@
     $('player-mute').setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
     $('player-mute').title = muted ? 'Unmute' : 'Mute';
     $('player-volume').value = muted ? 0 : Math.round(audio.volume * 100);
-  }
-
-  function updateMode() {
-    const labels = ['in order', 'shuffle', 'repeat one'];
-    icon('player-mode', ['list-ordered', 'shuffle', 'repeat-one-01'][mode]);
-    $('player-mode').setAttribute('aria-label', `Playback mode: ${labels[mode]}`);
-    $('player-mode').title = `Playback mode: ${labels[mode]}`;
   }
 
   function refresh() {
@@ -64,7 +57,7 @@
     if (!tracks.length) await loadTracks();
     if (!tracks.length) { await play(null); return; }
     const index = tracks.findIndex(track => stamp(track) === current);
-    if (mode === 1 && tracks.length > 1) {
+    if ($('player-shuffle').getAttribute('aria-pressed') === 'true' && tracks.length > 1) {
       const candidates = tracks.filter(track => stamp(track) !== current);
       await play(candidates[Math.floor(Math.random() * candidates.length)]);
     } else {
@@ -88,10 +81,7 @@
   audio.addEventListener('pause', refresh);
   audio.addEventListener('volumechange', updateVolume);
   audio.addEventListener('error', () => { $('player-error').textContent = 'MP3 unavailable. Download it again and refresh the page.'; });
-  audio.addEventListener('ended', () => {
-    if (mode === 2) { audio.currentTime = 0; audio.play().catch(() => {}); }
-    else next();
-  });
+  audio.addEventListener('ended', next);
 
   document.addEventListener('click', event => {
     const button = event.target.closest('button');
@@ -102,7 +92,11 @@
     }
     if (button.id === 'player-prev') previous();
     if (button.id === 'player-next') next();
-    if (button.id === 'player-mode') { mode = (mode + 1) % 3; updateMode(); }
+    if (button.id === 'player-shuffle') {
+      const enabled = button.getAttribute('aria-pressed') !== 'true';
+      button.setAttribute('aria-pressed', String(enabled));
+      button.title = enabled ? 'Shuffle on' : 'Shuffle off';
+    }
     if (button.id === 'player-mute') {
       if (audio.muted || audio.volume === 0) {
         audio.muted = false;
@@ -134,6 +128,5 @@
     if (event.detail.target.id === 'content') loadTracks();
   });
   loadTracks();
-  updateMode();
   updateVolume();
 })();

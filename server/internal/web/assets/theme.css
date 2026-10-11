@@ -112,6 +112,8 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
   font-size: 20px;
 }
 .topbar button:hover { background: var(--selected); }
+.topbar #player-shuffle[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.topbar #player-shuffle[aria-pressed="true"]:hover { background: var(--button-hover); }
 .topbar button.primary { background: var(--accent); color: var(--accent-ink); }
 .topbar button.primary:hover { background: var(--button-hover); }
 .topbar .player-controls input[type="range"] { appearance: none; width: 60px; height: 18px; min-width: 0; padding: 0; border: 0; background: transparent; cursor: pointer; }
