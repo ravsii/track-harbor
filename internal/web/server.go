@@ -286,7 +286,11 @@ func (s *Server) pingSource(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	if s.pingStatus[source] == "Checking…" {
 		s.mu.Unlock()
-		http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
+		if r.Header.Get("Accept") == "application/json" {
+			w.WriteHeader(http.StatusAccepted)
+		} else {
+			http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
+		}
 		return
 	}
 	s.pingStatus[source] = "Checking…"
@@ -322,7 +326,11 @@ func (s *Server) pingSource(w http.ResponseWriter, r *http.Request) {
 		}
 		s.logger.Info("source connection checked", zap.String("source", source), zap.String("result", result))
 	}()
-	http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
+	if r.Header.Get("Accept") == "application/json" {
+		w.WriteHeader(http.StatusAccepted)
+	} else {
+		http.Redirect(w, r, "/?source="+source, http.StatusSeeOther)
+	}
 }
 
 // spotifyHeaders extracts only the two credentials needed for sync from a

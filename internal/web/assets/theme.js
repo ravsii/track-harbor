@@ -15,6 +15,12 @@
 
   apply(choice);
   document.addEventListener('DOMContentLoaded', () => {
+    const topbar = document.getElementById('music-player');
+    if (topbar) {
+      const updateHeight = () => document.documentElement.style.setProperty('--topbar-height', `${topbar.getBoundingClientRect().height}px`);
+      updateHeight();
+      new ResizeObserver(updateHeight).observe(topbar);
+    }
     const button = document.getElementById('theme-choice');
     if (!button) return;
     const modes = ['system', 'light', 'dark'];

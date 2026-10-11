@@ -62,7 +62,6 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	      <a class="{{if eq .Source "vk"}}active{{end}}" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "vk"}}</span> VK Music <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
 	      <a class="{{if eq .Source "downloads"}}active{{end}}" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "download-01"}}</span> Downloads <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
     </nav>
-    <div class="sidebar-bottom"><span class="dot"></span> LOCAL SERVER <p>This preview runs on your computer only. No web login is configured.</p></div>
   </aside>
 	  <main id="content" data-source="{{.Source}}" hx-history-elt>
 	    {{if ne .Source "music"}}
@@ -88,7 +87,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	        {{end}}
 	        {{if .Connected}}</details>{{end}}
 	        <form action="/ping" method="post"><input type="hidden" name="source" value="{{.Source}}"><button type="submit" class="secondary" {{if not .Connected}}disabled{{end}}>Check connection <span>{{template "icon" "arrow-right-01"}}</span></button></form>
-        <div class="status" aria-live="polite">CONNECTION <span hx-get="/ping-status?source={{.Source}}" hx-trigger="every 10s" hx-swap="innerHTML">{{if .PingStatus}}{{.PingStatus}}{{else}}Not checked yet.{{end}}</span></div>
+        <div class="status" aria-live="polite">CONNECTION <span hx-get="/ping-status?source={{.Source}}" hx-trigger="every 3s" hx-swap="innerHTML">{{if .PingStatus}}{{.PingStatus}}{{else}}Not checked yet.{{end}}</span></div>
       </div>
       <div class="panel sync"><div class="panel-top"><span class="index">02 / SYNC</span><span class="mini-mark">{{template "icon" "reload"}}</span></div>
         <h2>Bring your tracks in</h2>

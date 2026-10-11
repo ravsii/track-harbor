@@ -21,6 +21,26 @@
     ripples.set(element, setTimeout(() => element.classList.remove('rippling'), 600));
   }
 
+  async function pingCurrentSource() {
+    const content = document.getElementById('content');
+    const source = content?.dataset.source;
+    if (source !== 'spotify' && source !== 'vk') return;
+    const button = content.querySelector('form[action="/ping"] button');
+    if (!button || button.disabled) return;
+    const field = content.querySelector('.connect .status span');
+    if (field) field.textContent = 'Checking…';
+    try {
+      const response = await fetch('/ping', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json'},
+        body: new URLSearchParams({source})
+      });
+      if (!response.ok) throw new Error('connection check unavailable');
+    } catch (_) {
+      if (field?.isConnected) field.textContent = 'Could not start connection check. Try again.';
+    }
+  }
+
   function systemStatus() {
     const link = document.getElementById('system-status');
     const label = document.getElementById('system-status-text');
@@ -192,6 +212,7 @@
     if (event.detail.target.id === 'content') {
       syncMessage = document.getElementById('sync-state')?.textContent;
       load();
+      pingCurrentSource();
     }
     if (event.detail.target.id === 'sync-state') {
       const message = event.detail.target.textContent;
@@ -202,5 +223,6 @@
     }
   });
   load();
+  pingCurrentSource();
   setInterval(load, 15000);
 })();

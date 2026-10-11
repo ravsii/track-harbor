@@ -28,7 +28,7 @@ Keep these values in sync with the styles when adjusting the layout:
 
 | Area | Desktop | Narrow screens |
 | --- | --- | --- |
-| Sidebar padding | `36px 22px` | `14px 20px` at 950px; `16px 20px` at 700px |
+| Sidebar padding | `16px 12px`; nav link `8px 10px`, gap `4px` | `8px 12px` at 950px; `8px 10px` at 700px |
 | Top bar content padding | `12px clamp(24px, 5vw, 82px)` | `8px 20px 12px` at 950px |
 | Music content padding | `8px 12px 16px` | `8px 10px 16px` at 700px |
 | Spotify, VK, Downloads content padding | `14px clamp(16px, 3vw, 38px) 24px` | `12px 16px 20px` at 950px |
@@ -39,6 +39,10 @@ Music has no fixed content-width or track-list-height cap: its tracks fill the
 space beside the sidebar and scroll with the page. Keep horizontal scrolling
 only when the track columns cannot fit on a narrow screen. Preserve the top
 player and source navigation rather than spending their space on decoration.
+Keep the sidebar below the sticky player while scrolling; if its navigation
+exceeds the available viewport height, scroll inside the sidebar. On narrow
+screens, keep the source links in a horizontally scrollable row. Do not place
+decorative or informational copy at the bottom of the sidebar.
 The row number becomes Play on hover or keyboard focus; on touch, Play remains
 visible. Show the duration of the local MP3 when available and put its download
 action at the right edge of each row. Missing files have neither action active.
