@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -35,49 +34,9 @@ func Open(path string) (*Store, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	_, err = db.Exec(`CREATE TABLE IF NOT EXISTS credentials (source TEXT PRIMARY KEY, first TEXT NOT NULL, second TEXT NOT NULL);
-			CREATE TABLE IF NOT EXISTS tracks (source TEXT NOT NULL, artist TEXT NOT NULL, title TEXT NOT NULL, added_at INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(source, artist, title));
-			CREATE TABLE IF NOT EXISTS downloads (source TEXT NOT NULL, artist TEXT NOT NULL, title TEXT NOT NULL, file_path TEXT NOT NULL, sha256 TEXT NOT NULL, PRIMARY KEY(source, artist, title));`)
-	if err != nil {
+	if err := migrate(db); err != nil {
 		db.Close()
-		return nil, err
-	}
-	var hasAddedAt bool
-	rows, err := db.Query("PRAGMA table_info(tracks)")
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	for rows.Next() {
-		var cid, notNull, pk int
-		var name, kind string
-		var defaultValue sql.NullString
-		if err = rows.Scan(&cid, &name, &kind, &notNull, &defaultValue, &pk); err != nil {
-			break
-		}
-		if name == "added_at" {
-			hasAddedAt = true
-		}
-	}
-	if err == nil {
-		err = rows.Err()
-	}
-	rows.Close()
-	if err != nil {
-		db.Close()
-		return nil, err
-	}
-	if !hasAddedAt {
-		if _, err := db.Exec("ALTER TABLE tracks ADD COLUMN added_at INTEGER NOT NULL DEFAULT 0"); err != nil {
-			db.Close()
-			return nil, err
-		}
-	}
-	for _, column := range []string{"owner_id INTEGER NOT NULL DEFAULT 0", "audio_id INTEGER NOT NULL DEFAULT 0", "audio_url TEXT NOT NULL DEFAULT ''", "cover_url TEXT NOT NULL DEFAULT ''"} {
-		if _, err := db.Exec("ALTER TABLE tracks ADD COLUMN " + column); err != nil && !strings.Contains(err.Error(), "duplicate column name") {
-			db.Close()
-			return nil, err
-		}
+		return nil, fmt.Errorf("migrate server database: %w", err)
 	}
 	return &Store{db: db}, nil
 }

@@ -68,6 +68,11 @@ If the default directory contains an older `config.json` but no `config.yaml`,
 the server converts the JSON to private YAML on its next start, preserving
 the saved settings and removing the old JSON only after conversion succeeds.
 The server never reads the CLI's credentials or `~/.trackharbor/vault.db`.
+Database migrations are separate: CLI Goose scripts live in `cli/migrations/`
+and `make migrate-up` targets `~/.trackharbor/vault.db` by default (override
+`DB_PATH` to target another CLI vault). Server migrations live in
+`server/internal/store/migrations/` and run automatically against the server's
+own `library.db` at startup; do not apply CLI migrations to it.
 Syncing Spotify or VK updates that library, checks its saved MP3s, and downloads
 missing tracks in the background. The **Downloads** tab shows per-track status;
 progress is pushed to the browser with SSE. The server

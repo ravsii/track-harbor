@@ -1,5 +1,5 @@
-DB_PATH=meshtune.db
-MIGRATIONS_DIR=./migrations
+DB_PATH?=$(HOME)/.trackharbor/vault.db
+MIGRATIONS_DIR=./cli/migrations
 
 GOOSE=goose -dir $(MIGRATIONS_DIR) sqlite3 $(DB_PATH)
 
