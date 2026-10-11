@@ -24,14 +24,13 @@ import (
 )
 
 const (
-	testFolder             = "tmp_music"
 	defaultDownloadWorkers = 50
 )
 
 var downloadCmd = &cobra.Command{
 	Use:   "download",
 	Short: "Скачать все треки из базы",
-	Long:  "Скачать все треки из ~/.meshvault/vault.db в tmp_music через YouTube. Порядок соединений задаётся strategy в ~/.meshvault/config.yaml. Параллельность задаётся --workers (по умолчанию 50), при доступном пуле прокси ограничивается его размером.",
+	Long:  "Скачать все треки из ~/.meshvault/vault.db через YouTube. Папка задаётся download_dir в ~/.meshvault/config.yaml (по умолчанию ~/.meshvault/downloaded). Порядок соединений задаётся strategy. Параллельность задаётся --workers (по умолчанию 50), при доступном пуле прокси ограничивается его размером.",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		if _, err := downloadWorkerLimit(cmd); err != nil {
 			return err
@@ -131,10 +130,11 @@ var downloadCmd = &cobra.Command{
 			return
 		}
 
-		err = os.MkdirAll(testFolder, os.ModePerm)
-		if err != nil {
+		if err := prepareDownloadDirectory(cfg.DownloadDir); err != nil {
 			fatal(err)
 		}
+		fmt.Fprintf(out, "Папка скачивания: %s\n", cfg.DownloadDir)
+		logger.Info("download_directory", zap.String("path", cfg.DownloadDir))
 
 		disp := download.NewDisplay()
 		store, err := repository.NewDownloadedTracksRepository(database)
@@ -148,7 +148,7 @@ var downloadCmd = &cobra.Command{
 		pending := make([]string, 0, len(queries))
 		skipped := 0
 		for _, query := range queries {
-			path, err := download.DownloadedQueryPath(store, "youtube", query, testFolder)
+			path, err := download.DownloadedQueryPath(store, "youtube", query, cfg.DownloadDir)
 			if err != nil {
 				fatal(fmt.Errorf("проверка истории скачиваний: %w", err))
 			}
@@ -260,7 +260,7 @@ var downloadCmd = &cobra.Command{
 		provider.WithStrategy(connection)
 		fmt.Fprintf(out, "Параллельность поиска и скачивания: %d (лимит --workers: %d).\n", workers, workerLimit)
 		logger.Info("workers_configured", zap.String("strategy", strategyName), zap.Int("workers", workers), zap.Int("proxy_count", proxyCount), zap.Int("workers_limit", workerLimit))
-		downloader := download.New(provider, workers, testFolder).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
+		downloader := download.New(provider, workers, cfg.DownloadDir).WithDownloadStore(store).WithLogger(logger).WithDisplay(disp)
 
 		downloader.Run(pending)
 	},

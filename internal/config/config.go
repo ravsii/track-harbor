@@ -13,12 +13,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const defaultYAML = "version: 1\nstrategy:\n  - direct\npersonal_proxy: []\n"
+const defaultYAML = "version: 1\nstrategy:\n  - direct\npersonal_proxy: []\ndownload_dir: ~/.meshvault/downloaded\n"
 
 type Config struct {
 	Version       int      `yaml:"version"`
 	Strategy      []string `yaml:"strategy"`
 	PersonalProxy []string `yaml:"personal_proxy"`
+	DownloadDir   string   `yaml:"download_dir"`
 }
 
 func Directory() (string, error) {
@@ -125,5 +126,19 @@ func Load() (Config, error) {
 	if seen["personal_proxy"] && len(cfg.PersonalProxy) == 0 {
 		return Config{}, fmt.Errorf("%s: personal_proxy requires a non-empty personal_proxy list", path)
 	}
+	cfg.DownloadDir = strings.TrimSpace(cfg.DownloadDir)
+	if cfg.DownloadDir == "" {
+		cfg.DownloadDir = filepath.Join(dir, "downloaded")
+	} else if cfg.DownloadDir == "~" {
+		cfg.DownloadDir = filepath.Dir(dir)
+	} else if strings.HasPrefix(cfg.DownloadDir, "~/") || strings.HasPrefix(cfg.DownloadDir, `~\`) {
+		cfg.DownloadDir = filepath.Join(filepath.Dir(dir), filepath.FromSlash(cfg.DownloadDir[2:]))
+	} else if strings.HasPrefix(cfg.DownloadDir, "~") {
+		return Config{}, fmt.Errorf("%s: download_dir supports ~ or ~/path, not another user's home", path)
+	} else if !filepath.IsAbs(cfg.DownloadDir) {
+		// Resolve relative paths against the configuration directory, not cwd.
+		cfg.DownloadDir = filepath.Join(dir, cfg.DownloadDir)
+	}
+	cfg.DownloadDir = filepath.Clean(cfg.DownloadDir)
 	return cfg, nil
 }
