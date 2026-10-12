@@ -119,10 +119,11 @@ func (s *Server) playableTracks(w http.ResponseWriter, r *http.Request) {
 		Source string `json:"source"`
 		Artist string `json:"artist"`
 		Title  string `json:"title"`
+		Cover  string `json:"cover"`
 	}
 	items := make([]playableTrack, 0, len(tracks))
 	for _, t := range tracks {
-		items = append(items, playableTrack{t.Source, t.Artist, t.Title})
+		items = append(items, playableTrack{t.Source, t.Artist, t.Title, coverURL(t.CoverURL)})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(items); err != nil {

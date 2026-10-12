@@ -93,7 +93,7 @@ func (s *Store) ListAll() ([]Track, error) {
 
 // ListPlayable returns tracks whose downloaded MP3 is still present on disk.
 func (s *Store) ListPlayable() ([]Track, error) {
-	rows, err := s.db.Query(`SELECT t.source, t.artist, t.title, d.file_path FROM tracks t JOIN downloads d ON (t.source=d.source AND t.artist=d.artist AND t.title=d.title) WHERE d.file_path<>'' ORDER BY t.added_at DESC, t.source, t.artist, t.title`)
+	rows, err := s.db.Query(`SELECT t.source, t.artist, t.title, t.cover_url, d.file_path FROM tracks t JOIN downloads d ON (t.source=d.source AND t.artist=d.artist AND t.title=d.title) WHERE d.file_path<>'' ORDER BY t.added_at DESC, t.source, t.artist, t.title`)
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (s *Store) ListPlayable() ([]Track, error) {
 	var tracks []Track
 	for rows.Next() {
 		var track Track
-		if err := rows.Scan(&track.Source, &track.Artist, &track.Title, &track.FilePath); err != nil {
+		if err := rows.Scan(&track.Source, &track.Artist, &track.Title, &track.CoverURL, &track.FilePath); err != nil {
 			return nil, err
 		}
 		info, err := os.Stat(track.FilePath)

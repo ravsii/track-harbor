@@ -8,8 +8,14 @@
   const lastTrackKey = 'trackharbor-last-track';
   const stamp = track => `${track.source}\0${track.artist}\0${track.title}`;
   const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '0:00';
-  let tracks = [], selected, shared, updatedAt = Date.now(), lastContact = 0;
+  let tracks = [], covers = new Map(), selected, shared, updatedAt = Date.now(), lastContact = 0;
   let previousVolume = 0.8, userMuted = false, releasing = false, pausing = false;
+  const coverImage = $('player-cover-image');
+  coverImage.addEventListener('load', () => { coverImage.hidden = false; });
+  coverImage.addEventListener('error', () => { coverImage.hidden = true; });
+  document.addEventListener('error', event => {
+    if (event.target.matches?.('.library .track-cover img')) event.target.hidden = true;
+  }, true);
   audio.volume = 0.8;
   audio.muted = true;
   audio.preload = 'metadata';
@@ -65,6 +71,12 @@
   }
 
   function select(track) {
+    const cover = covers.get(stamp(track)) || '';
+    if (coverImage.getAttribute('src') !== cover) {
+      coverImage.hidden = true;
+      if (cover) coverImage.src = cover;
+      else coverImage.removeAttribute('src');
+    }
     if (selected && stamp(selected) === stamp(track)) return false;
     selected = track;
     const params = new URLSearchParams({source: track.source, artist: track.artist, title: track.title});
@@ -87,6 +99,8 @@
       const response = await fetch('/audio/tracks');
       if (!response.ok) throw new Error();
       tracks = await response.json();
+      covers = new Map(tracks.map(track => [stamp(track), track.cover]));
+      if (selected) select(selected);
       chooseCandidate();
     } catch (_) {
       $('player-error').textContent = 'Could not load saved tracks. Refresh the page to retry.';

@@ -2,11 +2,21 @@ package web
 
 import (
 	"html/template"
+	"net/url"
 	"time"
 )
 
+func coverURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
+		return ""
+	}
+	return raw
+}
+
 var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
-	"add": func(a, b int) int { return a + b },
+	"add":      func(a, b int) int { return a + b },
+	"coverURL": coverURL,
 	"addedDate": func(timestamp int64) string {
 		if timestamp == 0 {
 			return "—"
@@ -37,6 +47,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
         <button type="button" id="player-prev" aria-label="Previous track">{{template "icon" "previous"}}</button>
         <button type="button" id="player-toggle" class="primary" aria-label="Play">{{template "icon" "play"}}</button>
         <button type="button" id="player-next" aria-label="Next track">{{template "icon" "next"}}</button>
+        <span class="track-cover player-cover relative grid size-8 shrink-0 place-items-center overflow-hidden rounded border border-edge bg-selected text-muted" aria-hidden="true">{{template "icon" "disc-album"}}<img id="player-cover-image" class="absolute inset-0 size-full object-cover" alt="" hidden></span>
         <div class="player-progress">
           <div class="player-track-line"><strong id="player-track" aria-live="polite"></strong><span id="player-remote" role="img" tabindex="0" aria-label="Listening on another device" data-tooltip="Listening on another device" hidden>{{template "icon" "computer"}}</span></div>
           <div class="player-progress-row">
@@ -147,7 +158,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	    <section class="library {{if eq .Source "music"}}music-library{{end}}"{{if eq .Source "music"}} aria-label="Tracks"{{end}}>{{if ne .Source "music"}}<div class="library-heading"><div><span class="index">03 / COLLECTION</span><h2>Your tracks</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>{{end}}
       {{if .Tracks}}
         <div class="track-head grid items-center"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span aria-label="Duration">TIME</span></div>
-        <ol class="tracks m-0 list-none border-t border-edge p-0">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="track-number"><span class="number">{{add $i 1}}</span><button type="button" class="play-track" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button><span class="playing-indicator" aria-hidden="true"><span></span><span></span><span></span></span></span><strong><span class="track-title">{{$t.Title}}</span></strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<span class="track-duration">—</span><a class="download-track{{if not $t.FilePath}} unavailable{{end}}" href="/audio?source={{$t.Source | urlquery}}&amp;artist={{$t.Artist | urlquery}}&amp;title={{$t.Title | urlquery}}&amp;download=1" aria-label="Download {{$t.Title}} as MP3" title="Download MP3"{{if not $t.FilePath}} aria-disabled="true" tabindex="-1"{{end}}>{{template "icon" "download-01"}}</a></li>{{end}}</ol>
+        <ol class="tracks m-0 list-none border-t border-edge p-0">{{range $i, $t := .Tracks}}<li data-source="{{$t.Source}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}"><span class="track-number"><span class="number">{{add $i 1}}</span><button type="button" class="play-track" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button><span class="playing-indicator" aria-hidden="true"><span></span><span></span><span></span></span></span><strong class="flex min-w-0 items-center gap-2"><span class="track-cover relative grid size-7 shrink-0 place-items-center overflow-hidden rounded border border-edge bg-selected text-muted" aria-hidden="true">{{template "icon" "disc-album"}}{{with coverURL $t.CoverURL}}<img class="absolute inset-0 size-full object-cover" src="{{.}}" alt="" loading="lazy">{{end}}</span><span class="track-title">{{$t.Title}}</span></strong><span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}<span class="track-duration">—</span><a class="download-track{{if not $t.FilePath}} unavailable{{end}}" href="/audio?source={{$t.Source | urlquery}}&amp;artist={{$t.Artist | urlquery}}&amp;title={{$t.Title | urlquery}}&amp;download=1" aria-label="Download {{$t.Title}} as MP3" title="Download MP3"{{if not $t.FilePath}} aria-disabled="true" tabindex="-1"{{end}}>{{template "icon" "download-01"}}</a></li>{{end}}</ol>
       {{else}}
         <div class="empty"><span>{{template "icon" "disc"}}</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
       {{end}}

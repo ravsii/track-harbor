@@ -92,6 +92,8 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 .library:not(.download-library) .tracks li { padding: 3.5px 5px; }
 .library:not(.download-library) .track-head { padding: 0 5px 3.5px; }
 .library:not(.download-library) .track-head > :first-child { text-align: center; }
+.track-cover .icon { width: 16px; height: 16px; }
+.track-cover img[hidden] { display: none; }
 .music-library .track-head, .music-library .tracks { min-width: 700px; }
 .track-number { position: relative; display: grid; place-items: center; width: 32px; height: 28px; }
 .track-number .play-track { position: absolute; inset: 0; display: grid; place-items: center; width: 32px; height: 28px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--ink); cursor: pointer; }
