@@ -139,5 +139,5 @@ npm run test:web       # real Chromium integration tests (also requires FFmpeg)
 ```
 
 The interface uses local HTMX and Hugeicons assets under `internal/web/assets/`.
-See `docs/visual-design.md` for theme and layout conventions and
+See `.agents/skills/design/SKILL.md` for shared UI element, theme, and spacing conventions and
 `docs/hugeicons-license.txt` for icon attribution.

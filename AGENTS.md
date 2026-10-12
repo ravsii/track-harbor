@@ -21,7 +21,7 @@ explicitly requests them.
    Preserve intentional behavior and keep each change focused.
 3. **Preview design changes first.** Create separate temporary HTML previews and
    show them to the user before changing the application UI. Follow
-   `docs/visual-design.md`, including both themes and responsive layouts. Delete
+   `.agents/skills/design/SKILL.md`, including both themes and responsive layouts. Delete
    the previews after review and implementation; do not commit preview artifacts.
 
 ## Project boundaries
@@ -35,8 +35,8 @@ explicitly requests them.
 
 ## Development
 
-- Before changing the server web UI's visual elements, read
-  `docs/visual-design.md` and follow its palette and light/dark theme
+- Before changing the server web UI's visual elements, load the project `design`
+  skill at `.agents/skills/design/SKILL.md` and follow its element tokens and light/dark theme
   requirements for every new or changed element. The HTML-preview workflow above
   is mandatory for design changes and is an explicit exception to the no-drafts
   rule below.
