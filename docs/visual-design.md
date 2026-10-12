@@ -1,5 +1,27 @@
 # TrackHarbor Web Visual Design
 
+## Design-change workflow
+
+The current focus is deslop: understand and review AI-generated features, then
+standardize them rather than introducing speculative redesigns.
+
+Before changing any application design:
+
+1. Understand the existing element, its purpose, and its behavior in the core
+   workflow. Identify what needs fixing or standardizing.
+2. Create separate temporary HTML previews of the proposed changes instead of
+   experimenting directly in application templates or styles. Use representative
+   dummy content, never real credentials, tokens, or private user data.
+3. Show the previews to the user before applying the design. Cover light and dark
+   themes, desktop and narrow layouts, and relevant hover, focus, and error states.
+   Follow the palette and layout rules in this document.
+4. Apply the reviewed design to the application, then delete the temporary HTML
+   previews and any preview-only assets. Do not commit these artifacts or leave
+   them in the application's assets directory.
+
+This preview requirement applies to design changes, not documentation-only edits
+or backend changes that leave the UI's appearance unchanged.
+
 ## Interface priorities
 
 The site's primary purpose is to make **downloading and listening to music**
