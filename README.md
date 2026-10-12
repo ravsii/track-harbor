@@ -134,10 +134,16 @@ make run-server-watch  # watch server source and restart after successful builds
 go test ./...          # backend tests (FFmpeg required), with isolated/local fixtures
 go test -race ./...    # backend tests with race detection
 npm ci
+npm run assets:build   # regenerate imported Hugeicons sprite and compiled CSS
 npx playwright install chromium --only-shell
 npm run test:web       # real Chromium integration tests (also requires FFmpeg)
 ```
 
 The interface uses local HTMX and Hugeicons assets under `internal/web/assets/`.
+Icons are named imports from the pinned `@hugeicons/core-free-icons` dependency
+in `scripts/build-icons.mjs`. Run `npm run icons:build` after adding an icon;
+never edit the generated `icons.svg` by hand. Generated UI assets are committed
+and embedded in the Go server, so Node.js is needed only for asset rebuilding,
+not for building or running the server from the checked-in assets.
 See `.agents/skills/design/SKILL.md` for shared UI element, theme, and spacing conventions and
 `docs/hugeicons-license.txt` for icon attribution.

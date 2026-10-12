@@ -140,8 +140,13 @@ border, and `6px 10px` padding. Do not rely on a colored border alone.
 
 ## Icons and branding
 
-Use self-hosted Hugeicons **Stroke Rounded**, from the MIT-licensed
-`@hugeicons/core-free-icons` set. Preserve `docs/hugeicons-license.txt`.
+Import Hugeicons **Stroke Rounded** from the MIT-licensed
+`@hugeicons/core-free-icons` package. Add named imports and symbol mappings to
+`scripts/build-icons.mjs`, then run `npm run icons:build` (or
+`npm run assets:build` for all generated UI assets). Never copy SVG paths or
+icon data into application code or previews. `internal/web/assets/icons.svg`
+is generated, committed output; do not edit it manually. Use the shared `icon`
+template or references to this sprite. Preserve `docs/hugeicons-license.txt`.
 Icons inherit text color; hide decorative SVGs with `aria-hidden="true"`.
 Place action icons before labels. No emoji, Unicode substitutes, or CDN assets.
 

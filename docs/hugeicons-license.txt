@@ -1,6 +1,7 @@
 Hugeicons Free Stroke Rounded icons
 Source: @hugeicons/core-free-icons 4.3.5 (https://hugeicons.com/)
-The selected icons are bundled in server/internal/web/assets/icons.svg.
+The selected icons are imported by scripts/build-icons.mjs and generated into
+internal/web/assets/icons.svg. Do not edit or copy icon paths manually.
 
 MIT License
 

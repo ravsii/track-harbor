@@ -40,6 +40,13 @@ explicitly requests them.
   requirements for every new or changed element. The HTML-preview workflow above
   is mandatory for design changes and is an explicit exception to the no-drafts
   rule below.
+- Always import UI icons from `@hugeicons/core-free-icons`; never draw or copy
+  SVG paths, icon data arrays, or Unicode substitutes into templates, scripts,
+  styles, or previews. Add named imports to `scripts/build-icons.mjs` and run
+  `npm run icons:build`. `internal/web/assets/icons.svg` is generated output:
+  commit it, but never edit it by hand. Render icons through the shared `icon`
+  template or references to this generated sprite. Keep the approved custom
+  CSS brand mark; it is branding, not a library action icon.
 - Prioritize the core workflow over speculative features, but keep application
   boundaries explicit and deployment/security constraints visible.
 - When a request is clear, proceed directly to implementation. Do not create

@@ -14,6 +14,8 @@ func coverURL(raw string) string {
 	return raw
 }
 
+const iconTemplate = `{{define "icon"}}<svg class="icon" aria-hidden="true" focusable="false"><use href="/assets/icons.svg#hg-{{.}}"></use></svg>{{end}}`
+
 var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	"add":      func(a, b int) int { return a + b },
 	"coverURL": coverURL,
@@ -209,4 +211,4 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	    {{if ne .Source "music"}}<footer>LOCAL DOWNLOADS · TRACKHARBOR</footer>{{end}}
   </main>
 </div>
-</body></html>{{define "icon"}}<svg class="icon" aria-hidden="true" focusable="false"><use href="/assets/icons.svg#hg-{{.}}"></use></svg>{{end}}`))
+</body></html>` + iconTemplate))

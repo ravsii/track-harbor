@@ -108,7 +108,7 @@ var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
   <section class="login-card" aria-labelledby="login-title">
     <div class="login-header">
       <div class="login-brand"><span class="login-mark" aria-hidden="true"><i></i><i></i><i></i></span>TrackHarbor</div>
-      <button type="button" id="theme-choice" class="theme-toggle" aria-label="Change color theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="/assets/icons.svg#hg-sun-01"></use></svg></button>
+      <button type="button" id="theme-choice" class="theme-toggle" aria-label="Change color theme">{{template "icon" "sun-01"}}</button>
     </div>
     <h1 id="login-title">Sign in</h1>
     {{if .}}<p class="login-error" role="alert">{{.}}</p>{{end}}
@@ -120,7 +120,7 @@ var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
   </section>
 </main>
 </body>
-</html>`))
+</html>` + iconTemplate))
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) { s.renderLogin(w, 200, "") }
 func (s *Server) renderLogin(w http.ResponseWriter, status int, message string) {

@@ -1,11 +1,14 @@
 {
   "private": true,
   "scripts": {
+    "icons:build": "node scripts/build-icons.mjs",
+    "assets:build": "npm run icons:build && npm run css:build",
     "test:web": "TRACKHARBOR_BROWSER_TEST=1 go test ./internal/web -run '^TestBrowser$' -count=1 -v",
     "css:build": "tailwindcss -i internal/web/tailwind.css -o internal/web/assets/tailwind.css --minify",
     "css:watch": "tailwindcss -i internal/web/tailwind.css -o internal/web/assets/tailwind.css --watch"
   },
   "devDependencies": {
+    "@hugeicons/core-free-icons": "4.3.5",
     "@tailwindcss/cli": "4.1.16",
     "playwright": "^1.64.0",
     "tailwindcss": "4.1.16"
