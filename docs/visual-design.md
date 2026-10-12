@@ -39,7 +39,8 @@ The top bar spans the viewport, with playback controls centered relative to
 the full viewport: logo on the left, current track above the seek bar, and
 the theme button on the far right. The shuffle button toggles between sequential
 and random playback. The volume icon toggles mute without losing the
-previous level. The theme button cycles through System, Light, and Dark.
+previous level. The theme button switches between Light and Dark with sun/moon
+icons; without a saved choice, the theme follows the operating system.
 The top bar has no track dropdown: on load it shows the last played available
 track, or the most recently added available one, without autoplay. Play starts the
 shown track; individual tracks are selected from their Play actions in the library.
@@ -53,6 +54,80 @@ the account name and Sign out action in the sidebar. Keep a persistent warning
 visible on authenticated pages while the bootstrap `admin` account exists:
 create a separate user, then delete `admin`. Settings has equal account-management
 controls for every user, with explicit confirmations for account changes.
+
+## Approved login card (variant B)
+
+This section records the selected and implemented login design, not an
+instruction to redesign other application pages. Only the login card is in scope; its control sizes and
+spacing are an explicit exception to the compact authenticated-page baseline
+below. Do not roll these values out across the application without review.
+
+### Layout and typography
+
+- Center a single card horizontally and vertically on the page background.
+  Allow vertical scrolling on short screens; never clip the form.
+- Card width: `100%`, maximum `380px`, including padding and border
+  (`box-sizing: border-box`). Use `24px` internal padding, reduced to `22px`
+  at viewport widths of `700px` or less. Keep at least `20px` horizontal space
+  between the card and narrow viewport edges.
+- Card surface: the palette's panel color, a `1px` border in the border color,
+  `10px` corner radius, no shadow, gradient, illustration or decorative footer.
+- Header: logo and TrackHarbor name on the left; theme button at the top right
+  **inside the card**, in the same flex row. Vertically center the items, use a
+  `10px` gap and allow wrapping on very narrow screens without overlap. Keep
+  the theme button right-aligned when it wraps. It is not a viewport control.
+- Use `system-ui, sans-serif`, base text `15px` with line-height `1.5`.
+  Brand name: `21px`, weight `650`, letter-spacing `-0.6px`.
+- Below the header, show one `Sign in` heading: `25px`, weight `600`,
+  line-height `1.2`, letter-spacing `-0.7px`; margin `22px 0 18px`.
+- Form order: Username, Password, Sign in. Use a single-column grid with
+  `12px` gaps. Keep all field labels and the heading left-aligned.
+  No registration, password-recovery links or promotional copy.
+
+### Fields and buttons
+
+- Labels sit above their inputs with a `5px` gap; font size `13px`, secondary
+  text color. Keep real labels even when placeholders repeat Username/Password.
+- Inputs fill the available width, minimum height `40px`, padding `8px 10px`,
+  `1px` border, `6px` corner radius. Use page-background color inside inputs,
+  primary text color and the palette's border color. On hover, use the secondary
+  text color for the border. Username uses `autocomplete="username"` and a
+  `64`-character limit; Password uses `type="password"` and
+  `autocomplete="current-password"`. Both fields are required.
+- The Sign in button fills the form width, has minimum height `40px`, a `1px`
+  accent border and `6px` corner radius. Use the turquoise accent background,
+  dark accent-ink text, centered label and weight `600`. Its top margin is `4px`
+  in addition to the form's `12px` grid gap. Hover brightness: `0.93`.
+- Theme button: icon-only, `32px × 32px`, zero padding, `1px` border, `6px`
+  radius, panel background and secondary text color. Center an `18px` Hugeicons
+  Stroke Rounded icon: `sun-01` for the active light theme, `moon-01` for dark.
+  On hover, use the selected-item background and primary text color.
+  Clicking switches to the opposite theme. Its accessible label and tooltip
+  describe the active theme and the next action; no third System button state.
+  Follow and persist theme choices as described in Color palette.
+- Keyboard focus on fields and buttons: `2px` accent outline, `3px` offset.
+- An authentication error appears between heading and form, not in place of a
+  field label: `13px` text, `3px` left error border, padding `6px 10px`, bottom
+  margin `14px`, `role="alert"`. Error color is `#a12622` in light mode and
+  `#ffb4ab` in dark mode, exposed through a semantic error variable.
+
+### TrackHarbor logo mark
+
+The preview's mark is a custom, static three-bar equalizer, not a Hugeicons
+asset or a playback indicator. It is the branding exception to the action-icon
+rules below. Keep the same geometry in both themes:
+
+- Outer square: `28px × 28px`, including a `1px` turquoise accent border;
+  corner radius `7px`, transparent interior, no shadow.
+- Center three vertical bars horizontally and vertically inside the square,
+  with `3px` gaps. Each bar is `3px` wide with `2px` corner radius.
+  Heights, left to right: `10px`, `17px`, `10px`; fill with the accent color.
+- Place the mark `10px` before the TrackHarbor wordmark, vertically centered.
+  Prevent it from shrinking. No animation or theme-dependent recoloring.
+- The preview builds it entirely with CSS: a bordered flex container and
+  three bar elements. No image, font glyph, emoji or external resource is used.
+  Hide the decorative mark from assistive technology (`aria-hidden="true"`);
+  the adjacent TrackHarbor text supplies the accessible brand name.
 
 ## Spacing baseline
 
@@ -152,9 +227,22 @@ Small turquoise text is hard to read on light backgrounds: use the primary
 text color for links and accent labels, with turquoise underlines, borders,
 or backgrounds. Text on turquoise buttons must always be dark.
 
-The interface must offer **Light**, **Dark**, and **System** theme options.
-System follows OS settings, including changes while the page is open.
-Explicit choices are saved in the browser.
+The theme control has exactly two visible states: **Light** and **Dark**.
+Save an explicit choice in browser `localStorage` under `trackharbor-theme`,
+shared by login and authenticated pages. If no valid choice is saved, follow OS
+settings, including changes while the page is open, until the first manual
+toggle. A saved choice takes precedence over OS changes. If storage is
+unavailable, switching must still work for the current page. Changes saved in
+another tab update the theme and icon in open tabs as well.
+
+`internal/web/assets/theme-toggle.js` exports `mountThemeToggle(button)` as the
+reusable component behavior. Pass a button containing an SVG `use` element;
+the component handles switching, icons, accessible labels and local persistence.
+`theme.js` applies the saved theme before rendering (to avoid a theme flash),
+then imports and mounts this component on `#theme-choice` after DOM readiness.
+The login card and authenticated top bar use the same component; their styles
+and placement remain separate. All assets are embedded in the Go server; no
+Node.js runtime or external CDN is needed.
 
 ## Icons
 

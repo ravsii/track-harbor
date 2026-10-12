@@ -94,7 +94,33 @@ func (a *authentication) allowLogin(remote string) bool {
 	return v.count <= 20
 }
 
-var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TrackHarbor · Sign in</title><link rel="stylesheet" href="/assets/tailwind.css"><script src="/assets/theme.js"></script></head><body><main class="min-h-screen flex items-center justify-center p-4"><section class="panel w-full max-w-sm rounded-lg border border-edge bg-surface p-6"><h1>TrackHarbor</h1><h2>Sign in</h2>{{if .}}<p class="account-error" role="alert">{{.}}</p>{{end}}<form method="post" action="/login"><label>Username<input name="username" autocomplete="username" maxlength="64" required autofocus></label><label>Password<input type="password" name="password" autocomplete="current-password" required></label><button type="submit">Sign in</button></form></section></main></body></html>`))
+var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>TrackHarbor · Sign in</title>
+  <link rel="stylesheet" href="/assets/tailwind.css">
+  <link rel="stylesheet" href="/assets/login.css">
+  <script src="/assets/theme.js"></script>
+</head>
+<body class="login-page">
+<main class="login-layout">
+  <section class="login-card" aria-labelledby="login-title">
+    <div class="login-header">
+      <div class="login-brand"><span class="login-mark" aria-hidden="true"><i></i><i></i><i></i></span>TrackHarbor</div>
+      <button type="button" id="theme-choice" class="theme-toggle" aria-label="Change color theme"><svg class="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><use href="/assets/icons.svg#hg-sun-01"></use></svg></button>
+    </div>
+    <h1 id="login-title">Sign in</h1>
+    {{if .}}<p class="login-error" role="alert">{{.}}</p>{{end}}
+    <form method="post" action="/login">
+      <label for="login-username">Username<input id="login-username" name="username" autocomplete="username" maxlength="64" placeholder="Username" required autofocus></label>
+      <label for="login-password">Password<input id="login-password" type="password" name="password" autocomplete="current-password" placeholder="Password" required></label>
+      <button class="login-submit" type="submit">Sign in</button>
+    </form>
+  </section>
+</main>
+</body>
+</html>`))
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) { s.renderLogin(w, 200, "") }
 func (s *Server) renderLogin(w http.ResponseWriter, status int, message string) {

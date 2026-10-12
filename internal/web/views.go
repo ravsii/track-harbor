@@ -62,7 +62,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
       </div>
 	      <div class="topbar-actions">
 	        <a id="system-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" title="Open Downloads"><span class="system-indicator" aria-hidden="true"><span class="system-waves"></span><span class="system-dot"></span><span class="system-sync-icon">{{template "icon" "reload"}}</span></span><span id="system-status-text">Checking status…</span></a>
-	        <button type="button" id="theme-choice" class="theme-toggle" aria-label="Theme: system" title="Theme: system">{{template "icon" "computer"}}</button>
+	        <button type="button" id="theme-choice" class="theme-toggle" aria-label="Change color theme">{{template "icon" "sun-01"}}</button>
 	      </div>
       <div id="player-error" role="status" aria-live="polite"></div>
       <div id="bootstrap-warning" class="bootstrap-warning" role="status"{{if not .BootstrapWarning}} hidden{{end}}>Создайте отдельного пользователя, удалите admin</div>
