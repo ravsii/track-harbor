@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"time"
@@ -63,5 +64,10 @@ func run(logger *zap.Logger) error {
 		WriteTimeout: 0, IdleTimeout: time.Minute, // SSE stays open while downloads run.
 	}
 	logger.Info("starting local server", zap.String("address", cfg.Listen))
+	if host, _, err := net.SplitHostPort(cfg.Listen); err == nil {
+		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
+			logger.Warn("web UI has no login; any device that can reach the server can access it")
+		}
+	}
 	return srv.ListenAndServe()
 }

@@ -3,7 +3,8 @@
   if (!audio) return;
 
   const $ = id => document.getElementById(id);
-  const client = crypto.randomUUID(); // One owner per tab, even across browser profiles.
+  // getRandomValues works on HTTP LAN pages; randomUUID requires HTTPS or localhost.
+  const client = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
   const lastTrackKey = 'trackharbor-last-track';
   const stamp = track => `${track.source}\0${track.artist}\0${track.title}`;
   const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '0:00';

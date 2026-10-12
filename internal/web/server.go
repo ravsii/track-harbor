@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"html/template"
 	"io/fs"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -90,14 +89,6 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("GET /player/events", s.playerEvents)
 	mux.HandleFunc("POST /player/command", s.playerCommand)
 	return logRequests(logger, mux, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		host, _, err := net.SplitHostPort(r.Host)
-		if err != nil {
-			host = r.Host
-		}
-		if host != "localhost" && host != "127.0.0.1" && host != "[::1]" && host != "::1" {
-			http.Error(w, "local access only", http.StatusForbidden)
-			return
-		}
 		if r.Method == http.MethodPost {
 			origin := r.Header.Get("Origin")
 			u, err := url.Parse(origin)

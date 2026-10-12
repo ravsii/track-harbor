@@ -71,7 +71,13 @@ the server imports existing `strategy`, `personal_proxy`, and `public_proxy`
 values from `config.yaml` into `library.db` and removes those keys from YAML.
 `vk_strategy` is fixed to `direct`. Keep `listen` and optional `download_dir`
 in `config.yaml`; changes to either require a server restart. The web UI has
-no login: keep it on loopback and protect access to the server database.
+no login: it binds to loopback by default. Protect access to the server database.
+To serve the UI on your Wi-Fi, set `listen: "0.0.0.0:8787"` in the server's
+`config.yaml` and restart it; a specific interface address also works. Open
+`http://<server-LAN-IP>:8787` from another device. **Non-loopback access has
+no login or HTTPS:** any device that can reach the port can control downloads,
+reveal saved personal proxies and access the music library. Do not forward the
+port to the internet; use an SSH tunnel when the network is not trusted.
 
 Server logs are structured JSON on stderr at Info level. Downloads use
 `downloads/youtube/<video-id>.mp3` for Spotify library tracks and

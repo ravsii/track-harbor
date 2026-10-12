@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"slices"
@@ -88,10 +87,6 @@ func Load() (Config, string, error) {
 	}
 	if len(cfg.Strategy) == 0 {
 		cfg.Strategy = []string{"direct"}
-	}
-	host, _, err := net.SplitHostPort(cfg.Listen)
-	if err != nil || net.ParseIP(host) == nil || !net.ParseIP(host).IsLoopback() {
-		return Config{}, "", fmt.Errorf("server without login must listen on a loopback IP address")
 	}
 	return cfg, dbPath, nil
 }
