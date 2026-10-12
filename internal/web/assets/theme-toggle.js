@@ -16,6 +16,8 @@ export function mountThemeToggle(button) {
     const label = `Theme: ${active}. Switch to ${next} theme`;
     button.setAttribute('aria-label', label);
     button.title = label;
+    const value = button.querySelector('[data-theme-value]');
+    if (value) value.textContent = active === 'dark' ? 'Dark' : 'Light';
     button.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${active === 'dark' ? 'moon-01' : 'sun-01'}`);
   }
 

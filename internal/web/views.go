@@ -41,36 +41,50 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 <body data-user-id="{{.User.ID}}" hx-headers='{"X-TrackHarbor-User":"{{.User.ID}}"}'>
 <div class="shell grid min-h-screen grid-cols-[256px_minmax(0,1fr)] max-[950.02px]:grid-cols-1">
   <header id="music-player" class="topbar sticky top-0 z-10 border-b border-edge bg-surface" aria-label="Music player">
-    <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home"><span class="mark">{{template "icon" "disc-album"}}</span><strong>TrackHarbor</strong></a>
     <div class="topbar-content">
+      <div class="topbar-brand">
+        <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><strong>TrackHarbor</strong></a>
+        <a id="system-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="Checking status. Open Downloads" title="Checking status · Open Downloads"><span class="system-indicator" aria-hidden="true">{{template "icon" "circle"}}</span><span id="system-status-text">Checking</span></a>
+      </div>
       <audio id="player-audio" preload="none"></audio>
       <div class="player-controls">
-        <button type="button" id="player-shuffle" aria-label="Shuffle" aria-pressed="false" title="Shuffle off">{{template "icon" "shuffle"}}</button>
-        <button type="button" id="player-prev" aria-label="Previous track">{{template "icon" "previous"}}</button>
-        <button type="button" id="player-toggle" class="primary" aria-label="Play">{{template "icon" "play"}}</button>
-        <button type="button" id="player-next" aria-label="Next track">{{template "icon" "next"}}</button>
-        <span class="track-cover player-cover relative grid size-8 shrink-0 place-items-center overflow-hidden rounded border border-edge bg-selected text-muted" aria-hidden="true">{{template "icon" "disc-album"}}<img id="player-cover-image" class="absolute inset-0 size-full object-cover" alt="" hidden></span>
-        <div class="player-progress">
-          <div class="player-track-line"><strong id="player-track" aria-live="polite"></strong></div>
-          <div class="player-progress-row">
-            <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek">
-            <span id="player-time">0:00 / 0:00</span>
+        <div class="player-transport">
+          <button type="button" id="player-shuffle" aria-label="Shuffle" aria-pressed="false" title="Shuffle off">{{template "icon" "shuffle"}}</button>
+          <button type="button" id="player-prev" aria-label="Previous track">{{template "icon" "previous"}}</button>
+          <button type="button" id="player-toggle" class="primary" aria-label="Play">{{template "icon" "play"}}</button>
+          <button type="button" id="player-next" aria-label="Next track">{{template "icon" "next"}}</button>
+        </div>
+        <div class="player-track-group">
+          <span class="track-cover player-cover relative grid size-8 shrink-0 place-items-center overflow-hidden border border-edge bg-selected text-muted" aria-hidden="true">{{template "icon" "disc-album"}}<img id="player-cover-image" class="absolute inset-0 size-full object-cover" alt="" hidden></span>
+          <div class="player-progress">
+            <div class="player-track-line"><strong id="player-track" aria-live="polite"></strong></div>
+            <div class="player-progress-row">
+              <input type="range" id="player-seek" min="0" max="1000" value="0" aria-label="Seek">
+              <span id="player-time">0:00 / 0:00</span>
+            </div>
           </div>
         </div>
-        <button type="button" id="player-mute" aria-label="Mute" title="Mute">{{template "icon" "volume-high"}}</button>
-        <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume">
+        <div class="player-volume-group">
+          <button type="button" id="player-mute" aria-label="Mute" title="Mute">{{template "icon" "volume-high"}}</button>
+          <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume">
+        </div>
       </div>
-	      <div class="topbar-actions">
-	        <a id="system-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" title="Open Downloads"><span class="system-indicator" aria-hidden="true"><span class="system-waves"></span><span class="system-dot"></span><span class="system-sync-icon">{{template "icon" "reload"}}</span></span><span id="system-status-text">Checking status…</span></a>
-	        <button type="button" id="theme-choice" class="theme-toggle" aria-label="Change color theme">{{template "icon" "sun-01"}}</button>
-	      </div>
+      <div class="topbar-actions">
+        <details id="account-menu" class="account-menu">
+          <summary><span class="account-name">{{.User.Username}}</span>{{template "icon" "arrow-right-01"}}</summary>
+          <div class="account-dropdown">
+            <button type="button" id="theme-choice" class="account-menu-item" aria-label="Change color theme">{{template "icon" "sun-01"}}<span>Theme</span><span class="theme-value" data-theme-value></span></button>
+            <hr>
+            <form id="logout-form" method="post" action="/logout?account_id={{.User.ID}}"><button type="submit" class="account-menu-item">{{template "icon" "logout-01"}}<span>Sign out</span></button></form>
+          </div>
+        </details>
+      </div>
       <div id="player-error" role="status" aria-live="polite"></div>
       <div id="bootstrap-warning" class="bootstrap-warning" role="status"{{if not .BootstrapWarning}} hidden{{end}}>Создайте отдельного пользователя, удалите admin</div>
     </div>
   </header>
   <aside class="sidebar border-r border-edge bg-sidebar">
 	    <div class="nav-label">NAVIGATION</div>
-		    <div class="account-bar flex items-center justify-between gap-2"><span class="text-muted">{{.User.Username}}</span><form id="logout-form" method="post" action="/logout?account_id={{$.User.ID}}"><button type="submit">Sign out</button></form></div>
 	    <nav aria-label="Navigation">
 	      <a class="{{if eq .Source "music"}}active{{end}}" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "music-note-01"}}</span> Tracks <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
 	      <a class="{{if eq .Source "all"}}active{{end}}" href="/?source=all" hx-get="/?source=all" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "disc-album"}}</span> Server tracks <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>

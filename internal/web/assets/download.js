@@ -45,34 +45,46 @@
     const label = document.getElementById('system-status-text');
     if (!link || !label || !snapshot) return;
     let text;
+    let short;
     let kind = 'idle';
     if (state?.stopped && state?.running) {
       text = 'Stopping…';
+      short = 'Stopping';
       kind = 'active';
     } else if (state?.running) {
       text = `Syncing ${state.finished}/${state.total}`;
+      short = 'Syncing';
       kind = 'active';
     } else if (snapshot.syncing) {
       text = 'Syncing library…';
+      short = 'Syncing';
       kind = 'active';
     } else if (state?.stopped) {
       text = 'Syncing stopped';
+      short = 'Stopped';
     } else if (snapshot.tracks.some(track => track.stage === 'failed')) {
       text = 'Syncing needs attention';
+      short = 'Attention';
       kind = 'attention';
     } else if (!snapshot.library_count) {
       text = 'Sync a library to begin';
+      short = 'Empty';
     } else if (!snapshot.tracks.length) {
       text = 'All tracks ready to play';
+      short = 'Ready';
       kind = 'ready';
     } else {
       text = 'Syncing is not active';
+      short = 'Idle';
     }
-    label.textContent = text;
+    label.textContent = short;
+    const icon = kind === 'ready' ? 'checkmark-circle-02' : kind === 'active' || kind === 'attention' ? 'reload' : 'circle';
+    link.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${icon}`);
     link.dataset.state = kind;
     link.dataset.syncing = snapshot.syncing ? 'true' : 'false';
     link.dataset.active = snapshot.syncing || (state?.running && !state.stopped) ? 'true' : 'false';
     link.title = `${text} · Open Downloads`;
+    link.setAttribute('aria-label', link.title);
   }
 
   function control() {
@@ -166,7 +178,16 @@
       const target = document.getElementById('download-state');
       if (target) target.textContent = 'Could not load download status. Reopen Downloads to retry.';
       const label = document.getElementById('system-status-text');
-      if (label) label.textContent = 'Status unavailable';
+      if (label) {
+        label.textContent = 'Unknown';
+        const link = document.getElementById('system-status');
+        link.dataset.state = 'attention';
+        link.dataset.syncing = 'false';
+        link.dataset.active = 'false';
+        link.querySelector('use').setAttribute('href', '/assets/icons.svg#hg-circle');
+        link.title = 'Status unavailable · Open Downloads to retry';
+        link.setAttribute('aria-label', link.title);
+      }
     }
   }
 

@@ -61,6 +61,9 @@ remain fixed across themes and viewport sizes; available widths may be fluid.
 | Button icon-to-label gap | `6px` |
 | Heading-to-content / section-to-section gap | `18px` / `24px` |
 | List row padding / column gap | `8px 10px` / `10px` |
+| Compact toolbar padding | `8px 20px`; `8px 12px` at widths ≤ `700px` |
+| Adjacent toolbar icon gap / group gap | `4px` / `12px` |
+| Range control hit area height / track height / thumb size | `24px` / `3px` / `10px` |
 | Keyboard focus outline / offset | `2px solid var(--accent)` / `3px` |
 
 Reset browser heading and paragraph margins; explicitly use these spacing
@@ -106,6 +109,18 @@ explicit layout decision, not a different button style.
 hover uses selected background. **Icon button:** shared square geometry,
 zero padding, centered icon, secondary text; hover uses selected background
 and primary text. Give every icon-only button an accessible action label.
+
+**Compact toolbar icons:** use the same `32px` buttons and `18px` icons,
+but no border or permanent background. Arrange related actions together with
+the toolbar gaps above; show a background only on hover or keyboard focus.
+An active toggle uses a small accent indicator rather than a separate filled
+block. Range sliders use their dedicated geometry, not text-input padding.
+
+**Dropdown:** panel background, `1px` standard border, `10px` radius, `8px`
+padding, `8px` gap from its trigger. Items are full-width, minimum `40px`
+high, with `8px 10px` padding, `6px` radius and `10px` icon-to-label gap.
+Use selected background on hover. Support keyboard activation, Escape to close,
+and dismissal on outside interaction; return focus to the trigger on Escape.
 
 **Disabled control:** use the same geometry, `opacity: 0.5`, no hover effect,
 and native `disabled` where supported. Do not communicate unavailability
