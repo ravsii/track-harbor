@@ -22,6 +22,8 @@ import (
 )
 
 type downloadState struct {
+	ID         int64  `json:"id,omitempty"`
+	SourceID   string `json:"source_id,omitempty"`
 	Running    bool   `json:"running"`
 	Stopped    bool   `json:"stopped"`
 	Total      int    `json:"total"`
@@ -71,16 +73,18 @@ func (d *downloadJob) publishLocked(update downloadState) {
 	}
 	d.state = update
 	if update.Title != "" {
-		d.tracks[trackKey(update.Source, update.Artist, update.Title)] = update
+		d.tracks[trackKey(update.Source, update.SourceID)] = update
 	}
 	if update.Stage != "done" {
 		return
 	}
 	data, _ := json.Marshal(struct {
-		Source string `json:"source"`
-		Artist string `json:"artist"`
-		Title  string `json:"title"`
-	}{update.Source, update.Artist, update.Title})
+		ID       int64  `json:"id"`
+		SourceID string `json:"source_id"`
+		Source   string `json:"source"`
+		Artist   string `json:"artist"`
+		Title    string `json:"title"`
+	}{update.ID, update.SourceID, update.Source, update.Artist, update.Title})
 	for ch := range d.listeners {
 		select {
 		case ch <- data:
@@ -97,8 +101,8 @@ func (d *downloadJob) publishLocked(update downloadState) {
 	}
 }
 
-func trackKey(source, artist, title string) string {
-	return source + "\x00" + artist + "\x00" + title
+func trackKey(source, sourceID string) string {
+	return source + "\x00" + sourceID
 }
 
 func (d *downloadJob) enqueue(tracks []store.Track) {
@@ -116,13 +120,13 @@ func (d *downloadJob) enqueue(tracks []store.Track) {
 	}
 	added := 0
 	for _, t := range tracks {
-		key := trackKey(t.Source, t.Artist, t.Title)
+		key := trackKey(t.Source, t.SourceID)
 		if d.active[key] {
 			continue
 		}
 		d.active[key] = true
 		d.queue = append(d.queue, t)
-		d.tracks[key] = downloadState{Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: "queued"}
+		d.tracks[key] = downloadState{ID: t.ID, SourceID: t.SourceID, Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: "queued"}
 		added++
 	}
 	if added == 0 && !d.state.Running {
@@ -145,8 +149,8 @@ func (d *downloadJob) runQueue(ctx context.Context) {
 		d.mu.Lock()
 		if d.stopped {
 			for _, t := range d.queue {
-				key := trackKey(t.Source, t.Artist, t.Title)
-				d.tracks[key] = downloadState{Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: "stopped", Message: "Stopped"}
+				key := trackKey(t.Source, t.SourceID)
+				d.tracks[key] = downloadState{ID: t.ID, SourceID: t.SourceID, Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: "stopped", Message: "Stopped"}
 			}
 			d.queue = nil
 			clear(d.active)
@@ -185,12 +189,18 @@ func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 	d.mu.Unlock()
 	process := func(t store.Track) {
 		state := downloadState{Running: true}
+		state.ID, state.SourceID = t.ID, t.SourceID
+		// A different user's sync may have queued an older snapshot just before
+		// the preceding download finished. Always consult the shared file index.
+		if latest, err := d.store.Track(t.ID); err == nil {
+			t = latest
+		}
 		state.Source, state.Artist, state.Title = t.Source, t.Artist, t.Title
 		if ctx.Err() != nil {
 			state.Stage, state.Message = "stopped", "Stopped"
 			d.mu.Lock()
 			d.publishLocked(state)
-			delete(d.active, trackKey(t.Source, t.Artist, t.Title))
+			delete(d.active, trackKey(t.Source, t.SourceID))
 			d.mu.Unlock()
 			return
 		}
@@ -218,10 +228,9 @@ func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 			state.Message = "Already downloaded"
 		} else {
 			directory := filepath.Join(d.config.DownloadDir, "youtube")
-			id := ""
+			id := t.SourceID
 			if t.Source == "vk" {
 				directory = filepath.Join(d.config.DownloadDir, "vk")
-				id = fmt.Sprintf("%d_%d", t.OwnerID, t.AudioID)
 			}
 			fields := []zap.Field{zap.String("source", t.Source), zap.String("artist", t.Artist), zap.String("title", t.Title)}
 			d.logger.Info("track download started", fields...)
@@ -266,7 +275,7 @@ func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 		state.Finished = d.finished
 		state.Total = d.state.Total
 		d.publishLocked(state)
-		delete(d.active, trackKey(t.Source, t.Artist, t.Title))
+		delete(d.active, trackKey(t.Source, t.SourceID))
 		d.mu.Unlock()
 	}
 	var wg sync.WaitGroup
@@ -302,7 +311,7 @@ func (s *Server) startDownloads(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "downloads unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	tracks, err := s.store.ListAll()
+	tracks, err := s.store.Downloadable()
 	if err != nil {
 		http.Error(w, "unable to read library", http.StatusInternalServerError)
 		return
@@ -355,12 +364,16 @@ func (s *Server) downloadStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "downloads unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	tracks, err := s.store.ListAll()
+	tracks, err := s.store.Downloadable()
 	if err != nil {
 		http.Error(w, "unable to read library", http.StatusInternalServerError)
 		return
 	}
 	type item struct {
+		ID         int64  `json:"id"`
+		SourceID   string `json:"source_id"`
+		Cover      string `json:"cover"`
+		Playable   bool   `json:"playable"`
 		Source     string `json:"source"`
 		Artist     string `json:"artist"`
 		Title      string `json:"title"`
@@ -387,24 +400,50 @@ func (s *Server) downloadStatus(w http.ResponseWriter, r *http.Request) {
 		if t.FilePath != "" {
 			stage = "missing"
 		}
-		status := d.tracks[trackKey(t.Source, t.Artist, t.Title)]
+		status := d.tracks[trackKey(t.Source, t.SourceID)]
 		if status.Stage != "" && status.Stage != "done" && status.Stage != "skipped" {
 			stage = status.Stage
 		}
-		items = append(items, item{Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: stage, Message: status.Message, Bytes: status.Bytes, TotalBytes: status.TotalBytes})
+		items = append(items, item{ID: t.ID, SourceID: t.SourceID, Cover: coverURL(t.CoverURL), Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: stage, Message: status.Message, Bytes: status.Bytes, TotalBytes: status.TotalBytes})
 	}
 	state := d.state
 	d.mu.Unlock()
+	mine, err := s.store.ListUser(currentUser(r).ID)
+	if err != nil {
+		http.Error(w, "unable to read personal tracks", 500)
+		return
+	}
+	personal := make([]item, 0, len(mine))
+	for _, t := range mine {
+		stage, playable := "waiting", false
+		if info, e := os.Stat(t.FilePath); e == nil && info.Mode().IsRegular() && info.Size() > 0 {
+			stage, playable = "downloaded", true
+		}
+		for _, queued := range items {
+			if queued.ID == t.ID {
+				stage = queued.Stage
+				break
+			}
+		}
+		personal = append(personal, item{ID: t.ID, SourceID: t.SourceID, Cover: coverURL(t.CoverURL), Playable: playable, Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: stage})
+	}
+	available, err := s.store.ListPlayable()
+	if err != nil {
+		http.Error(w, "unable to read available tracks", 500)
+		return
+	}
 	s.mu.Lock()
-	syncing := s.status["spotify"] == "Syncing…" || s.status["vk"] == "Syncing…"
+	syncing := s.status[userSourceKey(r, "spotify")] == "Syncing…" || s.status[userSourceKey(r, "vk")] == "Syncing…"
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(struct {
-		State        downloadState `json:"state"`
-		Tracks       []item        `json:"tracks"`
-		LibraryCount int           `json:"library_count"`
-		Syncing      bool          `json:"syncing"`
-	}{state, items, len(tracks), syncing}); err != nil {
+		State        downloadState   `json:"state"`
+		Tracks       []item          `json:"tracks"`
+		Mine         []item          `json:"my_tracks"`
+		Available    []playableTrack `json:"available_tracks"`
+		LibraryCount int             `json:"library_count"`
+		Syncing      bool            `json:"syncing"`
+	}{state, items, personal, playableItems(available), len(tracks), syncing}); err != nil {
 		s.logger.Error("write download status failed")
 	}
 }
@@ -464,11 +503,17 @@ func (s *Server) downloadEvents(w http.ResponseWriter, r *http.Request) {
 		case <-r.Context().Done():
 			return
 		case data := <-ch:
+			if _, _, err := s.auth.authenticate(r); err != nil {
+				return
+			}
 			if _, err := fmt.Fprintf(w, "data: %s\n\n", data); err != nil {
 				return
 			}
 			f.Flush()
 		case <-ticker.C:
+			if _, _, err := s.auth.authenticate(r); err != nil {
+				return
+			}
 			if _, err := io.WriteString(w, ": keepalive\n\n"); err != nil {
 				return
 			}

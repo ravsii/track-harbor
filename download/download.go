@@ -27,7 +27,7 @@ import (
 
 type Track struct {
 	Source, Artist, Title, AudioURL, CoverURL string
-	SourceID                                  string // VK owner_id_audio_id; YouTube IDs are resolved during search.
+	SourceID                                  string // Spotify track ID or VK owner_id_audio_id.
 }
 
 type Event struct {
@@ -45,6 +45,7 @@ type Routes struct {
 }
 
 var videoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
+var spotifyID = regexp.MustCompile(`^[A-Za-z0-9]{22}$`)
 var vkAudioID = regexp.MustCompile(`^-?[0-9]+_[0-9]+$`)
 
 func (r *Routes) candidates() []string {
@@ -148,7 +149,7 @@ func (r *Routes) try(ctx context.Context, event func(Event), stage string, reque
 var errRateLimit = errors.New("download rate limited")
 var errNoMatch = errors.New("no YouTube match")
 
-// Save converts into a staged MP3 and publishes it under the audio source ID.
+// Save converts into a staged MP3 and publishes it under the catalogue source ID.
 // The caller owns its file history. Shared ID-named files are not overwritten;
 // an invalid file already tracked at the same destination may be replaced.
 func Save(ctx context.Context, t Track, directory, trackedPath string, routes *Routes, event func(Event)) (string, string, error) {
@@ -178,6 +179,9 @@ func Save(ctx context.Context, t Track, directory, trackedPath string, routes *R
 		}
 		input, release = f, closeFile
 	} else if t.Source == "spotify" {
+		if !spotifyID.MatchString(t.SourceID) {
+			return "", "", fmt.Errorf("invalid Spotify track ID")
+		}
 		executable, err := exec.LookPath("yt-dlp")
 		if err != nil {
 			return "", "", fmt.Errorf("yt-dlp is required: %w", err)
@@ -260,11 +264,13 @@ func Save(ctx context.Context, t Track, directory, trackedPath string, routes *R
 		return "", "", fmt.Errorf("unknown track source")
 	}
 	defer release()
-	id := t.SourceID
-	if video != "" {
-		id = video
+	filename := t.SourceID
+	if t.Source == "spotify" {
+		// Spotify IDs are case-sensitive. Lowercase byte encoding keeps them
+		// distinct even on case-insensitive filesystems.
+		filename = hex.EncodeToString([]byte(t.SourceID))
 	}
-	destination := filepath.Join(directory, id+".mp3")
+	destination := filepath.Join(directory, filename+".mp3")
 	stage, err := os.CreateTemp(directory, ".download-*.mp3")
 	if err != nil {
 		return "", "", err
@@ -320,8 +326,8 @@ func Save(ctx context.Context, t Track, directory, trackedPath string, routes *R
 			}
 			return destination, hex.EncodeToString(h.Sum(nil)), nil
 		}
-		// Another track may have resolved to this ID concurrently. Keep the
-		// first file and record its actual checksum for this track as well.
+		// Another process may have saved this source ID concurrently. Keep the
+		// first file and record its actual checksum.
 		f, err := os.Open(destination)
 		if err != nil {
 			return "", "", err

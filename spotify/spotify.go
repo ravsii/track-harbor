@@ -38,10 +38,14 @@ func GetSongInfoPage(bearer, clientToken string, offset int) (*PlaylistResponse,
 }
 
 func GetPlaylistPage(bearer, clientToken, uri string, offset int, loggers ...*zap.Logger) (*PlaylistResponse, error) {
-	return fetchPlaylist(bearer, clientToken, uri, offset, "fetchPlaylistContents", loggers...)
+	return GetPlaylistPageContext(context.Background(), bearer, clientToken, uri, offset, loggers...)
 }
 
-func fetchPlaylist(bearer, clientToken, uri string, offset int, operation string, loggers ...*zap.Logger) (*PlaylistResponse, error) {
+func GetPlaylistPageContext(ctx context.Context, bearer, clientToken, uri string, offset int, loggers ...*zap.Logger) (*PlaylistResponse, error) {
+	return fetchPlaylist(ctx, bearer, clientToken, uri, offset, "fetchPlaylistContents", loggers...)
+}
+
+func fetchPlaylist(ctx context.Context, bearer, clientToken, uri string, offset int, operation string, loggers ...*zap.Logger) (*PlaylistResponse, error) {
 	var response struct {
 		Data struct {
 			PlaylistV2 json.RawMessage `json:"playlistV2"`
@@ -51,7 +55,7 @@ func fetchPlaylist(bearer, clientToken, uri string, offset int, operation string
 	if operation == "fetchPlaylist" {
 		variables["enableWatchFeedEntrypoint"] = true
 	}
-	if err := query(bearer, clientToken, operation, playlistQueryHash, variables, &response, loggers...); err != nil {
+	if err := queryContext(ctx, bearer, clientToken, operation, playlistQueryHash, variables, &response, loggers...); err != nil {
 		return nil, err
 	}
 	if len(response.Data.PlaylistV2) == 0 || string(response.Data.PlaylistV2) == "null" {

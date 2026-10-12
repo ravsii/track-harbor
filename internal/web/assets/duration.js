@@ -3,8 +3,8 @@
   const queue = [];
   let active = 0;
   let observer;
-  const key = row => `${row.dataset.source}\0${row.dataset.artist}\0${row.dataset.title}`;
-  const url = row => `/audio?${new URLSearchParams({source: row.dataset.source, artist: row.dataset.artist, title: row.dataset.title})}`;
+  const key = row => String(row.dataset.id);
+  const url = row => `/audio?${new URLSearchParams({id: row.dataset.id})}`;
 
   function next() {
     while (active < 3 && queue.length) {
@@ -60,7 +60,7 @@
       const track = e.detail;
       if (!track) return;
       for (const row of document.querySelectorAll('.library:not(.download-library) .tracks li[data-source]')) {
-        if (key(row) !== `${track.source}\0${track.artist}\0${track.title}`) continue;
+        if (key(row) !== String(track.id)) continue;
         cache.delete(key(row));
         row.querySelector('.track-duration').textContent = '—';
         if (playable) queueMicrotask(() => watch(row));

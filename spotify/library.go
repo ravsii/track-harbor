@@ -1,6 +1,7 @@
 package spotify
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -37,6 +38,10 @@ type libraryResponse struct {
 // Discover by semantic identifiers, never by a localized display name. Request
 // the full flattened library, including folders; no user-specific playlist ID.
 func FindLikedSongs(bearer, clientToken string, loggers ...*zap.Logger) (*PlaylistResponse, error) {
+	return FindLikedSongsContext(context.Background(), bearer, clientToken, loggers...)
+}
+
+func FindLikedSongsContext(ctx context.Context, bearer, clientToken string, loggers ...*zap.Logger) (*PlaylistResponse, error) {
 	logger := spotifyLogger(loggers)
 	features := []string{"LIKED_SONGS"}
 	expectedTotal := -1
@@ -47,7 +52,7 @@ func FindLikedSongs(bearer, clientToken string, loggers ...*zap.Logger) (*Playli
 			"limit": 50, "offset": offset, "flatten": true,
 			"expandedFolders": []string{}, "folderUri": nil, "includeFoldersWhenFlattening": true,
 		}
-		if err := query(bearer, clientToken, "libraryV3", libraryQueryHash, variables, &response, loggers...); err != nil {
+		if err := queryContext(ctx, bearer, clientToken, "libraryV3", libraryQueryHash, variables, &response, loggers...); err != nil {
 			return nil, err
 		}
 		library := response.Data.Me.Library
@@ -72,11 +77,11 @@ func FindLikedSongs(bearer, clientToken string, loggers ...*zap.Logger) (*Playli
 			if uri == likedSongsURI {
 				logger.Info("spotify_liked_candidate", zap.String("uri", uri), zap.String("matched_by", "collection_uri"))
 				logger.Info("spotify_collection_resolved", zap.String("collection_uri", uri), zap.String("playlist_uri", likedSongsPlaylistURI), zap.String("resolved_by", "web_player_builtin"))
-				return resolveLikedPlaylist(bearer, clientToken, likedSongsPlaylistURI, loggers...)
+				return resolveLikedPlaylist(ctx, bearer, clientToken, likedSongsPlaylistURI, loggers...)
 			}
 			if entry.Item.Data.Format == "liked-songs" && strings.HasPrefix(uri, "spotify:playlist:") {
 				logger.Info("spotify_liked_candidate", zap.String("uri", diagnosticText(uri, bearer, clientToken)), zap.String("matched_by", "playlist_format"))
-				return resolveLikedPlaylist(bearer, clientToken, uri, loggers...)
+				return resolveLikedPlaylist(ctx, bearer, clientToken, uri, loggers...)
 			}
 		}
 		offset += len(library.Items)
@@ -90,8 +95,8 @@ func FindLikedSongs(bearer, clientToken string, loggers ...*zap.Logger) (*Playli
 	return nil, fmt.Errorf("Liked Songs was not found in the Spotify library")
 }
 
-func resolveLikedPlaylist(bearer, clientToken, uri string, loggers ...*zap.Logger) (*PlaylistResponse, error) {
-	info, err := fetchPlaylist(bearer, clientToken, uri, 0, "fetchPlaylist", loggers...)
+func resolveLikedPlaylist(ctx context.Context, bearer, clientToken, uri string, loggers ...*zap.Logger) (*PlaylistResponse, error) {
+	info, err := fetchPlaylist(ctx, bearer, clientToken, uri, 0, "fetchPlaylist", loggers...)
 	if err != nil {
 		return nil, err
 	}

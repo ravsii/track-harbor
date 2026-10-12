@@ -9,8 +9,8 @@ import (
 	"trackharbor/vk"
 )
 
-func SyncVK(ctx context.Context, db *store.Store) (int, error) {
-	token, _, err := db.Credentials("vk")
+func SyncVK(ctx context.Context, db *store.Store, userID int64) (int, error) {
+	token, _, err := db.Credentials(userID, "vk")
 	if err != nil {
 		return 0, fmt.Errorf("load VK credentials: %w", err)
 	}
@@ -32,11 +32,11 @@ func SyncVK(ctx context.Context, db *store.Store) (int, error) {
 			if cover == "" {
 				cover = song.Album.Thumb.Photo300
 			}
-			tracks = append(tracks, store.Track{Artist: artist, Title: title, AddedAt: addedAt, OwnerID: song.OwnerID, AudioID: song.ID, AudioURL: song.URL, CoverURL: cover})
+			tracks = append(tracks, store.Track{SourceID: fmt.Sprintf("%d_%d", song.OwnerID, song.ID), Artist: artist, Title: title, AddedAt: addedAt, AudioURL: song.URL, CoverURL: cover})
 		}
 	}
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	return db.Replace("vk", tracks)
+	return db.Replace(userID, "vk", tracks)
 }

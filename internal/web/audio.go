@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -17,12 +18,12 @@ func (s *Server) playAudio(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	source := r.URL.Query().Get("source")
-	if source != "spotify" && source != "vk" {
+	id, err := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
+	if err != nil || id <= 0 {
 		http.NotFound(w, r)
 		return
 	}
-	t, err := s.store.Track(source, r.URL.Query().Get("artist"), r.URL.Query().Get("title"))
+	t, err := s.store.Track(id)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.NotFound(w, r)
 		return

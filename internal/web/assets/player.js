@@ -1,313 +1,168 @@
 (() => {
   const audio = document.getElementById('player-audio');
   if (!audio) return;
-
   const $ = id => document.getElementById(id);
-  // getRandomValues works on HTTP LAN pages; randomUUID requires HTTPS or localhost.
-  const client = Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('');
-  const lastTrackKey = 'trackharbor-last-track';
-  const stamp = track => `${track.source}\0${track.artist}\0${track.title}`;
+  const cover = $('player-cover-image');
+  const rememberedKey = `trackharbor-last-track:${document.body.dataset.userId}`;
+  let tracks = [], selected, started = false, shuffle = false, muted = false, previousVolume = 0.8;
+  const history = [];
+  audio.volume = 0.8;
+  audio.preload = 'metadata';
   const time = seconds => Number.isFinite(seconds) ? `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}` : '0:00';
-  let tracks = [], covers = new Map(), selected, shared, updatedAt = Date.now(), lastContact = 0;
-  let previousVolume = 0.8, userMuted = false, releasing = false, pausing = false;
-  const coverImage = $('player-cover-image');
-  coverImage.addEventListener('load', () => { coverImage.hidden = false; });
-  coverImage.addEventListener('error', () => { coverImage.hidden = true; });
+  const icon = (id, name) => $(id).querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${name}`);
+  cover.addEventListener('load', () => { cover.hidden = false; });
+  cover.addEventListener('error', () => { cover.hidden = true; });
   document.addEventListener('error', event => {
     if (event.target.matches?.('.library .track-cover img')) event.target.hidden = true;
   }, true);
-  audio.volume = 0.8;
-  audio.muted = true;
-  audio.preload = 'metadata';
 
-  function icon(id, name) {
-    $(id).querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${name}`);
-  }
-
-  function setShuffle(enabled) {
-    $('player-shuffle').setAttribute('aria-pressed', String(enabled));
-    $('player-shuffle').title = enabled ? 'Shuffle on' : 'Shuffle off';
-  }
-
-  function updateVolume() {
-    const muted = userMuted || audio.volume === 0;
-    icon('player-mute', muted ? 'volume-mute' : 'volume-high');
-    $('player-mute').setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
-    $('player-mute').title = muted ? 'Unmute' : 'Mute';
-    $('player-volume').value = muted ? 0 : Math.round(audio.volume * 100);
-    audio.muted = muted || !ownsSound();
-  }
-
-  const ownsSound = () => !pausing && shared?.owner === client && shared.playing && !shared.pending && Date.now() - lastContact < 6000;
-  const canPauseHere = () => shared?.playing && shared.owner === client && !shared.pending;
-  const position = () => ownsSound() && !audio.paused ? audio.currentTime :
-    Math.max(0, (shared?.position || 0) + (shared?.playing ? (Date.now() - updatedAt) / 1000 : 0));
-
-  function refresh() {
-    const remote = !!(shared?.playing && shared.owner && shared.owner !== client);
-    $('player-remote').hidden = !remote;
-    $('music-player').classList.toggle('remote-playing', remote);
-    icon('player-toggle', canPauseHere() ? 'pause' : 'play');
-    $('player-toggle').setAttribute('aria-label', canPauseHere() ? 'Pause' : shared?.playing ? 'Play here' : 'Play');
-    const elapsed = position();
-    $('player-time').textContent = `${time(elapsed)} / ${time(audio.duration)}`;
-    $('player-seek').value = Number.isFinite(audio.duration) && audio.duration > 0
-      ? Math.min(1000, Math.round(elapsed / audio.duration * 1000)) : 0;
-  }
-
-  function highlightCurrent() {
-    document.querySelectorAll('.library:not(.download-library) .tracks li[data-source]').forEach(row => {
-      const active = !!shared?.track && stamp(shared.track) === stamp(row.dataset);
-      const playing = active && shared.playing;
+  function highlight() {
+    document.querySelectorAll('.library:not(.download-library) li[data-id]').forEach(row => {
+      const active = started && String(selected?.id) === row.dataset.id;
+      const playing = active && !audio.paused;
       row.classList.toggle('current-track', active);
       row.classList.toggle('is-playing', playing);
       const button = row.querySelector('.play-track');
-      const pause = playing && canPauseHere();
-      button.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${pause ? 'pause' : 'play'}`);
-      button.setAttribute('aria-label', `${pause ? 'Pause' : playing ? 'Play here' : 'Play'} ${row.dataset.title}`);
+      button.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${playing ? 'pause' : 'play'}`);
+      button.setAttribute('aria-label', `${playing ? 'Pause' : 'Play'} ${row.dataset.title}`);
       if (active) row.setAttribute('aria-current', 'true');
       else row.removeAttribute('aria-current');
     });
   }
-
+  function refresh() {
+    icon('player-toggle', audio.paused ? 'play' : 'pause');
+    $('player-toggle').setAttribute('aria-label', audio.paused ? 'Play' : 'Pause');
+    $('player-time').textContent = `${time(audio.currentTime)} / ${time(audio.duration)}`;
+    $('player-seek').value = Number.isFinite(audio.duration) && audio.duration > 0 ? Math.min(1000, Math.round(audio.currentTime / audio.duration * 1000)) : 0;
+  }
   function select(track) {
-    const cover = covers.get(stamp(track)) || '';
-    if (coverImage.getAttribute('src') !== cover) {
-      coverImage.hidden = true;
-      if (cover) coverImage.src = cover;
-      else coverImage.removeAttribute('src');
+    const next = tracks.find(item => String(item.id) === String(track.id)) || track;
+    const image = next.cover || '';
+    if ((cover.getAttribute('src') || '') !== image) {
+      cover.hidden = true;
+      if (image) cover.src = image;
+      else cover.removeAttribute('src');
     }
-    if (selected && stamp(selected) === stamp(track)) return false;
-    selected = track;
-    const params = new URLSearchParams({source: track.source, artist: track.artist, title: track.title});
-    audio.src = `/audio?${params}`;
-    $('player-track').textContent = `${track.artist} — ${track.title}`;
+    $('player-track').textContent = `${next.artist} — ${next.title}`;
+    if (selected?.id === next.id) { selected = next; return; }
+    selected = next;
+    audio.src = `/audio?id=${encodeURIComponent(next.id)}`;
     $('player-error').textContent = '';
-    return true;
+    try { sessionStorage.setItem(rememberedKey, String(next.id)); } catch (_) { /* Storage may be disabled. */ }
   }
-
-  function chooseCandidate() {
-    if (shared?.track || selected || !tracks.length) return;
-    let remembered;
-    try { remembered = JSON.parse(localStorage.getItem(lastTrackKey)); } catch (_) { /* Storage may be disabled. */ }
-    select((remembered && tracks.find(track => stamp(track) === stamp(remembered))) || tracks[0]);
-    refresh();
+  async function play(track = selected) {
+    if (!track) { $('player-error').textContent = 'Download a track before playing it.'; return; }
+    select(track);
+    started = true;
+    try { await audio.play(); }
+    catch (_) { $('player-error').textContent = 'Could not play this track. Click Play to retry.'; }
+    highlight(); refresh();
   }
-
+  function next() {
+    if (!tracks.length) return;
+    if (selected) history.push(selected.id);
+    if (history.length > 100) history.shift();
+    const index = tracks.findIndex(track => track.id === selected?.id);
+    let choice = (index + 1) % tracks.length;
+    if (shuffle && tracks.length > 1) {
+      choice = Math.floor(Math.random() * (tracks.length - 1));
+      if (choice >= index && index >= 0) choice++;
+    }
+    if (tracks[choice].id === selected?.id) audio.currentTime = 0;
+    play(tracks[choice]);
+  }
+  function previous() {
+    if (audio.currentTime > 3) { audio.currentTime = 0; return; }
+    let track;
+    while (history.length && !track) track = tracks.find(item => item.id === history.pop());
+    if (!track && tracks.length) {
+      const index = tracks.findIndex(item => item.id === selected?.id);
+      track = tracks[(index - 1 + tracks.length) % tracks.length];
+    }
+    if (track) play(track);
+  }
+  function volume() {
+    audio.muted = muted || audio.volume === 0;
+    icon('player-mute', audio.muted ? 'volume-mute' : 'volume-high');
+    $('player-mute').setAttribute('aria-label', audio.muted ? 'Unmute' : 'Mute');
+    $('player-mute').title = audio.muted ? 'Unmute' : 'Mute';
+    $('player-volume').value = audio.muted ? 0 : Math.round(audio.volume * 100);
+  }
+  function applyTracks(items) {
+    tracks = items;
+    const updated = tracks.find(track => track.id === selected?.id);
+    if (updated) select(updated); // Metadata refreshes never reset the audio source.
+    else {
+      audio.pause();
+      started = false;
+      selected = undefined;
+      if (tracks.length) {
+        let remembered;
+        try { remembered = sessionStorage.getItem(rememberedKey); } catch (_) { /* Storage may be disabled. */ }
+        select(tracks.find(track => String(track.id) === remembered) || tracks[0]);
+      } else {
+        audio.removeAttribute('src');
+        audio.load();
+        $('player-track').textContent = '';
+        cover.removeAttribute('src');
+        cover.hidden = true;
+      }
+    }
+    refresh(); highlight();
+  }
+  let catalogueRequest;
   async function loadTracks() {
+    if (catalogueRequest) return catalogueRequest;
+    catalogueRequest = fetchCatalogue();
+    try { await catalogueRequest; } finally { catalogueRequest = undefined; }
+  }
+  async function fetchCatalogue() {
     try {
       const response = await fetch('/audio/tracks');
       if (!response.ok) throw new Error();
-      tracks = await response.json();
-      covers = new Map(tracks.map(track => [stamp(track), track.cover]));
-      if (selected) select(selected);
-      chooseCandidate();
-    } catch (_) {
-      $('player-error').textContent = 'Could not load saved tracks. Refresh the page to retry.';
-    }
+      applyTracks(await response.json());
+    } catch (_) { $('player-error').textContent = 'Could not load saved tracks. Refresh the page to retry.'; }
   }
-
-  async function command(action, extra = {}) {
-    const response = await fetch('/player/command', {
-      method: 'POST', headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({client, action, ...extra})
-    });
-    if (!response.ok) throw new Error('player command failed');
-  }
-
-  function stopLocal() {
-    audio.muted = true;
-    audio.pause();
-  }
-
-  async function apply(state) {
-    if (state.revision < (shared?.revision ?? -1)) return;
-    lastContact = Date.now();
-    const wasOwner = shared?.owner === client;
-    const changed = !shared || state.revision !== shared.revision;
-    shared = state;
-    if (!state.playing || state.owner !== client) pausing = false;
-    updatedAt = Date.now();
-    setShuffle(state.shuffle);
-
-    if (state.owner === client && state.pending && !releasing) {
-      releasing = true;
-      const position = audio.currentTime || 0;
-      stopLocal(); // Stop sound before granting the new browser ownership.
-      try { await command('release', {position}); } catch (_) { /* Lease expiry handles a lost acknowledgement. */ }
-      releasing = false;
-      refresh();
-      return;
-    }
-    if (state.track) {
-      const selectedChanged = select(state.track);
-      if (selectedChanged || changed || !wasOwner && state.owner === client) {
-        const seek = () => {
-          if (audio.readyState && Number.isFinite(audio.duration) && shared?.revision === state.revision) {
-            audio.currentTime = Math.min(state.position, audio.duration);
-            if (ownsSound()) audio.muted = userMuted || audio.volume === 0;
-          }
-        };
-        if (audio.readyState) seek();
-        else audio.addEventListener('loadedmetadata', seek, {once: true});
-      }
-    } else {
-      chooseCandidate();
-    }
-    highlightCurrent();
-    if (ownsSound()) {
-      // An existing owner must remain audible while loading the next track:
-      // muted media in a background tab may not load until the tab is focused.
-      // A new owner stays muted until its initial position has been restored.
-      audio.muted = (!wasOwner && !audio.readyState) || userMuted || audio.volume === 0;
-      if (audio.paused && state.track) {
-        try {
-          await audio.play();
-          if (!ownsSound()) stopLocal();
-        }
-        catch (_) {
-          stopLocal();
-          if (ownsSound()) {
-            $('player-error').textContent = 'Playback blocked. Click Play again in this browser.';
-            try { await command('pause', {position: state.position}); } catch (_) { /* Retry via Play. */ }
-          }
-        }
-      }
-    } else {
-      stopLocal();
-    }
-    refresh();
-  }
-
-  function prime(track) {
-    if (!track) {
-      $('player-error').textContent = 'Download a track before playing it.';
-      return;
-    }
-    select(track);
-    audio.muted = true; // Start inside the click gesture, but make no sound until the server grants ownership.
-    audio.play().catch(() => { /* May require another click after handoff. */ });
-    command('play', {track}).catch(() => {
-      stopLocal();
-      $('player-error').textContent = 'Could not start playback. Try again.';
-    });
-  }
-
-  async function next() {
-    if (!shared?.track && tracks.length) { prime(tracks[0]); return; }
-    try { await command('next'); } catch (_) { $('player-error').textContent = 'Could not skip track.'; }
-  }
-
-  async function previous() {
-    if (position() > 3) { seek(0); return; }
-    try { await command('previous'); } catch (_) { $('player-error').textContent = 'Could not skip track.'; }
-  }
-
-  function seek(value) {
-    if (ownsSound() && audio.readyState) audio.currentTime = value;
-    command('seek', {position: value}).catch(() => { $('player-error').textContent = 'Could not seek.'; });
-  }
-
-  function pause() {
-    const at = position();
-    pausing = true;
-    stopLocal();
-    command('pause', {position: at}).catch(() => {
-      pausing = false;
-      $('player-error').textContent = 'Could not pause playback.';
-    });
-  }
-
-  audio.addEventListener('timeupdate', refresh);
-  audio.addEventListener('durationchange', refresh);
-  audio.addEventListener('loadedmetadata', refresh);
-  audio.addEventListener('pause', refresh);
-  audio.addEventListener('volumechange', updateVolume);
-  audio.addEventListener('playing', () => {
-    if (!ownsSound() || !selected) return;
-    try { localStorage.setItem(lastTrackKey, JSON.stringify(selected)); } catch (_) { /* Storage may be disabled. */ }
-    refresh();
-  });
-  audio.addEventListener('error', () => {
-    stopLocal();
-    $('player-error').textContent = 'MP3 unavailable. Download it again and refresh the page.';
-    if (shared?.owner === client) command('pause', {position: 0}).catch(() => {});
-  });
-  audio.addEventListener('ended', () => {
-    if (shared?.owner === client) next();
-  });
-
   document.addEventListener('click', event => {
     const button = event.target.closest('button');
-    if (!button) return;
+    if (!button || button.disabled) return;
     if (button.classList.contains('play-track')) {
-      const row = button.closest('li');
-      if (row?.dataset.playable === 'true') {
-        if (shared?.track && stamp(shared.track) === stamp(row.dataset) && canPauseHere())
-          pause();
-        else prime({source: row.dataset.source, artist: row.dataset.artist, title: row.dataset.title});
-      }
+      const row = button.closest('[data-id]');
+      if (row.dataset.playable !== 'true') return;
+      if (started && String(selected?.id) === row.dataset.id && !audio.paused) audio.pause();
+      else play(tracks.find(track => String(track.id) === row.dataset.id) || {id: Number(row.dataset.id), artist: row.dataset.artist, title: row.dataset.title});
     }
-    if (button.id === 'player-prev') previous();
+    if (button.id === 'player-toggle') { if (audio.paused) play(); else audio.pause(); }
     if (button.id === 'player-next') next();
-    if (button.id === 'player-shuffle') command('shuffle', {shuffle: shuffleButton.getAttribute('aria-pressed') !== 'true'}).catch(() => {});
+    if (button.id === 'player-prev') previous();
+    if (button.id === 'player-shuffle') {
+      shuffle = !shuffle;
+      button.setAttribute('aria-pressed', String(shuffle));
+      button.title = shuffle ? 'Shuffle on' : 'Shuffle off';
+    }
     if (button.id === 'player-mute') {
-      if (userMuted || audio.volume === 0) {
-        userMuted = false;
-        if (audio.volume === 0) audio.volume = previousVolume;
-      } else {
-        previousVolume = audio.volume;
-        userMuted = true;
-      }
-      updateVolume();
-    }
-    if (button.id === 'player-toggle') {
-      if (canPauseHere()) pause();
-      else prime(shared?.track || selected || tracks[0]);
+      if (audio.volume === 0) { audio.volume = previousVolume || 0.8; muted = false; }
+      else muted = !muted;
+      volume();
     }
   });
-  const shuffleButton = $('player-shuffle');
-  document.addEventListener('input', event => {
-    if (event.target.id === 'player-volume') {
-      audio.volume = event.target.value / 100;
-      userMuted = false;
-      if (audio.volume > 0) previousVolume = audio.volume;
-      updateVolume();
-    }
-    if (event.target.id === 'player-seek' && Number.isFinite(audio.duration) && audio.duration > 0)
-      seek(audio.duration * event.target.value / 1000);
+  $('player-volume').addEventListener('input', event => {
+    audio.volume = Number(event.target.value) / 100;
+    if (audio.volume > 0) previousVolume = audio.volume;
+    muted = false; volume();
   });
-  document.addEventListener('download:done', loadTracks);
-  document.addEventListener('download:missing', loadTracks);
-  document.addEventListener('htmx:afterSwap', event => {
-    if (event.detail.target.id === 'content') {
-      highlightCurrent();
-      loadTracks();
-    }
+  $('player-seek').addEventListener('input', event => {
+    if (Number.isFinite(audio.duration)) audio.currentTime = Number(event.target.value) / 1000 * audio.duration;
   });
-
-  const events = new EventSource('/player/events');
-  events.onmessage = async event => {
-    try {
-      const state = JSON.parse(event.data);
-      await apply(state);
-      if (ownsSound() && !audio.paused) {
-        await command('report', {position: audio.currentTime, revision: shared.revision});
-      }
-    } catch (_) { stopLocal(); }
-  };
-  events.onerror = stopLocal;
-  setInterval(() => {
-    if (Date.now() - lastContact > 6000) stopLocal();
-    refresh();
-  }, 1000);
-  window.addEventListener('pagehide', () => {
-    if (shared?.owner === client) {
-      stopLocal();
-      navigator.sendBeacon('/player/command', new Blob([JSON.stringify({client, action: 'release', position: audio.currentTime || 0})], {type: 'application/json'}));
-    }
+  for (const name of ['play', 'pause']) audio.addEventListener(name, () => { refresh(); highlight(); });
+  for (const name of ['timeupdate', 'durationchange']) audio.addEventListener(name, refresh);
+  audio.addEventListener('ended', next);
+  audio.addEventListener('error', () => { $('player-error').textContent = 'Audio unavailable. Check Downloads.'; });
+  document.addEventListener('htmx:afterSwap', event => { if (event.detail.target.id === 'content') { highlight(); loadTracks(); } });
+  document.addEventListener('download:catalog', event => applyTracks(event.detail));
+  document.addEventListener('download:missing', event => {
+    if (String(selected?.id) === String(event.detail?.id)) audio.pause();
   });
-  fetch('/player/state').then(response => response.json()).then(apply).catch(stopLocal);
-  loadTracks();
-  updateVolume();
+  document.addEventListener('auth:expired', () => { audio.pause(); audio.removeAttribute('src'); audio.load(); });
+  volume(); refresh(); loadTracks();
 })();

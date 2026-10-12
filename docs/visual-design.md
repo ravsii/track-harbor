@@ -6,7 +6,7 @@ The site's primary purpose is to make **downloading and listening to music**
 easy. Download and Play actions should be clear and require as few steps as
 possible; secondary elements should not distract from these tasks.
 
-A top bar with a player must appear on **every page**. Users must be able to
+A top bar with a player must appear on **every authenticated page**. Users must be able to
 start a saved track from the top bar regardless of the current page, control
 playback, and see the currently playing track. Navigating between pages must
 not stop playback or reset the track or playback position. A track's Play
@@ -21,18 +21,16 @@ previous level. The theme button cycles through System, Light, and Dark.
 The top bar has no track dropdown: on load it shows the last played available
 track, or the most recently added available one, without autoplay. Play starts the
 shown track; individual tracks are selected from their Play actions in the library.
-Browsers on the same local server share the current track, position and play
-state. Only the browser granted playback ownership emits sound; clicking Play
-in another browser transfers ownership. Other player controls affect the shared
-player without moving its sound. A browser must stop local audio if it loses
-contact with the server; reopening a browser must never autoplay by itself.
-When another browser owns a playing track, its Play button says Play here and
-takes over playback rather than pausing the other browser.
-Show an accent monitor beside the track name with the tooltip "Listening on
-another device" and subtly dim the other player's controls while playback
-belongs to a different tab or browser. Keep Play here legible and operable.
-Use a styled tooltip rather than the browser's delayed native title; show it
-immediately on hover or keyboard focus and keep it visible while hovered.
+Each tab has independent playback, position, shuffle and volume. Controls never
+change another tab or browser's playback. Remember the last track per account
+in tab-local storage, without autoplay after reopening. Stop local audio when
+the session is revoked or the user signs out. Do not show remote-playback
+indicators or playback-ownership controls.
+The login form uses the same theme palette and adapts to narrow screens. Show
+the account name and Sign out action in the sidebar. Keep a persistent warning
+visible on authenticated pages while the bootstrap `admin` account exists:
+create a separate user, then delete `admin`. Settings has equal account-management
+controls for every user, with explicit confirmations for account changes.
 
 ## Spacing baseline
 

@@ -3,6 +3,7 @@ package library
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -10,12 +11,12 @@ import (
 	"trackharbor/spotify"
 )
 
-func SyncSpotify(ctx context.Context, db *store.Store) (int, error) {
-	first, second, err := db.Credentials("spotify")
+func SyncSpotify(ctx context.Context, db *store.Store, userID int64) (int, error) {
+	first, second, err := db.Credentials(userID, "spotify")
 	if err != nil {
 		return 0, fmt.Errorf("load Spotify credentials: %w", err)
 	}
-	info, err := spotify.FindLikedSongs(first, second)
+	info, err := spotify.FindLikedSongsContext(ctx, first, second)
 	if err != nil {
 		return 0, err
 	}
@@ -29,7 +30,7 @@ func SyncSpotify(ctx context.Context, db *store.Store) (int, error) {
 			return 0, err
 		}
 		offset := len(playlist.Content.Items)
-		next, err := spotify.GetPlaylistPage(first, second, playlist.URI, offset)
+		next, err := spotify.GetPlaylistPageContext(ctx, first, second, playlist.URI, offset)
 		if err != nil {
 			return 0, err
 		}
@@ -58,6 +59,10 @@ func SyncSpotify(ctx context.Context, db *store.Store) (int, error) {
 			}
 		}
 		if strings.TrimSpace(title) != "" {
+			id, err := spotifyTrackID(item)
+			if err != nil {
+				return 0, err
+			}
 			addedAt, err := time.Parse(time.RFC3339Nano, item.AddedAt.ISOString)
 			var timestamp int64
 			if err != nil {
@@ -79,11 +84,22 @@ func SyncSpotify(ctx context.Context, db *store.Store) (int, error) {
 					}
 				}
 			}
-			tracks = append(tracks, store.Track{Artist: strings.Join(artists, ", "), Title: title, AddedAt: timestamp, CoverURL: cover})
+			tracks = append(tracks, store.Track{SourceID: id, Artist: strings.Join(artists, ", "), Title: title, AddedAt: timestamp, CoverURL: cover})
 		}
 	}
 	if err := ctx.Err(); err != nil {
 		return 0, err
 	}
-	return db.Replace("spotify", tracks)
+	return db.Replace(userID, "spotify", tracks)
+}
+
+var spotifyID = regexp.MustCompile(`^spotify:track:([A-Za-z0-9]{22})$`)
+
+func spotifyTrackID(item spotify.Item) (string, error) {
+	for _, uri := range []string{item.ItemV3.Data.URI, item.ItemV2.Data.URI} {
+		if parts := spotifyID.FindStringSubmatch(uri); parts != nil {
+			return parts[1], nil
+		}
+	}
+	return "", fmt.Errorf("Spotify track ID is unavailable; previous playlist was kept")
 }

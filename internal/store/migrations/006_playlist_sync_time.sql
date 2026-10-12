@@ -1,0 +1,1 @@
+ALTER TABLE user_tracks ADD COLUMN synced_at INTEGER NOT NULL DEFAULT 0;

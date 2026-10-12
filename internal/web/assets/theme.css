@@ -52,6 +52,8 @@ a { color: var(--accent-label); text-decoration-color: var(--accent); }
 .source-tag.vk { color: var(--vk); }
 .player #player-error { color: var(--error); }
 
+body:has(#content[data-source="all"]) .sidebar nav a:not([href="/?source=all"]),
+body:has(#content:not([data-source="all"])) .sidebar nav a[href="/?source=all"],
 body:has(#content[data-source="vk"]) .sidebar nav a[href="/?source=spotify"],
 body:has(#content[data-source="settings"]) .sidebar nav a:not([href="/?source=settings"]),
 body:has(#content:not([data-source="settings"])) .sidebar nav a[href="/?source=settings"],
@@ -64,6 +66,7 @@ body:has(#content[data-source="vk"]) .sidebar nav a[href="/"] {
   background: transparent;
   color: var(--ink);
 }
+body:has(#content[data-source="all"]) .sidebar nav a[href="/?source=all"],
 body:has(#content[data-source="vk"]) .sidebar nav a[href="/?source=vk"],
 body:has(#content[data-source="spotify"]) .sidebar nav a[href="/?source=spotify"],
 body:has(#content[data-source="downloads"]) .sidebar nav a[href="/?source=downloads"],
@@ -94,6 +97,18 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 .library:not(.download-library) .track-head > :first-child { text-align: center; }
 .track-cover .icon { width: 16px; height: 16px; }
 .track-cover img[hidden] { display: none; }
+.bootstrap-warning { grid-column: 1 / -1; padding: 5px 8px; border: 1px solid var(--accent); border-radius: 5px; background: var(--selected); color: var(--ink); font-size: 12px; }
+.bootstrap-warning[hidden] { display: none; }
+.account-bar { margin: 0 5px 8px; font-size: 12px; }
+.account-bar button { border: 1px solid var(--edge); border-radius: 5px; padding: 3px 6px; background: var(--panel); color: var(--ink); cursor: pointer; }
+.account-bar button:hover { background: var(--selected); }
+.account-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.account-error { color: var(--error); }
+.user-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 7px 0; border-top: 1px solid var(--edge); }
+.user-row strong { min-width: 90px; overflow-wrap: anywhere; }
+.user-row form { display: flex; align-items: end; gap: 6px; margin: 0; }
+.user-row label { min-width: 0; }
+.user-row input { width: 100%; }
 .music-library .track-head, .music-library .tracks { min-width: 700px; }
 .track-number { position: relative; display: grid; place-items: center; width: 32px; height: 28px; }
 .track-number .play-track { position: absolute; inset: 0; display: grid; place-items: center; width: 32px; height: 28px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--ink); cursor: pointer; }
@@ -193,15 +208,6 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 .topbar .player-track-line { display: flex; align-items: center; gap: 5px; min-height: 18px; }
 .topbar .player-progress strong { display: block; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; line-height: 16px; }
 .topbar .player-progress strong:empty { visibility: hidden; }
-.topbar #player-remote { position: relative; display: inline-flex; align-items: center; justify-content: center; flex: none; width: 19px; height: 19px; border: 1px solid var(--accent); border-radius: 5px; background: var(--selected); color: var(--accent-label); cursor: help; }
-.topbar #player-remote[hidden] { display: none; }
-.topbar #player-remote .icon { width: 14px; height: 14px; }
-.topbar #player-remote:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.topbar #player-remote::after { content: attr(data-tooltip); position: absolute; z-index: 2; top: 100%; right: 0; min-width: max-content; padding: 8px 10px; border: 1px solid var(--edge); border-left: 3px solid var(--accent); border-radius: 6px; background: var(--panel); color: var(--ink); box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 16%, transparent); font: 12px/1.4 'DM Sans', sans-serif; opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-3px); transition: opacity .15s ease, transform .15s ease, visibility 0s linear .15s; }
-.topbar #player-remote:hover::after, .topbar #player-remote:focus-visible::after { opacity: 1; visibility: visible; pointer-events: auto; transform: translateY(0); transition-delay: 0s; }
-.topbar.remote-playing .player-controls > button:not(.primary), .topbar.remote-playing .player-progress-row, .topbar.remote-playing #player-track, .topbar.remote-playing #player-volume { opacity: .7; }
-.topbar.remote-playing #player-toggle.primary { background: var(--selected); color: var(--ink); }
-.topbar.remote-playing #player-toggle.primary:hover { background: var(--row-hover); }
 .topbar .player-progress-row { display: flex; align-items: center; gap: 8px; }
 .topbar-actions { grid-column: 3; justify-self: end; display: flex; align-items: center; gap: 10px; min-width: 0; }
 #system-status { position: relative; display: inline-flex; align-items: center; gap: 8px; max-width: clamp(60px, calc((100vw - 1020px) / 2), 155px); padding: 6px; overflow: hidden; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 12px; line-height: 1.3; }
@@ -225,7 +231,6 @@ body:has(#content[data-source="music"]) .sidebar nav a[href="/"] {
 #system-status[data-syncing="true"] .system-sync-icon { display: inline-flex; align-items: center; justify-content: center; animation: system-sync-spin 1.4s linear infinite; }
 @keyframes system-sync-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .topbar #player-remote::after { transition: none; }
   .playing-indicator span { animation: none; }
   .playing-indicator span:nth-child(2) { height: 60%; }
   .playing-indicator span:nth-child(3) { height: 80%; }

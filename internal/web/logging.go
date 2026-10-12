@@ -46,7 +46,7 @@ func logRequests(logger *zap.Logger, mux *http.ServeMux, next http.Handler) http
 		if route == "" {
 			route = "unmatched"
 		}
-		stream := route == "GET /download/events" || route == "GET /player/events"
+		stream := route == "GET /download/events"
 		response := &loggedResponse{ResponseWriter: w, stream: stream}
 		var writer http.ResponseWriter = response
 		if _, ok := w.(http.Flusher); ok {
@@ -83,7 +83,7 @@ func logRequests(logger *zap.Logger, mux *http.ServeMux, next http.Handler) http
 
 func routineRequest(route string) bool {
 	switch route {
-	case "GET /assets/", "GET /status", "GET /ping-status", "GET /download/status", "GET /audio", "GET /audio/tracks", "GET /player/state", "POST /player/command":
+	case "GET /assets/", "GET /status", "GET /ping-status", "GET /download/status", "GET /audio", "GET /audio/tracks", "GET /auth/status":
 		return true
 	}
 	return false

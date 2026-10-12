@@ -7,6 +7,8 @@
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 
 @source "./views.go";
+@source "./auth.go";
+@source "./assets/auth.js";
 @source "./assets/download.js";
 @source "./assets/player.js";
 @source "./assets/settings.js";

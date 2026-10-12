@@ -66,7 +66,7 @@ func run(logger *zap.Logger) error {
 	logger.Info("starting local server", zap.String("address", cfg.Listen))
 	if host, _, err := net.SplitHostPort(cfg.Listen); err == nil {
 		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
-			logger.Warn("web UI has no login; any device that can reach the server can access it")
+			logger.Warn("non-loopback HTTP bind: use HTTPS at a trusted reverse proxy and restrict direct access to this port")
 		}
 	}
 	return srv.ListenAndServe()

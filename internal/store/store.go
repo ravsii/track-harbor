@@ -3,18 +3,20 @@ package store
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
 )
 
 type Track struct {
-	Source, Artist, Title string
-	AddedAt               int64 // Unix seconds; zero means the source did not provide a date.
-	OwnerID, AudioID      int64
-	AudioURL, CoverURL    string
-	FilePath              string
+	ID                              int64
+	Source, SourceID, Artist, Title string
+	AddedAt                         int64
+	OwnerID, AudioID                int64
+	AudioURL, CoverURL, FilePath    string
 }
 type Store struct{ db *sql.DB }
 
@@ -23,191 +25,204 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := f.Close(); err != nil {
+	if err = f.Close(); err != nil {
 		return nil, err
 	}
-	if err := os.Chmod(path, 0600); err != nil {
+	if err = os.Chmod(path, 0600); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite3", path)
+	u := url.URL{Scheme: "file", Path: path}
+	q := u.Query()
+	q.Set("_foreign_keys", "on")
+	q.Set("_busy_timeout", "5000")
+	u.RawQuery = q.Encode()
+	db, err := sql.Open("sqlite3", u.String())
 	if err != nil {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if err := migrate(db); err != nil {
+	if err = migrate(db); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("migrate server database: %w", err)
 	}
-	return &Store{db: db}, nil
+	s := &Store{db: db}
+	if err = s.initAuth(); err != nil {
+		db.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
-
 func (s *Store) DownloadsStopped() (bool, error) {
-	var stopped bool
-	err := s.db.QueryRow(`SELECT stopped FROM download_control WHERE id=1`).Scan(&stopped)
-	return stopped, err
+	var v bool
+	err := s.db.QueryRow(`SELECT stopped FROM download_control WHERE id=1`).Scan(&v)
+	return v, err
 }
-
-func (s *Store) SetDownloadsStopped(stopped bool) error {
-	_, err := s.db.Exec(`UPDATE download_control SET stopped=? WHERE id=1`, stopped)
+func (s *Store) SetDownloadsStopped(v bool) error {
+	_, err := s.db.Exec(`UPDATE download_control SET stopped=? WHERE id=1`, v)
 	return err
 }
 
-func (s *Store) SaveCredentials(source, first, second string) error {
-	if source != "spotify" && source != "vk" {
+func validSource(source string) bool { return source == "spotify" || source == "vk" }
+func (s *Store) SaveCredentials(userID int64, source, first, second string) error {
+	if !validSource(source) {
 		return fmt.Errorf("unknown source")
 	}
-	_, err := s.db.Exec(`INSERT INTO credentials(source, first, second) VALUES(?, ?, ?)
-		ON CONFLICT(source) DO UPDATE SET first=excluded.first, second=excluded.second`, source, first, second)
+	_, err := s.db.Exec(`INSERT INTO user_credentials(user_id,source,first,second) VALUES(?,?,?,?) ON CONFLICT(user_id,source) DO UPDATE SET first=excluded.first,second=excluded.second`, userID, source, first, second)
 	return err
 }
-
-func (s *Store) Credentials(source string) (string, string, error) {
-	var first, second string
-	err := s.db.QueryRow(`SELECT first, second FROM credentials WHERE source=?`, source).Scan(&first, &second)
-	return first, second, err
+func (s *Store) Credentials(userID int64, source string) (string, string, error) {
+	var a, b string
+	err := s.db.QueryRow(`SELECT first,second FROM user_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&a, &b)
+	return a, b, err
 }
-
-func (s *Store) Connected(source string) (bool, error) {
+func (s *Store) Connected(userID int64, source string) (bool, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM credentials WHERE source=?`, source).Scan(&n)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM user_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&n)
 	return n > 0, err
 }
 
-func (s *Store) List(source string) ([]Track, error) {
-	rows, err := s.db.Query(`SELECT t.source, t.artist, t.title, t.added_at, t.owner_id, t.audio_id, t.audio_url, t.cover_url, COALESCE(d.file_path,'') FROM tracks t LEFT JOIN downloads d ON (t.source=d.source AND t.artist=d.artist AND t.title=d.title) WHERE t.source=? ORDER BY t.added_at DESC, t.artist, t.title`, source)
-	if err != nil {
-		return nil, err
-	}
-	return scanTracks(rows)
-}
+const catalogSelect = `SELECT t.id,t.source,t.source_id,t.artist,t.title,t.cover_url,COALESCE(d.file_path,''),0,
+ COALESCE((SELECT audio_url FROM user_tracks WHERE track_id=t.id AND audio_url<>'' ORDER BY synced_at DESC,user_id LIMIT 1),'')
+ FROM catalog_tracks t LEFT JOIN shared_downloads d ON d.track_id=t.id`
+const personalSelect = `SELECT t.id,t.source,t.source_id,t.artist,t.title,t.cover_url,COALESCE(d.file_path,''),p.added_at,p.audio_url
+ FROM user_tracks p JOIN catalog_tracks t ON t.id=p.track_id LEFT JOIN shared_downloads d ON d.track_id=t.id`
 
+func (s *Store) List(userID int64, source string) ([]Track, error) {
+	return s.queryTracks(personalSelect+` WHERE p.user_id=? AND t.source=? ORDER BY p.added_at DESC,t.artist,t.title,t.id`, userID, source)
+}
+func (s *Store) ListUser(userID int64) ([]Track, error) {
+	return s.queryTracks(personalSelect+` WHERE p.user_id=? ORDER BY p.added_at DESC,t.source,t.artist,t.title,t.id`, userID)
+}
 func (s *Store) ListAll() ([]Track, error) {
-	rows, err := s.db.Query(`SELECT t.source, t.artist, t.title, t.added_at, t.owner_id, t.audio_id, t.audio_url, t.cover_url, COALESCE(d.file_path,'') FROM tracks t LEFT JOIN downloads d ON (t.source=d.source AND t.artist=d.artist AND t.title=d.title) ORDER BY t.added_at DESC, t.source, t.artist, t.title`)
-	if err != nil {
-		return nil, err
-	}
-	return scanTracks(rows)
+	return s.queryTracks(catalogSelect + ` ORDER BY t.id DESC`)
 }
 
-// ListPlayable returns tracks whose downloaded MP3 is still present on disk.
+// Downloadable excludes orphaned catalog entries; their completed files remain available.
+func (s *Store) Downloadable() ([]Track, error) {
+	return s.queryTracks(catalogSelect + ` WHERE EXISTS(SELECT 1 FROM user_tracks p WHERE p.track_id=t.id) ORDER BY t.id DESC`)
+}
 func (s *Store) ListPlayable() ([]Track, error) {
-	rows, err := s.db.Query(`SELECT t.source, t.artist, t.title, t.cover_url, d.file_path FROM tracks t JOIN downloads d ON (t.source=d.source AND t.artist=d.artist AND t.title=d.title) WHERE d.file_path<>'' ORDER BY t.added_at DESC, t.source, t.artist, t.title`)
+	tracks, err := s.queryTracks(catalogSelect + ` WHERE d.file_path<>'' ORDER BY t.id DESC`)
+	if err != nil {
+		return nil, err
+	}
+	items := []Track{}
+	for _, t := range tracks {
+		info, err := os.Stat(t.FilePath)
+		if err == nil && info.Mode().IsRegular() && info.Size() > 0 {
+			items = append(items, t)
+		}
+	}
+	return items, nil
+}
+func (s *Store) Track(id int64) (Track, error) {
+	items, err := s.queryTracks(catalogSelect+` WHERE t.id=?`, id)
+	if err != nil {
+		return Track{}, err
+	}
+	if len(items) == 0 {
+		return Track{}, sql.ErrNoRows
+	}
+	return items[0], nil
+}
+func (s *Store) queryTracks(query string, args ...any) ([]Track, error) {
+	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var tracks []Track
+	items := []Track{}
 	for rows.Next() {
-		var track Track
-		if err := rows.Scan(&track.Source, &track.Artist, &track.Title, &track.CoverURL, &track.FilePath); err != nil {
+		var t Track
+		if err = rows.Scan(&t.ID, &t.Source, &t.SourceID, &t.Artist, &t.Title, &t.CoverURL, &t.FilePath, &t.AddedAt, &t.AudioURL); err != nil {
 			return nil, err
 		}
-		info, err := os.Stat(track.FilePath)
-		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
-			continue
-		}
-		tracks = append(tracks, track)
+		items = append(items, t)
 	}
-	return tracks, rows.Err()
+	return items, rows.Err()
 }
-
-func (s *Store) Track(source, artist, title string) (Track, error) {
-	if source != "spotify" && source != "vk" {
-		return Track{}, fmt.Errorf("unknown source")
-	}
-	var t Track
-	err := s.db.QueryRow(`SELECT t.source, t.artist, t.title, t.added_at, t.owner_id, t.audio_id, t.audio_url, t.cover_url, COALESCE(d.file_path,'') FROM tracks t LEFT JOIN downloads d ON (t.source=d.source AND t.artist=d.artist AND t.title=d.title) WHERE t.source=? AND t.artist=? AND t.title=?`, source, artist, title).Scan(&t.Source, &t.Artist, &t.Title, &t.AddedAt, &t.OwnerID, &t.AudioID, &t.AudioURL, &t.CoverURL, &t.FilePath)
-	return t, err
-}
-
 func (s *Store) SaveDownload(t Track, path, hash string) error {
-	_, err := s.db.Exec(`INSERT INTO downloads(source,artist,title,file_path,sha256) VALUES(?,?,?,?,?) ON CONFLICT(source,artist,title) DO UPDATE SET file_path=excluded.file_path,sha256=excluded.sha256`, t.Source, t.Artist, t.Title, path, hash)
+	_, err := s.db.Exec(`INSERT INTO shared_downloads(track_id,file_path,sha256) VALUES(?,?,?) ON CONFLICT(track_id) DO UPDATE SET file_path=excluded.file_path,sha256=excluded.sha256`, t.ID, path, hash)
 	return err
 }
-
-// InvalidateDownload removes an outdated download without removing the library track.
 func (s *Store) InvalidateDownload(t Track) error {
-	_, err := s.db.Exec(`DELETE FROM downloads WHERE source=? AND artist=? AND title=? AND file_path=?`, t.Source, t.Artist, t.Title, t.FilePath)
+	_, err := s.db.Exec(`DELETE FROM shared_downloads WHERE track_id=? AND file_path=?`, t.ID, t.FilePath)
 	return err
 }
-
 func (s *Store) DownloadHash(t Track) (string, error) {
-	var hash string
-	err := s.db.QueryRow(`SELECT sha256 FROM downloads WHERE source=? AND artist=? AND title=?`, t.Source, t.Artist, t.Title).Scan(&hash)
-	return hash, err
+	var v string
+	err := s.db.QueryRow(`SELECT sha256 FROM shared_downloads WHERE track_id=?`, t.ID).Scan(&v)
+	return v, err
 }
 
-func scanTracks(rows *sql.Rows) ([]Track, error) {
-	defer rows.Close()
-	var tracks []Track
-	for rows.Next() {
-		var track Track
-		if err := rows.Scan(&track.Source, &track.Artist, &track.Title, &track.AddedAt, &track.OwnerID, &track.AudioID, &track.AudioURL, &track.CoverURL, &track.FilePath); err != nil {
-			return nil, err
-		}
-		tracks = append(tracks, track)
-	}
-	return tracks, rows.Err()
-}
-
-func (s *Store) Replace(source string, tracks []Track) (int, error) {
-	if source != "spotify" && source != "vk" {
+// Replace changes only this user's source membership. Catalog rows and files survive.
+func (s *Store) Replace(userID int64, source string, tracks []Track) (int, error) {
+	if !validSource(source) {
 		return 0, fmt.Errorf("unknown source")
+	}
+	for _, t := range tracks {
+		if strings.TrimSpace(t.SourceID) == "" || len(t.SourceID) > 512 {
+			return 0, fmt.Errorf("source track ID is missing or invalid")
+		}
 	}
 	tx, err := s.db.Begin()
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback()
-	previous := make(map[string]int64)
-	if source == "vk" || source == "spotify" {
-		rows, err := tx.Query(`SELECT artist, title, added_at FROM tracks WHERE source=?`, source)
-		if err != nil {
-			return 0, err
-		}
-		for rows.Next() {
-			var artist, title string
-			var addedAt int64
-			if err = rows.Scan(&artist, &title, &addedAt); err != nil {
-				break
-			}
-			if addedAt != 0 {
-				previous[artist+"\x00"+title] = addedAt
-			}
-		}
-		if err == nil {
-			err = rows.Err()
-		}
-		rows.Close()
-		if err != nil {
-			return 0, err
-		}
+	var exists int
+	if err = tx.QueryRow(`SELECT id FROM users WHERE id=?`, userID).Scan(&exists); err != nil {
+		return 0, err
 	}
-	if _, err := tx.Exec(`DELETE FROM tracks WHERE source=?`, source); err != nil {
+	previous := map[int64]int64{}
+	rows, err := tx.Query(`SELECT p.track_id,p.added_at FROM user_tracks p JOIN catalog_tracks t ON t.id=p.track_id WHERE p.user_id=? AND t.source=?`, userID, source)
+	if err != nil {
+		return 0, err
+	}
+	for rows.Next() {
+		var id, added int64
+		if err = rows.Scan(&id, &added); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		previous[id] = added
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return 0, err
+	}
+	if _, err = tx.Exec(`DELETE FROM user_tracks WHERE user_id=? AND track_id IN (SELECT id FROM catalog_tracks WHERE source=?)`, userID, source); err != nil {
 		return 0, err
 	}
 	count := 0
-	for _, track := range tracks {
-		if addedAt, ok := previous[track.Artist+"\x00"+track.Title]; ok && track.AddedAt == 0 {
-			track.AddedAt = addedAt
+	syncedAt := time.Now().UnixNano()
+	for _, t := range tracks {
+		if _, err = tx.Exec(`INSERT INTO catalog_tracks(source,source_id,artist,title,cover_url) VALUES(?,?,?,?,?) ON CONFLICT(source,source_id) DO UPDATE SET artist=excluded.artist,title=excluded.title,cover_url=excluded.cover_url`, source, t.SourceID, t.Artist, t.Title, t.CoverURL); err != nil {
+			return 0, err
 		}
-		if source == "vk" && track.AddedAt == 0 {
-			track.AddedAt = time.Now().Unix()
+		var id int64
+		if err = tx.QueryRow(`SELECT id FROM catalog_tracks WHERE source=? AND source_id=?`, source, t.SourceID).Scan(&id); err != nil {
+			return 0, err
 		}
-		result, err := tx.Exec(`INSERT OR IGNORE INTO tracks(source, artist, title, added_at, owner_id, audio_id, audio_url, cover_url) VALUES(?, ?, ?, ?, ?, ?, ?, ?)`, source, track.Artist, track.Title, track.AddedAt, track.OwnerID, track.AudioID, track.AudioURL, track.CoverURL)
+		added := t.AddedAt
+		if added == 0 {
+			added = previous[id]
+		}
+		if added == 0 && source == "vk" {
+			added = time.Now().Unix()
+		}
+		result, err := tx.Exec(`INSERT OR IGNORE INTO user_tracks(user_id,track_id,added_at,audio_url,synced_at) VALUES(?,?,?,?,?)`, userID, id, added, t.AudioURL, syncedAt)
 		if err != nil {
 			return 0, err
 		}
-		if n, err := result.RowsAffected(); err == nil {
-			count += int(n)
-		} else {
+		n, err := result.RowsAffected()
+		if err != nil {
 			return 0, err
 		}
+		count += int(n)
 	}
-	if err := tx.Commit(); err != nil {
-		return 0, err
-	}
-	return count, nil
+	return count, tx.Commit()
 }
