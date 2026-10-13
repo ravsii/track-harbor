@@ -17,3 +17,9 @@ run-server: build
 
 run-server-watch:
 	python3 scripts/run-server-watch.py
+
+install-lint:
+	curl -sSfL https://golangci-lint.run/install.sh | sh -s v2.14.0
+
+lint: install-lint
+	./bin/golangci-lint run ./...

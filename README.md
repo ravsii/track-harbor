@@ -114,7 +114,12 @@ Protect the server database and backups: they contain source tokens, proxy
 credentials, session IDs and the JWT signing key. Only trusted people should have
 accounts: every user can change another user's password and access their account.
 
-Server logs are structured JSON on stderr at Info level. Downloads use
+Server logs use a shared global zap logger at Info level. Readable text is
+written to both stderr (colored levels) and `logs/YYYY-MM-DD.log` (no colors),
+relative to the server's working directory. The file follows the server's local
+calendar date on every write, so a process running across midnight switches
+files without restarting. Restarts append to the same day's file; old files
+are retained without automatic deletion. Downloads use
 `downloads/youtube/<hex-encoded-spotify-id>.mp3` for Spotify library tracks (the
 encoding preserves case-sensitive IDs on case-insensitive filesystems) and
 `downloads/vk/<owner-id>_<audio-id>.mp3` for VK. Existing MP3 paths recorded in

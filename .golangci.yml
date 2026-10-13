@@ -1,0 +1,53 @@
+version: "2"
+
+run:
+  concurrency: 0
+  timeout: 5m
+  relative-path-mode: gomod
+  issues-exit-code: 1
+  tests: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false
+  whole-files: true
+  fix: true
+
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+      colors: true
+
+formatters:
+  enable:
+    - gofumpt
+    - golines
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+      no-inline-comments: true
+      no-prefix-comments: true
+      custom-order: true
+      no-lex-order: false
+    gofumpt:
+      module-path: trackharbor
+      extra:
+        group-params: true
+        clothe-returns: true
+        balance-calls: true
+    golines:
+      max-len: 120
+      tab-len: 4
+      shorten-comments: true
+      reformat-tags: true
+      chain-split-dots: true
+
+linters:
+  default: standard
