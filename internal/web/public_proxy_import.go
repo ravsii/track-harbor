@@ -91,9 +91,7 @@ func (s *Server) runPublicProxyImport() {
 	results := make(chan proxyProbeResult, publicProbeWorkers)
 	var workers sync.WaitGroup
 	for range min(publicProbeWorkers, len(groups)) {
-		workers.Add(1)
-		go func() {
-			defer workers.Done()
+		workers.Go(func() {
 			for group := range jobs {
 				result := proxyProbeResult{key: group.key}
 				for _, address := range group.candidates {
@@ -111,7 +109,7 @@ func (s *Server) runPublicProxyImport() {
 					return
 				}
 			}
-		}()
+		})
 	}
 	go func() {
 		defer close(jobs)

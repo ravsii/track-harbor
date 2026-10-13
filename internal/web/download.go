@@ -286,13 +286,11 @@ func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 			workers = 50
 		}
 		for range workers {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 				for t := range queue {
 					process(t)
 				}
-			}()
+			})
 		}
 		go func(source string, jobs chan store.Track) {
 			defer close(jobs)

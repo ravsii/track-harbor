@@ -250,7 +250,7 @@ func TestLoginRateLimitAndRequestBodyBound(t *testing.T) {
 	if w.Code != 400 || len(w.Result().Cookies()) != 0 {
 		t.Fatal("oversized login accepted")
 	}
-	for i := 0; i < 19; i++ {
+	for i := range 19 {
 		w = request(h, "POST", "/login", nil, nil)
 		if w.Code != 401 || len(w.Result().Cookies()) != 0 {
 			t.Fatalf("wrong login attempt %d: %d", i, w.Code)

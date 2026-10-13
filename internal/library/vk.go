@@ -24,10 +24,7 @@ func SyncVK(ctx context.Context, db *store.Store, userID int64) (int, error) {
 	for _, song := range songs {
 		artist, title := strings.TrimSpace(song.Artist), strings.TrimSpace(song.Title)
 		if artist != "" && title != "" {
-			addedAt := song.Date
-			if addedAt < 0 {
-				addedAt = 0
-			}
+			addedAt := max(song.Date, 0)
 			cover := song.Album.Thumb.Photo600
 			if cover == "" {
 				cover = song.Album.Thumb.Photo300

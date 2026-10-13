@@ -465,7 +465,7 @@ func (s *Server) pingSource(w http.ResponseWriter, r *http.Request) {
 // spotifyHeaders extracts only the two credentials needed for sync from a
 // DevTools header dump. Other headers (including cookies) are never persisted.
 func spotifyHeaders(input string) (authorization, clientToken string) {
-	for _, line := range strings.Split(input, "\n") {
+	for line := range strings.SplitSeq(input, "\n") {
 		name, value, ok := strings.Cut(strings.TrimSpace(line), ":")
 		if !ok {
 			continue

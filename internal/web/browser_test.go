@@ -55,7 +55,7 @@ func TestBrowser(t *testing.T) {
 		}
 		if r.Method == "POST" && r.URL.Path == "/fixture/pending" {
 			bulk := append([]store.Track(nil), tracks...)
-			for i := 0; i < 1000; i++ {
+			for i := range 1000 {
 				bulk = append(bulk, store.Track{SourceID: fmt.Sprintf("pending-%d", i), Title: "Pending track"})
 			}
 			if _, err := db.Replace(1, "spotify", bulk); err != nil {

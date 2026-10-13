@@ -208,7 +208,7 @@ func settingsUsable(routes, personal, public []string) bool {
 
 func settingsLines(raw string) []string {
 	var lines []string
-	for _, line := range strings.Split(raw, "\n") {
+	for line := range strings.SplitSeq(raw, "\n") {
 		if value := strings.TrimSpace(line); value != "" {
 			lines = append(lines, value)
 		}

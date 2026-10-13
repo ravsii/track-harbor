@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -192,13 +193,7 @@ func fetchPublicProxies(ctx context.Context) ([]publicProxyGroup, int, error) {
 				groups[key] = i
 				ordered = append(ordered, publicProxyGroup{key: key})
 			}
-			seen := false
-			for _, candidate := range ordered[i].candidates {
-				if candidate == address {
-					seen = true
-					break
-				}
-			}
+			seen := slices.Contains(ordered[i].candidates, address)
 			if !seen {
 				ordered[i].candidates = append(ordered[i].candidates, address)
 			}
