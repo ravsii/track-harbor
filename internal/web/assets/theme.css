@@ -174,8 +174,6 @@ body { font: 15px/1.5 system-ui, sans-serif; }
 #sidebar-sync-status:hover { background: var(--selected); }
 #sidebar-sync-status[data-state="attention"] { color: var(--error); }
 .sidebar-bottom { margin-top: auto; color: var(--ink); font: 400 15px/1.5 system-ui, sans-serif; letter-spacing: normal; }
-.sidebar-theme { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 8px 10px; border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: 600 15px/1.5 system-ui, sans-serif; text-align: left; cursor: pointer; }
-.sidebar-theme:hover { background: var(--selected); }
 .sidebar-account { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin: 0 10px; padding-top: 18px; border-top: 1px solid var(--edge); }
 .sidebar-account strong { min-width: 0; overflow-wrap: anywhere; font-weight: 600; }
 .sidebar-account form { margin: 0; flex: none; }

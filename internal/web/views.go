@@ -105,9 +105,14 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
       <div class="sidebar-summary-row"><span>Sync</span><a id="sidebar-sync-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" title="Library synchronization across all users">{{template "icon" "circle"}}<span>{{.LibrarySync}}</span></a></div>
     </section>
     <div class="sidebar-bottom grid grid-cols-1 gap-3">
-      <button type="button" id="theme-choice" class="sidebar-theme" aria-label="Change color theme">{{template "icon" "sun-01"}}<span>Theme</span><span class="theme-value" data-theme-value></span></button>
       <nav class="grid grid-cols-1 gap-1.5" aria-label="Settings"><a class="{{if eq .Source "settings"}}active{{end}}" href="/?source=settings" hx-get="/?source=settings" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true">{{template "icon" "computer"}}<span>Settings</span></a></nav>
-      <div class="sidebar-account"><strong title="{{.User.Username}}">{{.User.Username}}</strong><form id="logout-form" method="post" action="/logout?account_id={{.User.ID}}"><button type="submit" title="Sign out" aria-label="Sign out {{.User.Username}}">{{template "icon" "logout-01"}}</button></form></div>
+      <div class="sidebar-account">
+        <strong title="{{.User.Username}}">{{.User.Username}}</strong>
+        <div class="flex shrink-0 items-center gap-1">
+          <button type="button" id="theme-choice" title="Change color theme" aria-label="Change color theme">{{template "icon" "sun-01"}}</button>
+          <form id="logout-form" method="post" action="/logout?account_id={{.User.ID}}"><button type="submit" title="Sign out" aria-label="Sign out {{.User.Username}}">{{template "icon" "logout-01"}}</button></form>
+        </div>
+      </div>
     </div>
   </aside>
 	  <main id="content" class="col-start-2 row-start-1 max-[700px]:col-start-1 max-[700px]:row-start-2" data-source="{{.Source}}" hx-history-elt>
