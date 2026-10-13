@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -9,32 +10,26 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
-
 	"trackharbor/internal/config"
+	"trackharbor/internal/logger"
 	"trackharbor/internal/store"
 	"trackharbor/internal/web"
 )
 
 func main() {
-	logging := zap.NewProductionConfig()
-	logging.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
-	logging.Sampling = nil
-	logging.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	logger, err := logging.Build()
-	if err != nil {
+	if err := logger.Init("logs"); err != nil {
 		fmt.Fprintln(os.Stderr, "initialize server logger:", err)
 		os.Exit(1)
 	}
-	if err := run(logger); err != nil {
-		logger.Error("server stopped", zap.Error(err))
-		_ = logger.Sync()
-		os.Exit(1)
+	defer zap.L().Sync()
+
+	ctx := context.Background()
+	if err := run(ctx); err != nil {
+		logger.Err(ctx, "server stopped", zap.Error(err))
 	}
-	_ = logger.Sync()
 }
 
-func run(logger *zap.Logger) error {
+func run(ctx context.Context) error {
 	cfg, dbPath, err := config.Load()
 	if err != nil {
 		// Config parsing may echo proxy URLs or credentials in an error.
@@ -53,20 +48,20 @@ func run(logger *zap.Logger) error {
 		return errors.New("move download settings from config.yaml failed; check file permissions or conflicting legacy values")
 	}
 	cfg.Strategy, cfg.PersonalProxy, cfg.PublicProxy = settings.Strategy, settings.PersonalProxy, settings.PublicProxy
-	httpLog, err := zap.NewStdLogAt(logger, zap.ErrorLevel)
+	httpLog, err := zap.NewStdLogAt(zap.L(), zap.ErrorLevel)
 	if err != nil {
 		return fmt.Errorf("configure HTTP error logging: %w", err)
 	}
 	srv := &http.Server{
-		Addr: cfg.Listen, Handler: web.New(db, logger, cfg),
+		Addr: cfg.Listen, Handler: web.New(db, zap.L(), cfg),
 		ErrorLog:          httpLog,
 		ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 20 * time.Second,
 		WriteTimeout: 0, IdleTimeout: time.Minute, // SSE stays open while downloads run.
 	}
-	logger.Info("starting local server", zap.String("address", cfg.Listen))
+	logger.Info(ctx, "starting local server", zap.String("address", cfg.Listen))
 	if host, _, err := net.SplitHostPort(cfg.Listen); err == nil {
 		if ip := net.ParseIP(host); ip == nil || !ip.IsLoopback() {
-			logger.Warn("non-loopback HTTP bind: use HTTPS at a trusted reverse proxy and restrict direct access to this port")
+			logger.Warn(ctx, "non-loopback HTTP bind: use HTTPS at a trusted reverse proxy and restrict direct access to this port")
 		}
 	}
 	return srv.ListenAndServe()
