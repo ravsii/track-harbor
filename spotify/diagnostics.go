@@ -14,7 +14,7 @@ func spotifyLogger(loggers []*zap.Logger) *zap.Logger {
 	if len(loggers) > 0 && loggers[0] != nil {
 		return loggers[0]
 	}
-	return zap.NewNop()
+	return zap.L()
 }
 
 // Redact the exact request tokens before shortening or normalizing text. Also
