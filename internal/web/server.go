@@ -199,6 +199,8 @@ func selectedSource(r *http.Request) (string, bool) {
 }
 
 type pageData struct {
+	Library                                   store.LibrarySummary
+	LibrarySync                               string
 	User                                      store.User
 	Users                                     []store.User
 	BootstrapWarning                          bool
@@ -220,6 +222,13 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	source := sourceName(r)
 	userID := currentUser(r).ID
 	data := pageData{Source: source, Name: "Tracks", User: currentUser(r)}
+	summary, summaryErr := s.store.LibrarySummary(userID)
+	if summaryErr != nil {
+		http.Error(w, "unable to read library summary", http.StatusInternalServerError)
+		return
+	}
+	data.Library = summary
+	data.LibrarySync = s.librarySyncStatus()
 	users, userErr := s.store.Users()
 	if userErr != nil {
 		http.Error(w, "unable to read users", 500)
@@ -297,6 +306,22 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	if err := pageTemplate.Execute(w, data); err != nil {
 		s.logger.Error("render web page failed")
 	}
+}
+
+// Return an aggregate state without exposing another user's source details.
+func (s *Server) librarySyncStatus() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	status := "Ready"
+	for _, message := range s.status {
+		if message == "Syncing…" {
+			return "Syncing"
+		}
+		if strings.HasPrefix(message, "Sync failed.") || strings.HasPrefix(message, "Sync timed out.") || strings.HasPrefix(message, "Library synced, but") {
+			status = "Attention"
+		}
+	}
+	return status
 }
 
 func (s *Server) currentStatus(w http.ResponseWriter, r *http.Request) {

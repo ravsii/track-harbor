@@ -15,7 +15,7 @@
 
   apply(choice);
   document.addEventListener('DOMContentLoaded', () => {
-    const topbar = document.getElementById('music-player');
+    const topbar = document.getElementById('app-header') || document.getElementById('music-player');
     if (topbar) {
       const updateHeight = () => document.documentElement.style.setProperty('--topbar-height', `${topbar.getBoundingClientRect().height}px`);
       updateHeight();

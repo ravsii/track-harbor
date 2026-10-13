@@ -41,22 +41,22 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	  <script src="/assets/duration.js" defer></script>
 </head>
 <body data-user-id="{{.User.ID}}" hx-headers='{"X-TrackHarbor-User":"{{.User.ID}}"}'>
-<div class="shell grid min-h-screen grid-cols-[256px_minmax(0,1fr)] max-[950.02px]:grid-cols-1">
-  <header id="music-player" class="topbar sticky top-0 z-10 border-b border-edge bg-surface" aria-label="Music player">
-    <div class="topbar-content">
-      <div class="topbar-brand">
-        <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><strong>TrackHarbor</strong></a>
-        <a id="system-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="Checking status. Open Downloads" title="Checking status · Open Downloads"><span class="system-indicator" aria-hidden="true">{{template "icon" "circle"}}</span><span id="system-status-text">Checking</span></a>
-      </div>
+<header id="app-header" class="fixed inset-x-0 top-0 z-10">
+ <div class="mx-auto grid w-[calc(100%_-_48px)] max-w-7xl grid-cols-[232px_minmax(0,1fr)] gap-6 rounded-b-[10px] border-x border-b border-edge bg-surface max-[700px]:w-[calc(100%_-_40px)] max-[700px]:grid-cols-1 max-[700px]:gap-0">
+  <div class="topbar-brand col-start-1 row-start-1 px-6 py-2 max-[700px]:px-5">
+    <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><strong>TrackHarbor</strong></a>
+  </div>
+  <div id="music-player" class="topbar col-start-2 row-start-1 self-start max-[700px]:col-start-1 max-[700px]:row-start-2" role="region" aria-label="Music player">
+    <div class="topbar-content @container grid w-full grid-cols-1 items-center gap-3 px-6 py-2 max-[700px]:px-5">
       <audio id="player-audio" preload="none"></audio>
-      <div class="player-controls">
-        <div class="player-transport">
+      <div class="player-controls grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 @min-[560px]:grid-cols-[auto_minmax(0,1fr)_auto] @max-[300px]:grid-cols-1">
+        <div class="player-transport col-start-1 row-start-1">
           <button type="button" id="player-shuffle" aria-label="Shuffle" aria-pressed="false" title="Shuffle off">{{template "icon" "shuffle"}}</button>
           <button type="button" id="player-prev" aria-label="Previous track">{{template "icon" "previous"}}</button>
           <button type="button" id="player-toggle" class="primary" aria-label="Play">{{template "icon" "play"}}</button>
           <button type="button" id="player-next" aria-label="Next track">{{template "icon" "next"}}</button>
         </div>
-        <div class="player-track-group">
+        <div class="player-track-group col-span-full row-start-2 @min-[560px]:col-span-1 @min-[560px]:col-start-2 @min-[560px]:row-start-1 @max-[300px]:row-start-3">
           <span class="track-cover player-cover relative grid size-8 shrink-0 place-items-center overflow-hidden border border-edge bg-selected text-muted" aria-hidden="true">{{template "icon" "disc-album"}}<img id="player-cover-image" class="absolute inset-0 size-full object-cover" alt="" hidden></span>
           <div class="player-progress">
             <div class="player-track-line"><strong id="player-track" aria-live="polite"></strong></div>
@@ -66,37 +66,51 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
             </div>
           </div>
         </div>
-        <div class="player-volume-group">
+        <div class="player-volume-group col-start-2 row-start-1 @min-[560px]:col-start-3 @max-[300px]:col-start-1 @max-[300px]:row-start-2 @max-[300px]:justify-self-end">
           <button type="button" id="player-mute" aria-label="Mute" title="Mute">{{template "icon" "volume-high"}}</button>
           <input type="range" id="player-volume" min="0" max="100" value="80" aria-label="Volume">
         </div>
       </div>
-      <div class="topbar-actions">
-        <details id="account-menu" class="account-menu">
-          <summary><span class="account-name">{{.User.Username}}</span>{{template "icon" "arrow-right-01"}}</summary>
-          <div class="account-dropdown">
-            <button type="button" id="theme-choice" class="account-menu-item" aria-label="Change color theme">{{template "icon" "sun-01"}}<span>Theme</span><span class="theme-value" data-theme-value></span></button>
-            <hr>
-            <form id="logout-form" method="post" action="/logout?account_id={{.User.ID}}"><button type="submit" class="account-menu-item">{{template "icon" "logout-01"}}<span>Sign out</span></button></form>
-          </div>
-        </details>
-      </div>
       <div id="player-error" role="status" aria-live="polite"></div>
       <div id="bootstrap-warning" class="bootstrap-warning" role="status"{{if not .BootstrapWarning}} hidden{{end}}>Создайте отдельного пользователя, удалите admin</div>
     </div>
-  </header>
-  <aside class="sidebar border-r border-edge bg-sidebar">
-	    <div class="nav-label">NAVIGATION</div>
-	    <nav aria-label="Navigation">
-	      <a class="{{if eq .Source "music"}}active{{end}}" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "music-note-01"}}</span> Tracks <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
-	      <a class="{{if eq .Source "all"}}active{{end}}" href="/?source=all" hx-get="/?source=all" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "disc-album"}}</span> Server tracks <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
-      <a class="{{if eq .Source "spotify"}}active{{end}}" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "spotify"}}</span> Spotify <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
-	      <a class="{{if eq .Source "vk"}}active{{end}}" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "vk"}}</span> VK Music <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
-	      <a class="{{if eq .Source "downloads"}}active{{end}}" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "download-01"}}</span> Downloads <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
-	      <a class="{{if eq .Source "settings"}}active{{end}}" href="/?source=settings" hx-get="/?source=settings" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"><span>{{template "icon" "computer"}}</span> Settings <span class="arrow">{{template "icon" "arrow-right-01"}}</span></a>
+  </div>
+ </div>
+</header>
+<div class="shell mx-auto grid min-h-dvh w-[calc(100%_-_48px)] max-w-7xl grid-cols-[232px_minmax(0,1fr)] grid-rows-[minmax(0,1fr)] gap-6 pb-6 pt-[calc(var(--topbar-height,_64px)_+_24px)] max-[700px]:w-[calc(100%_-_40px)] max-[700px]:grid-cols-1 max-[700px]:grid-rows-[auto_minmax(0,1fr)] max-[700px]:pb-[22px]">
+  <aside class="sidebar col-start-1 row-start-1" aria-label="Library sidebar">
+    <nav class="sidebar-library grid grid-cols-1 gap-1.5 max-[700px]:grid-cols-2" aria-label="Library">
+      <a class="{{if eq .Source "music"}}active{{end}}" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true">{{template "icon" "music-note-01"}}<span>Tracks</span><span class="sidebar-count" id="sidebar-personal-count">{{.Library.Personal}}</span></a>
+      <a class="{{if eq .Source "all"}}active{{end}}" href="/?source=all" hx-get="/?source=all" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true">{{template "icon" "disc-album"}}<span>Server tracks</span><span class="sidebar-count" data-catalog-count>{{.Library.Total}}</span></a>
+      <a class="{{if eq .Source "downloads"}}active{{end}}" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true">{{template "icon" "download-01"}}<span>Downloads</span></a>
     </nav>
+    <section>
+      <h2 class="sidebar-label">Your sources</h2>
+      <nav class="grid grid-cols-1 gap-1.5" aria-label="Your connected sources">
+        <a class="sidebar-source {{if eq .Source "spotify"}}active{{end}}" data-source="spotify" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"{{if not .Library.SpotifyConnected}} hidden{{end}}>{{template "icon" "spotify"}}<span>Spotify</span><span class="sidebar-count" data-source-count="spotify">{{.Library.Spotify}} tracks</span></a>
+        <a class="sidebar-source {{if eq .Source "vk"}}active{{end}}" data-source="vk" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"{{if not .Library.VKConnected}} hidden{{end}}>{{template "icon" "vk"}}<span>VK Music</span><span class="sidebar-count" data-source-count="vk">{{.Library.VK}} tracks</span></a>
+      </nav>
+      <p class="sidebar-note" id="sidebar-no-sources"{{if or .Library.SpotifyConnected .Library.VKConnected}} hidden{{end}}>No connected sources.</p>
+      <details class="source-connect" id="sidebar-connect"{{if and .Library.SpotifyConnected .Library.VKConnected}} hidden{{end}}>
+        <summary>Connect source</summary>
+        <nav class="grid grid-cols-1 gap-1.5" aria-label="Connect a source">
+          <a data-connect-source="spotify" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"{{if .Library.SpotifyConnected}} hidden{{end}}>{{template "icon" "spotify"}}<span>Connect Spotify</span></a>
+          <a data-connect-source="vk" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"{{if .Library.VKConnected}} hidden{{end}}>{{template "icon" "vk"}}<span>Connect VK Music</span></a>
+        </nav>
+      </details>
+    </section>
+    <section class="sidebar-summary" aria-label="Server status">
+      <h2 class="sidebar-label">Server status</h2>
+      <div class="sidebar-summary-row"><span>Total tracks</span><strong data-catalog-count>{{.Library.Total}}</strong></div>
+      <div class="sidebar-summary-row"><span>Sync</span><a id="sidebar-sync-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" title="Library synchronization across all users">{{template "icon" "circle"}}<span>{{.LibrarySync}}</span></a></div>
+    </section>
+    <div class="sidebar-bottom grid grid-cols-1 gap-3">
+      <button type="button" id="theme-choice" class="sidebar-theme" aria-label="Change color theme">{{template "icon" "sun-01"}}<span>Theme</span><span class="theme-value" data-theme-value></span></button>
+      <nav class="grid grid-cols-1 gap-1.5" aria-label="Settings"><a class="{{if eq .Source "settings"}}active{{end}}" href="/?source=settings" hx-get="/?source=settings" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true">{{template "icon" "computer"}}<span>Settings</span></a></nav>
+      <div class="sidebar-account"><strong title="{{.User.Username}}">{{.User.Username}}</strong><form id="logout-form" method="post" action="/logout?account_id={{.User.ID}}"><button type="submit" title="Sign out" aria-label="Sign out {{.User.Username}}">{{template "icon" "logout-01"}}</button></form></div>
+    </div>
   </aside>
-	  <main id="content" data-source="{{.Source}}" hx-history-elt>
+	  <main id="content" class="col-start-2 row-start-1 max-[700px]:col-start-1 max-[700px]:row-start-2" data-source="{{.Source}}" hx-history-elt>
 	    {{if ne .Source "music"}}
 	    <header class="page-heading"><h1>{{.Name}}</h1></header>
 	    {{end}}

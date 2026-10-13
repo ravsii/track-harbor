@@ -436,14 +436,21 @@ func (s *Server) downloadStatus(w http.ResponseWriter, r *http.Request) {
 	syncing := s.status[userSourceKey(r, "spotify")] == "Syncing…" || s.status[userSourceKey(r, "vk")] == "Syncing…"
 	s.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
+	library, err := s.store.LibrarySummary(currentUser(r).ID)
+	if err != nil {
+		http.Error(w, "unable to read library summary", http.StatusInternalServerError)
+		return
+	}
 	if err := json.NewEncoder(w).Encode(struct {
-		State        downloadState   `json:"state"`
-		Tracks       []item          `json:"tracks"`
-		Mine         []item          `json:"my_tracks"`
-		Available    []playableTrack `json:"available_tracks"`
-		LibraryCount int             `json:"library_count"`
-		Syncing      bool            `json:"syncing"`
-	}{state, items, personal, playableItems(available), len(tracks), syncing}); err != nil {
+		Library      store.LibrarySummary `json:"library"`
+		LibrarySync  string               `json:"library_sync"`
+		State        downloadState        `json:"state"`
+		Tracks       []item               `json:"tracks"`
+		Mine         []item               `json:"my_tracks"`
+		Available    []playableTrack      `json:"available_tracks"`
+		LibraryCount int                  `json:"library_count"`
+		Syncing      bool                 `json:"syncing"`
+	}{library, s.librarySyncStatus(), state, items, personal, playableItems(available), len(tracks), syncing}); err != nil {
 		s.logger.Error("write download status failed")
 	}
 }

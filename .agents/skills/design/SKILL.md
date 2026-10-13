@@ -128,6 +128,25 @@ through color alone. **Pending action:** show concise status and prevent
 duplicate submissions without moving surrounding elements.
 
 **Surface:** panel background, shared surface geometry, no gradient or shadow.
+**Centered two-column layout:** cap the shared frame at `1280px`, center it with
+the standard page gutters, and use a `232px` navigation column with a `24px`
+content gap. An unobtrusive navigation column uses the page background without
+its own border; the main content uses the shared surface recipe. At widths
+≤ `700px`, stack navigation and content rather than shrinking controls.
+When the header contains branding and content controls, align them to the same
+two columns instead of letting the controls span the navigation column.
+For a fixed header, keep its outer wrapper transparent and give the centered
+grid one continuous surface with side and bottom borders shared by the brand
+and player, without a top border. Use `24px` horizontal padding inside both
+columns, reduced to `20px` at widths ≤ `700px`.
+Keep the controls aligned to their respective columns. At the top edge, use square upper
+corners and the shared radius below. Reserve its measured height plus the standard
+content gap above the page, including when controls wrap.
+Express the frame and responsive column placement with Tailwind grid utilities
+in templates; do not duplicate these layout declarations in component CSS.
+Navigation rows use `40px` minimum height, `8px 10px` padding, `10px` gaps,
+`18px` icons, and `6px` radii. Use selected background for hover and selection;
+keep count metadata at `12px`, aligned to the trailing edge.
 **List row:** shared row spacing, subtle border separator; hover uses selected
 background. Keep column alignment consistent. Wrap or scroll content rather
 than shrinking text or controls to fit.

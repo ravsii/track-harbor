@@ -39,23 +39,6 @@
   document.addEventListener('submit', event => {
     if (event.target.id === 'logout-form') document.dispatchEvent(new Event('auth:expired'));
   });
-  const menu = document.getElementById('account-menu');
-  if (menu) {
-    document.addEventListener('click', event => {
-      if (!menu.contains(event.target)) menu.open = false;
-    });
-    document.addEventListener('keydown', event => {
-      if (event.key === 'Escape' && menu.open) {
-        menu.open = false;
-        menu.querySelector('summary').focus();
-      }
-    });
-    menu.addEventListener('focusout', () => {
-      requestAnimationFrame(() => {
-        if (!menu.contains(document.activeElement)) menu.open = false;
-      });
-    });
-  }
   setInterval(status, 30000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) status(); });
 })();

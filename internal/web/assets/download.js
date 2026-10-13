@@ -40,51 +40,44 @@
     }
   }
 
-  function systemStatus() {
-    const link = document.getElementById('system-status');
-    const label = document.getElementById('system-status-text');
-    if (!link || !label || !snapshot) return;
-    let text;
-    let short;
-    let kind = 'idle';
-    if (state?.stopped && state?.running) {
-      text = 'Stopping…';
-      short = 'Stopping';
-      kind = 'active';
-    } else if (state?.running) {
-      text = `Syncing ${state.finished}/${state.total}`;
-      short = 'Syncing';
-      kind = 'active';
-    } else if (snapshot.syncing) {
-      text = 'Syncing library…';
-      short = 'Syncing';
-      kind = 'active';
-    } else if (state?.stopped) {
-      text = 'Syncing stopped';
-      short = 'Stopped';
-    } else if (snapshot.tracks.some(track => track.stage === 'failed')) {
-      text = 'Syncing needs attention';
-      short = 'Attention';
-      kind = 'attention';
-    } else if (!snapshot.library_count) {
-      text = 'Sync a library to begin';
-      short = 'Empty';
-    } else if (!snapshot.tracks.length) {
-      text = 'All tracks ready to play';
-      short = 'Ready';
-      kind = 'ready';
-    } else {
-      text = 'Syncing is not active';
-      short = 'Idle';
+  function sidebarSummary() {
+    if (!snapshot?.library) return;
+    const library = snapshot.library;
+    for (const field of document.querySelectorAll('[data-catalog-count]')) field.textContent = library.total;
+    const personal = document.getElementById('sidebar-personal-count');
+    if (personal) personal.textContent = library.personal;
+    for (const source of ['spotify', 'vk']) {
+      const connected = library[`${source}_connected`];
+      const link = document.querySelector(`.sidebar-source[data-source="${source}"]`);
+      if (link) link.hidden = !connected;
+      const count = document.querySelector(`[data-source-count="${source}"]`);
+      if (count) count.textContent = `${library[source]} tracks`;
+      const connect = document.querySelector(`[data-connect-source="${source}"]`);
+      if (connect) connect.hidden = connected;
     }
-    label.textContent = short;
-    const icon = kind === 'ready' ? 'checkmark-circle-02' : kind === 'active' || kind === 'attention' ? 'reload' : 'circle';
-    link.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${icon}`);
-    link.dataset.state = kind;
-    link.dataset.syncing = snapshot.syncing ? 'true' : 'false';
-    link.dataset.active = snapshot.syncing || (state?.running && !state.stopped) ? 'true' : 'false';
-    link.title = `${text} · Open Downloads`;
-    link.setAttribute('aria-label', link.title);
+    const empty = document.getElementById('sidebar-no-sources');
+    if (empty) empty.hidden = library.spotify_connected || library.vk_connected;
+    const connect = document.getElementById('sidebar-connect');
+    if (connect) connect.hidden = library.spotify_connected && library.vk_connected;
+    const sync = document.getElementById('sidebar-sync-status');
+    if (sync) {
+      const status = snapshot.library_sync;
+      sync.querySelector('span').textContent = status;
+      sync.dataset.state = status === 'Attention' ? 'attention' : status === 'Syncing' ? 'active' : 'ready';
+      sync.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${status === 'Syncing' ? 'reload' : status === 'Ready' ? 'checkmark-circle-02' : 'circle'}`);
+      sync.title = `Library synchronization across all users: ${status}. Open Downloads`;
+      sync.setAttribute('aria-label', sync.title);
+    }
+  }
+
+  function sidebarNavigation() {
+    const source = document.getElementById('content')?.dataset.source;
+    for (const link of document.querySelectorAll('.sidebar nav a')) {
+      const selected = (new URL(link.href).searchParams.get('source') || 'music') === source;
+      link.classList.toggle('active', selected);
+      if (selected) link.setAttribute('aria-current', 'page');
+      else link.removeAttribute('aria-current');
+    }
   }
 
   function control() {
@@ -148,7 +141,7 @@
         if (!wasPlayable && playable) document.dispatchEvent(new CustomEvent('download:done', {detail: {id: Number(row.dataset.id)}}));
       }
       document.dispatchEvent(new CustomEvent('download:catalog', {detail: snapshot.available_tracks}));
-      systemStatus();
+      sidebarSummary();
       control();
       if (!list || document.getElementById('download-tracks') !== list) return;
       summary();
@@ -177,16 +170,13 @@
     } catch (_) {
       const target = document.getElementById('download-state');
       if (target) target.textContent = 'Could not load download status. Reopen Downloads to retry.';
-      const label = document.getElementById('system-status-text');
-      if (label) {
-        label.textContent = 'Unknown';
-        const link = document.getElementById('system-status');
-        link.dataset.state = 'attention';
-        link.dataset.syncing = 'false';
-        link.dataset.active = 'false';
-        link.querySelector('use').setAttribute('href', '/assets/icons.svg#hg-circle');
-        link.title = 'Status unavailable · Open Downloads to retry';
-        link.setAttribute('aria-label', link.title);
+      const sync = document.getElementById('sidebar-sync-status');
+      if (sync) {
+        sync.querySelector('span').textContent = 'Unknown';
+        sync.dataset.state = 'attention';
+        sync.querySelector('use').setAttribute('href', '/assets/icons.svg#hg-circle');
+        sync.title = 'Sync status unavailable. Open Downloads to retry';
+        sync.setAttribute('aria-label', sync.title);
       }
     }
   }
@@ -240,14 +230,9 @@
       control();
     }
   });
-  document.addEventListener('click', event => {
-    const link = event.target.closest('#system-status');
-    if (!link) return;
-    const indicator = link.querySelector('.system-indicator');
-    if (indicator) ripple(indicator, {detail: 0});
-  });
   document.addEventListener('htmx:afterSwap', event => {
     if (event.detail.target.id === 'content') {
+      sidebarNavigation();
       syncMessage = document.getElementById('sync-state')?.textContent;
       load();
       pingCurrentSource();
@@ -260,6 +245,17 @@
       syncMessage = message;
     }
   });
+  document.addEventListener('htmx:historyRestore', event => {
+    const content = document.getElementById('content');
+    if (!content) return;
+    const source = new URL(event.detail.path, location.href).searchParams.get('source');
+    content.dataset.source = ['all', 'spotify', 'vk', 'downloads', 'settings'].includes(source) ? source : 'music';
+    sidebarNavigation();
+    syncMessage = document.getElementById('sync-state')?.textContent;
+    load();
+    pingCurrentSource();
+  });
+  sidebarNavigation();
   load();
   pingCurrentSource();
   setInterval(load, 15000);
