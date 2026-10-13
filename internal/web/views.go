@@ -16,6 +16,8 @@ func coverURL(raw string) string {
 
 const iconTemplate = `{{define "icon"}}<svg class="icon" aria-hidden="true" focusable="false"><use href="/assets/icons.svg#hg-{{.}}"></use></svg>{{end}}`
 
+const brandMarkTemplate = `{{define "brand-mark"}}<span class="mark" aria-hidden="true"><i></i><i></i><i></i></span>{{end}}`
+
 var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	"add":      func(a, b int) int { return a + b },
 	"coverURL": coverURL,
@@ -44,7 +46,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 <header id="app-header" class="fixed inset-x-0 top-0 z-10">
  <div class="mx-auto grid w-[calc(100%_-_48px)] max-w-7xl grid-cols-[232px_minmax(0,1fr)] gap-6 rounded-b-[10px] border-x border-b border-edge bg-surface max-[700px]:w-[calc(100%_-_40px)] max-[700px]:grid-cols-1 max-[700px]:gap-0">
   <div class="topbar-brand col-start-1 row-start-1 px-6 py-2 max-[700px]:px-5">
-    <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home"><span class="mark" aria-hidden="true"><i></i><i></i><i></i></span><strong>TrackHarbor</strong></a>
+    <a class="brand" href="/" hx-get="/" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" aria-label="TrackHarbor home">{{template "brand-mark"}}<strong>TrackHarbor</strong></a>
   </div>
   <div id="music-player" class="topbar col-start-2 row-start-1 self-start max-[700px]:col-start-1 max-[700px]:row-start-2" role="region" aria-label="Music player">
     <div class="topbar-content @container grid w-full grid-cols-1 items-center gap-3 px-6 py-2 max-[700px]:px-5">
@@ -57,7 +59,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
           <button type="button" id="player-next" aria-label="Next track">{{template "icon" "next"}}</button>
         </div>
         <div class="player-track-group col-span-full row-start-2 @min-[560px]:col-span-1 @min-[560px]:col-start-2 @min-[560px]:row-start-1 @max-[300px]:row-start-3">
-          <span class="track-cover player-cover relative grid size-8 shrink-0 place-items-center overflow-hidden border border-edge bg-selected text-muted" aria-hidden="true">{{template "icon" "disc-album"}}<img id="player-cover-image" class="absolute inset-0 size-full object-cover" alt="" hidden></span>
+          <span class="track-cover player-cover relative grid size-8 shrink-0 place-items-center overflow-hidden bg-selected" aria-hidden="true">{{template "brand-mark"}}<img id="player-cover-image" class="absolute inset-0 size-full object-cover" alt="" hidden></span>
           <div class="player-progress">
             <div class="player-track-line"><strong id="player-track" aria-live="polite"></strong></div>
             <div class="player-progress-row">
@@ -218,7 +220,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
         <ol class="tracks m-0 list-none border-t border-edge p-0">{{range $i, $t := .Tracks}}
           <li data-id="{{$t.ID}}" data-source="{{$t.Source}}" data-source-id="{{$t.SourceID}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}">
             <span class="track-number"><span class="number">{{add $i 1}}</span><button type="button" class="play-track" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button><span class="playing-indicator" aria-hidden="true"><span></span><span></span><span></span></span></span>
-            <strong class="flex min-w-0 items-center gap-2"><span class="track-cover relative grid size-7 shrink-0 place-items-center overflow-hidden rounded border border-edge bg-selected text-muted" aria-hidden="true">{{template "icon" "disc-album"}}{{with coverURL $t.CoverURL}}<img class="absolute inset-0 size-full object-cover" src="{{.}}" alt="" loading="lazy">{{end}}</span><span class="track-title">{{$t.Title}}</span></strong>
+            <strong class="flex min-w-0 items-center gap-2"><span class="track-cover relative grid size-7 shrink-0 place-items-center overflow-hidden rounded-[7px] bg-selected" aria-hidden="true">{{template "brand-mark"}}{{with coverURL $t.CoverURL}}<img class="absolute inset-0 size-full object-cover" src="{{.}}" alt="" loading="lazy">{{end}}</span><span class="track-title">{{$t.Title}}</span></strong>
             <span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}
             <span class="track-duration">—</span><a class="download-track{{if not $t.FilePath}} unavailable{{end}}" href="/audio?id={{$t.ID}}&amp;download=1" aria-label="Download {{$t.Title}} as MP3" title="Download MP3"{{if not $t.FilePath}} aria-disabled="true" tabindex="-1"{{end}}>{{template "icon" "download-01"}}</a>
           </li>{{end}}</ol>
@@ -230,4 +232,4 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	    {{if ne .Source "music"}}<footer>LOCAL DOWNLOADS · TRACKHARBOR</footer>{{end}}
   </main>
 </div>
-</body></html>` + iconTemplate))
+</body></html>` + iconTemplate + brandMarkTemplate))

@@ -175,6 +175,11 @@ bars with `3px` gaps, `3px` widths, `2px` radii and heights `10px, 17px, 10px`.
 Build it with CSS, prevent shrinking, and place it `10px` before the wordmark.
 Do not animate it or change its geometry between themes.
 
+Cover placeholders retain the brand mark's `28px × 28px` frame with smaller bars:
+`1px` muted border, `7px` radius, `2px` bars and gaps, bar heights `6px, 11px, 6px`,
+muted bar color and `0.65` opacity. Keep the cover container dimensions unchanged;
+this exception does not apply to the header logo.
+
 ## Theme control and responsive behavior
 
 Use `mountThemeToggle(button)` from `internal/web/assets/theme-toggle.js` for
