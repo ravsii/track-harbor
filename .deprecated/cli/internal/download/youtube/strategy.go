@@ -7,7 +7,7 @@ import (
 	"net"
 	"strings"
 
-	"trackharbor/cli/internal/download"
+	"github.com/ravsii/trackharbor/cli/internal/download"
 )
 
 // DownloadStrategy controls the connection used by a search or audio request.

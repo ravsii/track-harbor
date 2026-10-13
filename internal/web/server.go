@@ -18,11 +18,11 @@ import (
 
 	"go.uber.org/zap"
 
-	"trackharbor/internal/config"
-	"trackharbor/internal/library"
-	"trackharbor/internal/store"
-	"trackharbor/spotify"
-	"trackharbor/vk"
+	"github.com/ravsii/trackharbor/internal/config"
+	"github.com/ravsii/trackharbor/internal/library"
+	"github.com/ravsii/trackharbor/internal/store"
+	"github.com/ravsii/trackharbor/spotify"
+	"github.com/ravsii/trackharbor/vk"
 )
 
 //go:embed assets/*

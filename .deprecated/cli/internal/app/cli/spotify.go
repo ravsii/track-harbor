@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ravsii/trackharbor/cli/internal/db"
+	"github.com/ravsii/trackharbor/cli/internal/download"
+	"github.com/ravsii/trackharbor/cli/internal/repository"
+	"github.com/ravsii/trackharbor/spotify"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"trackharbor/cli/internal/db"
-	"trackharbor/cli/internal/download"
-	"trackharbor/cli/internal/repository"
-	"trackharbor/spotify"
 )
 
 var spotifyCmd = &cobra.Command{

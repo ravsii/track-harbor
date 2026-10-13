@@ -20,9 +20,9 @@ import (
 	"sync"
 	"time"
 
-	"trackharbor/audio"
-	"trackharbor/vk"
-	"trackharbor/youtube"
+	"github.com/ravsii/trackharbor/audio"
+	"github.com/ravsii/trackharbor/vk"
+	"github.com/ravsii/trackharbor/youtube"
 )
 
 type Track struct {

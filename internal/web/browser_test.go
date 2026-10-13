@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trackharbor/internal/store"
+	"github.com/ravsii/trackharbor/internal/store"
 )
 
 func TestBrowser(t *testing.T) {

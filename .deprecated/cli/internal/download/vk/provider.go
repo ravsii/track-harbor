@@ -7,9 +7,9 @@ import (
 	"strconv"
 	"strings"
 
-	"trackharbor/cli/internal/download"
-	"trackharbor/cli/internal/repository"
-	sourcevk "trackharbor/vk"
+	"github.com/ravsii/trackharbor/cli/internal/download"
+	"github.com/ravsii/trackharbor/cli/internal/repository"
+	sourcevk "github.com/ravsii/trackharbor/vk"
 )
 
 // Provider uses the URLs returned by VK sync; it never searches YouTube.

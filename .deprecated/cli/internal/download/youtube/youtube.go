@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"trackharbor/audio"
-	"trackharbor/cli/internal/download"
-	sourceyoutube "trackharbor/youtube"
+	"github.com/ravsii/trackharbor/audio"
+	"github.com/ravsii/trackharbor/cli/internal/download"
+	sourceyoutube "github.com/ravsii/trackharbor/youtube"
 )
 
 var videoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)

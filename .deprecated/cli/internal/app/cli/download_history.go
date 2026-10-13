@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"trackharbor/cli/internal/repository"
+	"github.com/ravsii/trackharbor/cli/internal/repository"
 )
 
 // Previous downloads predate query-to-file persistence. Recover exact mappings

@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/ravsii/trackharbor/internal/config"
 	"go.uber.org/zap"
-	"trackharbor/internal/config"
 )
 
 func TestRevokedSessionCannotReceiveMoreDownloadEvents(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"trackharbor/internal/store"
-	"trackharbor/vk"
+	"github.com/ravsii/trackharbor/internal/store"
+	"github.com/ravsii/trackharbor/vk"
 )
 
 func SyncVK(ctx context.Context, db *store.Store, userID int64) (int, error) {

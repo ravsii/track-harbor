@@ -37,7 +37,7 @@ formatters:
       custom-order: true
       no-lex-order: false
     gofumpt:
-      module-path: trackharbor
+      module-path: github.com/ravsii/trackharbor
       extra:
         group-params: true
         clothe-returns: true

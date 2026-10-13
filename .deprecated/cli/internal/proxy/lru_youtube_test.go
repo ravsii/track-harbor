@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"trackharbor/cli/internal/download"
-	"trackharbor/cli/internal/download/youtube"
+	"github.com/ravsii/trackharbor/cli/internal/download"
+	"github.com/ravsii/trackharbor/cli/internal/download/youtube"
 )
 
 func TestYouTube429MakesNextRequestUseAnotherLRUProxy(t *testing.T) {

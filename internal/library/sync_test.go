@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"trackharbor/internal/store"
+	"github.com/ravsii/trackharbor/internal/store"
 )
 
 // Exercise the real provider clients against a local HTTPS fixture; no tokens

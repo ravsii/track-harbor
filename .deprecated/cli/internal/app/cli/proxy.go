@@ -9,13 +9,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ravsii/trackharbor/cli/internal/config"
+	"github.com/ravsii/trackharbor/cli/internal/db"
+	"github.com/ravsii/trackharbor/cli/internal/download"
+	"github.com/ravsii/trackharbor/cli/internal/proxy"
+	"github.com/ravsii/trackharbor/cli/internal/repository"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"trackharbor/cli/internal/config"
-	"trackharbor/cli/internal/db"
-	"trackharbor/cli/internal/download"
-	"trackharbor/cli/internal/proxy"
-	"trackharbor/cli/internal/repository"
 )
 
 var proxyCmd = &cobra.Command{

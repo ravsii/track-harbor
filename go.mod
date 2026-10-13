@@ -1,4 +1,4 @@
-module trackharbor
+module github.com/ravsii/trackharbor
 
 go 1.26.4
 

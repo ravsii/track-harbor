@@ -10,8 +10,8 @@ import (
 
 	"go.uber.org/zap"
 
-	"trackharbor/internal/store"
-	"trackharbor/spotify"
+	"github.com/ravsii/trackharbor/internal/store"
+	"github.com/ravsii/trackharbor/spotify"
 )
 
 func SyncSpotify(ctx context.Context, db *store.Store, userID int64) (count int, syncErr error) {

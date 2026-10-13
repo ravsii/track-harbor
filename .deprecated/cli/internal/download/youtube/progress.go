@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"trackharbor/cli/internal/download"
+	"github.com/ravsii/trackharbor/cli/internal/download"
 )
 
 const progressPrefix = "trackharbor-progress:"

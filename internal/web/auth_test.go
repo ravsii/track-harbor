@@ -10,9 +10,9 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/ravsii/trackharbor/internal/config"
+	"github.com/ravsii/trackharbor/internal/store"
 	"go.uber.org/zap"
-	"trackharbor/internal/config"
-	"trackharbor/internal/store"
 )
 
 func webFixture(t *testing.T) (*store.Store, http.Handler, string) {

@@ -5,10 +5,10 @@ import (
 	"io"
 	"strings"
 
+	"github.com/ravsii/trackharbor/cli/internal/download"
+	vkdownload "github.com/ravsii/trackharbor/cli/internal/download/vk"
+	"github.com/ravsii/trackharbor/cli/internal/repository"
 	"go.uber.org/zap"
-	"trackharbor/cli/internal/download"
-	vkdownload "trackharbor/cli/internal/download/vk"
-	"trackharbor/cli/internal/repository"
 )
 
 func downloadVKTracks(repo *repository.VKRepository, store *repository.DownloadedTracksRepository, outputDir string, logger *zap.Logger, out io.Writer) error {

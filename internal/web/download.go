@@ -16,9 +16,9 @@ import (
 
 	"go.uber.org/zap"
 
-	"trackharbor/download"
-	"trackharbor/internal/config"
-	"trackharbor/internal/store"
+	"github.com/ravsii/trackharbor/download"
+	"github.com/ravsii/trackharbor/internal/config"
+	"github.com/ravsii/trackharbor/internal/store"
 )
 
 type downloadState struct {

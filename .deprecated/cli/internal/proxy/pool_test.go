@@ -12,7 +12,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 	_ "github.com/mattn/go-sqlite3"
-	"trackharbor/cli/internal/repository"
+	"github.com/ravsii/trackharbor/cli/internal/repository"
 )
 
 type sourceFunc func(context.Context) ([]string, error)

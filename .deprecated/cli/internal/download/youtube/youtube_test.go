@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"trackharbor/cli/internal/download"
+	"github.com/ravsii/trackharbor/cli/internal/download"
 )
 
 func fakeTools(t *testing.T, script string) string {

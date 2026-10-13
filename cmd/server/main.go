@@ -9,11 +9,11 @@ import (
 	"os"
 	"time"
 
+	"github.com/ravsii/trackharbor/internal/config"
+	"github.com/ravsii/trackharbor/internal/logger"
+	"github.com/ravsii/trackharbor/internal/store"
+	"github.com/ravsii/trackharbor/internal/web"
 	"go.uber.org/zap"
-	"trackharbor/internal/config"
-	"trackharbor/internal/logger"
-	"trackharbor/internal/store"
-	"trackharbor/internal/web"
 )
 
 func main() {

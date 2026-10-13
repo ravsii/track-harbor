@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"trackharbor/cli/internal/config"
-	"trackharbor/cli/internal/download"
+	"github.com/ravsii/trackharbor/cli/internal/config"
+	"github.com/ravsii/trackharbor/cli/internal/download"
 )
 
 // Only a successfully completed yt-dlp output is published in the source cache.

@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/jmoiron/sqlx"
-	"trackharbor/cli/internal/repository"
+	"github.com/ravsii/trackharbor/cli/internal/repository"
 )
 
 func TestEffectiveDownloadWorkersNeverExceedsProxyPool(t *testing.T) {

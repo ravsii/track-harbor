@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"trackharbor/internal/store"
+	"github.com/ravsii/trackharbor/internal/store"
 )
 
 // The __Host- prefix requires Secure and cannot be used for direct LAN HTTP.

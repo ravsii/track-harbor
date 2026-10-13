@@ -17,9 +17,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ravsii/trackharbor/internal/config"
+	"github.com/ravsii/trackharbor/internal/store"
 	"go.uber.org/zap"
-	"trackharbor/internal/config"
-	"trackharbor/internal/store"
 )
 
 func TestQueuedVKTrackUsesLatestSignedURL(t *testing.T) {

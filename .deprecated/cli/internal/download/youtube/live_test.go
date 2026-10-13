@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"trackharbor/cli/internal/download"
+	"github.com/ravsii/trackharbor/cli/internal/download"
 )
 
 // Opt-in: this invokes real tools, accesses YouTube and downloads audio.

@@ -1,4 +1,4 @@
-module trackharbor/cli
+module github.com/ravsii/trackharbor/cli
 
 go 1.26.4
 
@@ -12,10 +12,10 @@ require (
 	go.uber.org/zap v1.28.0
 	golang.org/x/term v0.47.0
 	gopkg.in/yaml.v3 v3.0.1
-	trackharbor v0.0.0
+	github.com/ravsii/trackharbor v0.0.0
 )
 
-replace trackharbor => ../..
+replace github.com/ravsii/trackharbor => ../..
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect

@@ -1,8 +1,8 @@
 package library
 
 import (
+	"github.com/ravsii/trackharbor/spotify"
 	"testing"
-	"trackharbor/spotify"
 )
 
 func TestSpotifyTrackIDUsesSourceIdentityNotPlaylistEntry(t *testing.T) {
