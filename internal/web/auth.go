@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +19,8 @@ import (
 	"trackharbor/internal/store"
 )
 
-const sessionCookie = "__Host-trackharbor"
+// The __Host- prefix requires Secure and cannot be used for direct LAN HTTP.
+const sessionCookie = "trackharbor-session"
 const sessionLifetime = 7 * 24 * time.Hour
 
 type authContextKey struct{}
@@ -175,11 +177,17 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 		s.renderLogin(w, 401, "Account changed. Sign in again.")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(sessionLifetime.Seconds())})
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureSessionCookie(r), SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(sessionLifetime.Seconds())})
 	http.Redirect(w, r, "/", 303)
 }
-func clearSession(w http.ResponseWriter) {
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+func secureSessionCookie(r *http.Request) bool {
+	// A proxy's HTTPS indication can only enable Secure, never disable it
+	// for a TLS request. It does not establish identity or authorize requests.
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
+func clearSession(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Path: "/", HttpOnly: true, Secure: secureSessionCookie(r), SameSite: http.SameSiteLaxMode, MaxAge: -1})
 }
 
 func redirectToLogin(w http.ResponseWriter, r *http.Request) {
@@ -196,7 +204,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not sign out", 500)
 		return
 	}
-	clearSession(w)
+	clearSession(w, r)
 	http.Redirect(w, r, "/login", 303)
 }
 func (s *Server) authStatus(w http.ResponseWriter, r *http.Request) {
@@ -270,7 +278,7 @@ func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if id == currentUser(r).ID {
-		clearSession(w)
+		clearSession(w, r)
 		redirectToLogin(w, r)
 		return
 	}
@@ -295,7 +303,7 @@ func (s *Server) deleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if id == currentUser(r).ID {
-		clearSession(w)
+		clearSession(w, r)
 		redirectToLogin(w, r)
 		return
 	}

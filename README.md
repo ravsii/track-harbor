@@ -12,8 +12,8 @@ Install Go, FFmpeg, and `yt-dlp` (for Spotify audio), then run:
 make run
 ```
 
-Open <http://127.0.0.1:8787> in a browser that allows Secure cookies on loopback
-(use HTTPS otherwise). Sign in with **admin / admin**, create your own user in
+Open <http://127.0.0.1:8787> in a browser.
+Sign in with **admin / admin**, create your own user in
 **Settings**, sign in as that user and delete `admin`. There is no public
 registration; every authenticated user can create users, reset any user's password
 or delete accounts. The last user cannot be deleted. A warning remains visible
@@ -44,7 +44,8 @@ Each tab has its own player: playback, seeking, shuffle and volume do not affect
 other tabs or browsers. In-page navigation preserves playback; opening/reloading
 a tab never starts playback automatically.
 
-Sessions use signed JWTs in HttpOnly, Secure, SameSite=Lax cookies for seven days.
+Sessions use signed JWTs in HttpOnly, SameSite=Lax cookies for seven days.
+Cookies use Secure on HTTPS, but allow HTTP for trusted local networks.
 Signing keys and revocable session IDs persist in the server database. Signing
 out revokes that session; changing a password revokes all that user's sessions,
 including the current one. Deleting an account also removes its source credentials
@@ -98,13 +99,16 @@ the server imports existing `strategy`, `personal_proxy`, and `public_proxy`
 values from `config.yaml` into `library.db` and removes those keys from YAML.
 `vk_strategy` is fixed to `direct`. Keep `listen` and optional `download_dir`
 in `config.yaml`; changes to either require a server restart. The server binds
-to loopback by default and serves HTTP internally. For other devices or public
-access, put it behind an **HTTPS reverse proxy**, keeping the HTTP port private
+to loopback by default and serves HTTP internally. Direct HTTP access from other
+devices is supported on trusted local networks when bound to a LAN interface;
+passwords and sessions are transmitted without encryption. Do not expose this
+HTTP port publicly. For public access, put it behind an **HTTPS reverse proxy**, keeping the HTTP port private
 (loopback or a firewall). The proxy must preserve the external `Host` header,
+set `X-Forwarded-Proto: https` to enable Secure cookies,
 support HTTP ranges and disable buffering for `/download/events`. POST requests
 require an HTTP/HTTPS Origin matching Host; arbitrary forwarded headers are not
-trusted for authentication. Direct HTTP over a LAN cannot use the Secure session
-cookie. Restrict login attempts at the proxy as well: the built-in rate limit
+trusted for authentication; `X-Forwarded-Proto` only enables the Secure cookie flag.
+Restrict login attempts at the proxy as well: the built-in rate limit
 uses the direct peer IP, so clients behind one proxy share its limit.
 Protect the server database and backups: they contain source tokens, proxy
 credentials, session IDs and the JWT signing key. Only trusted people should have
