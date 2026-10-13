@@ -84,7 +84,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
       <a class="{{if eq .Source "all"}}active{{end}}" href="/?source=all" hx-get="/?source=all" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true">{{template "icon" "disc-album"}}<span>Server tracks</span><span class="sidebar-count" data-catalog-count>{{.Library.Total}}</span></a>
       <a class="{{if eq .Source "downloads"}}active{{end}}" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true">{{template "icon" "download-01"}}<span>Downloads</span></a>
     </nav>
-    <section>
+    <section class="border-t border-edge pt-[18px]">
       <h2 class="sidebar-label">Your sources</h2>
       <nav class="grid grid-cols-1 gap-1.5" aria-label="Your connected sources">
         <a class="sidebar-source {{if eq .Source "spotify"}}active{{end}}" data-source="spotify" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"{{if not .Library.SpotifyConnected}} hidden{{end}}>{{template "icon" "spotify"}}<span>Spotify</span><span class="sidebar-count" data-source-count="spotify">{{.Library.Spotify}} tracks</span></a>
