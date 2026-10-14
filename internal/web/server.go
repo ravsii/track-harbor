@@ -373,22 +373,23 @@ func (s *Server) connect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "sync in progress", http.StatusConflict)
 		return
 	}
-	var first, second string
+	var credentials any
 	if source == "spotify" {
-		first, second = spotifyHeaders(r.PostForm.Get("headers"))
-		if !strings.HasPrefix(first, "Bearer ") || len(first) < len("Bearer ")+1 || second == "" {
+		authorization, clientToken := spotifyHeaders(r.PostForm.Get("headers"))
+		if !strings.HasPrefix(authorization, "Bearer ") || len(authorization) < len("Bearer ")+1 || clientToken == "" {
 			http.Error(w, "paste request headers containing authorization: Bearer … and client-token", 400)
 			return
 		}
+		credentials = spotify.Credentials{Authorization: authorization, ClientToken: clientToken}
 	} else {
-		var err error
-		first, err = vk.ParseToken(r.PostForm.Get("token"))
+		token, err := vk.ParseToken(r.PostForm.Get("token"))
 		if err != nil {
 			http.Error(w, "paste a valid VK token or redirect URL", 400)
 			return
 		}
+		credentials = vk.Credentials{Token: token}
 	}
-	if err := s.store.SaveCredentials(currentUser(r).ID, source, first, second); err != nil {
+	if err := s.store.SaveCredentials(currentUser(r).ID, source, credentials); err != nil {
 		http.Error(w, "could not save credentials", 500)
 		return
 	}
@@ -410,13 +411,20 @@ func (s *Server) pingSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	key := userSourceKey(r, source)
-	first, second, err := s.store.Credentials(currentUser(r).ID, source)
+	var spotifyCredentials spotify.Credentials
+	var vkCredentials vk.Credentials
+	var err error
+	if source == "spotify" {
+		err = s.store.Credentials(currentUser(r).ID, source, &spotifyCredentials)
+	} else {
+		err = s.store.Credentials(currentUser(r).ID, source, &vkCredentials)
+	}
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, "connect source first", 400)
 		return
 	}
 	if err != nil {
-		http.Error(w, "unable to read credentials", 500)
+		http.Error(w, "unable to read credentials; reconnect this source", 500)
 		return
 	}
 	s.mu.Lock()
@@ -436,9 +444,9 @@ func (s *Server) pingSource(w http.ResponseWriter, r *http.Request) {
 		defer cancel()
 		var pingErr error
 		if source == "spotify" {
-			pingErr = spotify.Ping(ctx, first, second)
+			pingErr = spotify.Ping(ctx, spotifyCredentials.Authorization, spotifyCredentials.ClientToken)
 		} else {
-			client := vk.NewClient(first)
+			client := vk.NewClient(vkCredentials.Token)
 			defer client.Close()
 			pingErr = client.Ping(ctx)
 		}

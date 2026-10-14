@@ -1,7 +1,9 @@
 package store
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/gob"
 	"fmt"
 	"net/url"
 	"os"
@@ -61,21 +63,27 @@ func (s *Store) SetDownloadsStopped(v bool) error {
 }
 
 func validSource(source string) bool { return source == "spotify" || source == "vk" }
-func (s *Store) SaveCredentials(userID int64, source, first, second string) error {
-	if !validSource(source) {
-		return fmt.Errorf("unknown source")
+func (s *Store) SaveCredentials(userID int64, source string, credentials any) error {
+	var data bytes.Buffer
+	if err := gob.NewEncoder(&data).Encode(credentials); err != nil {
+		return fmt.Errorf("encode source credentials: %w", err)
 	}
-	_, err := s.db.Exec(`INSERT INTO user_credentials(user_id,source,first,second) VALUES(?,?,?,?) ON CONFLICT(user_id,source) DO UPDATE SET first=excluded.first,second=excluded.second`, userID, source, first, second)
+	_, err := s.db.Exec(`INSERT INTO users_credentials(user_id,source,data) VALUES(?,?,?) ON CONFLICT(user_id,source) DO UPDATE SET data=excluded.data`, userID, source, data.Bytes())
 	return err
 }
-func (s *Store) Credentials(userID int64, source string) (string, string, error) {
-	var a, b string
-	err := s.db.QueryRow(`SELECT first,second FROM user_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&a, &b)
-	return a, b, err
+func (s *Store) Credentials(userID int64, source string, credentials any) error {
+	var data []byte
+	if err := s.db.QueryRow(`SELECT data FROM users_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&data); err != nil {
+		return err
+	}
+	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(credentials); err != nil {
+		return fmt.Errorf("decode source credentials; reconnect source: %w", err)
+	}
+	return nil
 }
 func (s *Store) Connected(userID int64, source string) (bool, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM user_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&n)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM users_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&n)
 	return n > 0, err
 }
 

@@ -23,12 +23,12 @@ func SyncSpotify(ctx context.Context, db *store.Store, userID int64) (count int,
 			logger.Error("spotify sync stage failed", zap.String("stage", stage), zap.String("reason", reason), zap.Bool("unauthorized", errors.Is(syncErr, spotify.ErrUnauthorized)), zap.Bool("timed_out", errors.Is(syncErr, context.DeadlineExceeded)))
 		}
 	}()
-	first, second, err := db.Credentials(userID, "spotify")
-	if err != nil {
+	var credentials spotify.Credentials
+	if err := db.Credentials(userID, "spotify", &credentials); err != nil {
 		return 0, fmt.Errorf("load Spotify credentials: %w", err)
 	}
 	stage = "discover_liked_songs"
-	info, err := spotify.FindLikedSongsContext(ctx, first, second)
+	info, err := spotify.FindLikedSongsContext(ctx, credentials.Authorization, credentials.ClientToken)
 	if err != nil {
 		return 0, err
 	}
@@ -45,7 +45,7 @@ func SyncSpotify(ctx context.Context, db *store.Store, userID int64) (count int,
 			return 0, err
 		}
 		offset := len(playlist.Content.Items)
-		next, err := spotify.GetPlaylistPageContext(ctx, first, second, playlist.URI, offset)
+		next, err := spotify.GetPlaylistPageContext(ctx, credentials.Authorization, credentials.ClientToken, playlist.URI, offset)
 		if err != nil {
 			return 0, err
 		}

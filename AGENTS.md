@@ -56,6 +56,7 @@ explicitly requests them.
   Do not save plans in `docs/` or any other project file.
 - Do not write or run tests, including unit, integration, race, and live tests,
   unless explicitly requested. Do not delete existing tests.
+- Do not update README files unless explicitly requested by the user.
 - Keep changes small, simple, and focused on the task. Follow the existing code
   structure and style; avoid unnecessary abstractions and unrelated refactoring.
 - Never delete or edit existing database migrations. If a migration is wrong,

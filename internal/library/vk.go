@@ -10,11 +10,11 @@ import (
 )
 
 func SyncVK(ctx context.Context, db *store.Store, userID int64) (int, error) {
-	token, _, err := db.Credentials(userID, "vk")
-	if err != nil {
+	var credentials vk.Credentials
+	if err := db.Credentials(userID, "vk", &credentials); err != nil {
 		return 0, fmt.Errorf("load VK credentials: %w", err)
 	}
-	client := vk.NewClient(token)
+	client := vk.NewClient(credentials.Token)
 	defer client.Close()
 	songs, err := client.MyMusic(ctx, nil)
 	if err != nil {
