@@ -26,12 +26,17 @@ func main() {
 	ctx := context.Background()
 	if err := run(ctx); err != nil {
 		logger.Err(ctx, "server stopped", zap.Error(err))
+		_ = zap.L().Sync()
+		os.Exit(1)
 	}
 }
 
 func run(ctx context.Context) error {
 	cfg, dbPath, err := config.Load()
 	if err != nil {
+		if errors.Is(err, config.ErrJWTSigningKey) {
+			return err
+		}
 		// Config parsing may echo proxy URLs or credentials in an error.
 		return errors.New("load server configuration failed; check config.yaml, the listen address and file permissions")
 	}

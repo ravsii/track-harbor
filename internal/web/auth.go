@@ -40,9 +40,8 @@ type authentication struct {
 	workers  chan struct{}
 }
 
-func newAuthentication(db *store.Store) *authentication {
-	key, _ := db.SigningKey()
-	return &authentication{db: db, key: key, attempts: map[string]loginWindow{}, workers: make(chan struct{}, 4)}
+func newAuthentication(db *store.Store, key string) *authentication {
+	return &authentication{db: db, key: []byte(key), attempts: map[string]loginWindow{}, workers: make(chan struct{}, 4)}
 }
 func currentUser(r *http.Request) store.User {
 	return r.Context().Value(authContextKey{}).(authenticatedUser).User

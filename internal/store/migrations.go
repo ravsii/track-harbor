@@ -51,6 +51,11 @@ func migrate(db *sql.DB) error {
 				return err
 			}
 		}
+		if version == 7 {
+			if err := bootstrapUser(tx); err != nil {
+				return fmt.Errorf("create initial server user: %w", err)
+			}
+		}
 		if _, err := tx.Exec(fmt.Sprintf("PRAGMA user_version = %d", version)); err != nil {
 			return err
 		}

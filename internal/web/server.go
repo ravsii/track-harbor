@@ -42,8 +42,15 @@ type Server struct {
 }
 
 func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Handler {
+	var cfg config.Config
+	if len(configs) != 0 {
+		cfg = configs[0]
+	}
+	if err := cfg.ValidateJWTSigningKey(); err != nil {
+		panic(err)
+	}
 	s := &Server{store: db, logger: logger, status: map[string]string{}, pingStatus: map[string]string{}}
-	s.auth = newAuthentication(db)
+	s.auth = newAuthentication(db, cfg.JWTSigningKey)
 	if len(configs) != 0 {
 		s.downloads = newDownloadJob(db, configs[0], logger)
 		stopped, err := db.DownloadsStopped()

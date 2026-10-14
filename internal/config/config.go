@@ -14,6 +14,7 @@ import (
 
 type Config struct {
 	Listen        string   `yaml:"listen"`
+	JWTSigningKey string   `yaml:"jwt_signing_key"`
 	DownloadDir   string   `yaml:"download_dir"`
 	ConfigPath    string   `yaml:"-"`
 	Strategy      []string `yaml:"strategy"`
@@ -22,7 +23,16 @@ type Config struct {
 	loadedYAML    []byte
 }
 
-const defaultYAML = "listen: 127.0.0.1:8787\n"
+const defaultYAML = "listen: 127.0.0.1:8787\njwt_signing_key: \"\" # Required; generate with openssl rand -hex 32\n"
+
+var ErrJWTSigningKey = errors.New("server config: jwt_signing_key is required and must contain at least 32 bytes")
+
+func (cfg Config) ValidateJWTSigningKey() error {
+	if len(cfg.JWTSigningKey) < 32 || len(bytes.TrimSpace([]byte(cfg.JWTSigningKey))) == 0 {
+		return ErrJWTSigningKey
+	}
+	return nil
+}
 
 func Load() (Config, string, error) {
 	dir := os.Getenv("TRACKHARBOR_SERVER_DIR")
@@ -79,6 +89,9 @@ func Load() (Config, string, error) {
 	var cfg Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return Config{}, "", fmt.Errorf("server config: %w", err)
+	}
+	if err := cfg.ValidateJWTSigningKey(); err != nil {
+		return Config{}, "", err
 	}
 	cfg.ConfigPath = configPath
 	cfg.loadedYAML = data

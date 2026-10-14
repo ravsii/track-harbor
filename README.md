@@ -6,7 +6,17 @@ Spotify tracks are matched to YouTube audio; VK audio is downloaded from VK.
 
 ## Run locally
 
-Install Go, FFmpeg, and `yt-dlp` (for Spotify audio), then run:
+Install Go, FFmpeg, and `yt-dlp` (for Spotify audio). Create
+`.local-server/config.yaml` with:
+
+```yaml
+listen: 127.0.0.1:8787
+jwt_signing_key: "<paste a secret generated with openssl rand -hex 32>"
+```
+
+Generate your own secret; do not use the placeholder. The key is required and
+must contain at least 32 bytes. Missing or short keys stop startup with an error.
+Then run:
 
 ```sh
 make run
@@ -46,7 +56,8 @@ a tab never starts playback automatically.
 
 Sessions use signed JWTs in HttpOnly, SameSite=Lax cookies for seven days.
 Cookies use Secure on HTTPS, but allow HTTP for trusted local networks.
-Signing keys and revocable session IDs persist in the server database. Signing
+The signing key lives in `config.yaml`; revocable session IDs persist in the
+server database. Changing the signing key invalidates existing cookies. Signing
 out revokes that session; changing a password revokes all that user's sessions,
 including the current one. Deleting an account also removes its source credentials
 and personal playlist but keeps the shared catalogue and MP3s. Passwords are
@@ -97,8 +108,8 @@ or removed if none of that host's protocols work. Other entries are kept;
 there is no fixed limit on the number of imported working addresses. On upgrade,
 the server imports existing `strategy`, `personal_proxy`, and `public_proxy`
 values from `config.yaml` into `library.db` and removes those keys from YAML.
-`vk_strategy` is fixed to `direct`. Keep `listen` and optional `download_dir`
-in `config.yaml`; changes to either require a server restart. The server binds
+`vk_strategy` is fixed to `direct`. Keep `listen`, required `jwt_signing_key`,
+and optional `download_dir` in `config.yaml`; changes require a server restart. The server binds
 to loopback by default and serves HTTP internally. Direct HTTP access from other
 devices is supported on trusted local networks when bound to a LAN interface;
 passwords and sessions are transmitted without encryption. Do not expose this
@@ -110,8 +121,11 @@ require an HTTP/HTTPS Origin matching Host; arbitrary forwarded headers are not
 trusted for authentication; `X-Forwarded-Proto` only enables the Secure cookie flag.
 Restrict login attempts at the proxy as well: the built-in rate limit
 uses the direct peer IP, so clients behind one proxy share its limit.
-Protect the server database and backups: they contain source tokens, proxy
-credentials, session IDs and the JWT signing key. Only trusted people should have
+Protect the server database, config and backups: the database contains source tokens,
+proxy credentials and session IDs; the config contains the JWT signing key.
+Upgrading removes `auth_meta` from the database; set `jwt_signing_key` before
+starting the upgraded server. A new key requires users to sign in again.
+Only trusted people should have
 accounts: every user can change another user's password and access their account.
 
 Server logs use a shared global zap logger at Info level. Readable text is

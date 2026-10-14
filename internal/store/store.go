@@ -46,10 +46,6 @@ func Open(path string) (*Store, error) {
 		return nil, fmt.Errorf("migrate server database: %w", err)
 	}
 	s := &Store{db: db}
-	if err = s.initAuth(); err != nil {
-		db.Close()
-		return nil, err
-	}
 	return s, nil
 }
 

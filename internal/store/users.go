@@ -1,7 +1,6 @@
 package store
 
 import (
-	"crypto/rand"
 	"database/sql"
 	"errors"
 	"regexp"
@@ -24,42 +23,21 @@ type User struct {
 	PasswordHash string
 }
 
-func (s *Store) initAuth() error {
-	tx, err := s.db.Begin()
+// bootstrapUser runs once as part of the migration, not on every startup.
+func bootstrapUser(tx *sql.Tx) error {
+	var count int
+	if err := tx.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return err
+	}
+	if count != 0 {
+		return nil
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-	key := make([]byte, 32)
-	if _, err = rand.Read(key); err != nil {
-		return err
-	}
-	if _, err = tx.Exec(`INSERT OR IGNORE INTO auth_meta(id,signing_key) VALUES(1,?)`, key); err != nil {
-		return err
-	}
-	var done bool
-	if err = tx.QueryRow(`SELECT bootstrapped FROM auth_meta WHERE id=1`).Scan(&done); err != nil {
-		return err
-	}
-	if !done {
-		hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
-		if err != nil {
-			return err
-		}
-		if _, err = tx.Exec(`INSERT INTO users(username,password_hash) VALUES('admin',?)`, string(hash)); err != nil {
-			return err
-		}
-		if _, err = tx.Exec(`UPDATE auth_meta SET bootstrapped=1 WHERE id=1`); err != nil {
-			return err
-		}
-	}
-	return tx.Commit()
-}
-
-func (s *Store) SigningKey() ([]byte, error) {
-	var key []byte
-	err := s.db.QueryRow(`SELECT signing_key FROM auth_meta WHERE id=1`).Scan(&key)
-	return key, err
+	_, err = tx.Exec(`INSERT INTO users(username,password_hash) VALUES('admin',?)`, string(hash))
+	return err
 }
 
 func passwordHash(password string) (string, error) {
