@@ -74,8 +74,9 @@ Server database migrations in `internal/store/migrations/` run on startup.
 Back up `library.db` before upgrading. The multi-user migration clears legacy
 source credentials: reconnect Spotify and VK separately for each account.
 Existing VK files with known owner/audio IDs enter the shared catalogue. Legacy
-Spotify rows had no Spotify track IDs: their old file index and MP3s are kept,
-but not guessed into a new playlist or shared catalogue by artist/title. A new
+Spotify rows had no Spotify track IDs: their MP3s remain on disk, but the unused
+legacy tables and file index are removed. These files are not guessed into a new
+playlist or shared catalogue by artist/title. A new
 Spotify sync creates source-ID entries and may download their audio again.
 Deleting `admin` is permanent across restarts; it is not automatically recreated.
 The server embeds the checked-in `internal/web/assets/tailwind.css`, so
