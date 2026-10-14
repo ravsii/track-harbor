@@ -69,7 +69,7 @@ func run(ctx context.Context) error {
 		// Config parsing may echo proxy URLs or credentials in an error.
 		return errors.New("load server configuration failed; check config.yaml, the listen address and file permissions")
 	}
-	db, err := store.Open(dbPath)
+	db, err := store.Open(dbPath, cfg.DownloadDir)
 	if err != nil {
 		return fmt.Errorf("open server database: %w", err)
 	}

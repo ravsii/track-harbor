@@ -2,15 +2,12 @@ package web
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -120,6 +117,9 @@ func (d *downloadJob) enqueue(tracks []store.Track) {
 	}
 	added := 0
 	for _, t := range tracks {
+		if t.FilePath != "" && download.FileExists(t.FilePath) {
+			continue
+		}
 		key := trackKey(t.Source, t.SourceID)
 		if d.active[key] {
 			continue
@@ -190,8 +190,8 @@ func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 	process := func(t store.Track) {
 		state := downloadState{Running: true}
 		state.ID, state.SourceID = t.ID, t.SourceID
-		// A different user's sync may have queued an older snapshot just before
-		// the preceding download finished. Always consult the shared file index.
+		// A different user's sync may have queued an older snapshot. Read the
+		// latest source URL and check the deterministic file path again.
 		if latest, err := d.store.Track(t.ID); err == nil {
 			t = latest
 		}
@@ -209,38 +209,29 @@ func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 		state.Message = "Checking saved file"
 		d.publish(state)
 		valid, err := d.saved(t)
-		var invalidateErr error
-		if err == nil && !valid && t.FilePath != "" && ctx.Err() == nil {
-			invalidateErr = d.store.InvalidateDownload(t)
-			if invalidateErr == nil {
-				state.Stage = "missing"
-				state.Message = "Saved file unavailable; downloading again"
-				d.publish(state)
-			}
-		}
 		if ctx.Err() != nil {
 			state.Stage, state.Message = "stopped", "Stopped"
-		} else if invalidateErr != nil {
-			state.Stage, state.Message = "failed", "Could not update missing track status"
-			d.logger.Warn("invalidate missing track failed", zap.String("source", t.Source), zap.String("artist", t.Artist), zap.String("title", t.Title))
-		} else if err == nil && valid {
+		} else if err != nil {
+			state.Stage, state.Message = "failed", "Could not inspect saved file; check file permissions"
+		} else if valid {
 			state.Stage = "skipped"
 			state.Message = "Already downloaded"
 		} else {
-			directory := filepath.Join(d.config.DownloadDir, "youtube")
-			id := t.SourceID
-			if t.Source == "vk" {
-				directory = filepath.Join(d.config.DownloadDir, "vk")
-			}
 			fields := []zap.Field{zap.String("source", t.Source), zap.String("artist", t.Artist), zap.String("title", t.Title)}
 			d.logger.Info("track download started", fields...)
-			path, hash, saveErr := download.Save(ctx, download.Track{Source: t.Source, SourceID: id, Artist: t.Artist, Title: t.Title, AudioURL: t.AudioURL, CoverURL: t.CoverURL}, directory, t.FilePath, routes, func(e download.Event) {
+			event := func(e download.Event) {
 				state.Stage, state.Bytes, state.TotalBytes = e.Stage, e.Bytes, e.Total
 				state.Message = "Downloading " + t.Source
 				d.publish(state)
-			})
+			}
+			candidate := download.Track{Source: t.Source, SourceID: t.SourceID, Artist: t.Artist, Title: t.Title, AudioURL: t.AudioURL, CoverURL: t.CoverURL}
+			sourceURL, saveErr := download.Resolve(ctx, candidate, routes, event)
 			if saveErr == nil {
-				saveErr = d.store.SaveDownload(t, path, hash)
+				saveErr = d.store.SetSourceURL(t.ID, sourceURL)
+			}
+			if saveErr == nil {
+				candidate.AudioURL = sourceURL
+				_, saveErr = download.Save(ctx, candidate, d.config.DownloadDir, routes, event)
 			}
 			if ctx.Err() != nil && saveErr != nil {
 				state.Stage = "stopped"
@@ -279,7 +270,7 @@ func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 		d.mu.Unlock()
 	}
 	var wg sync.WaitGroup
-	for _, source := range []string{"vk", "spotify"} {
+	for _, source := range []string{"vk", "spotify", "youtube"} {
 		queue := make(chan store.Track)
 		workers := 10
 		if source == "spotify" {
@@ -454,31 +445,18 @@ func (s *Server) downloadStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *downloadJob) saved(t store.Track) (bool, error) {
-	if t.FilePath == "" {
-		return false, nil
-	}
-	stored, err := d.store.DownloadHash(t)
+	path, err := download.FilePath(d.config.DownloadDir, t.Source, t.SourceID)
 	if err != nil {
 		return false, err
 	}
-	f, err := os.Open(t.FilePath)
+	info, err := os.Stat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	defer f.Close()
-	info, err := f.Stat()
-	if err != nil {
-		return false, err
-	}
-	if !info.Mode().IsRegular() || info.Size() == 0 {
-		return false, nil
-	}
-	h := sha256.New()
-	_, err = io.Copy(h, f)
-	return err == nil && hex.EncodeToString(h.Sum(nil)) == stored, err
+	return info.Mode().IsRegular() && info.Size() > 0, nil
 }
 
 func (s *Server) downloadEvents(w http.ResponseWriter, r *http.Request) {

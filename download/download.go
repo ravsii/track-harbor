@@ -4,8 +4,6 @@ package download
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +14,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -149,79 +146,59 @@ func (r *Routes) try(ctx context.Context, event func(Event), stage string, reque
 var errRateLimit = errors.New("download rate limited")
 var errNoMatch = errors.New("no YouTube match")
 
-// Save converts into a staged MP3 and publishes it under the catalogue source ID.
-// The caller owns its file history. Shared ID-named files are not overwritten;
-// an invalid file already tracked at the same destination may be replaced.
-func Save(ctx context.Context, t Track, directory, trackedPath string, routes *Routes, event func(Event)) (string, string, error) {
+// Save publishes a nonempty staged MP3 under its deterministic catalog key.
+// Its source URL must already be resolved. No file paths or hashes are persisted.
+func Save(ctx context.Context, t Track, directory string, routes *Routes, event func(Event)) (string, error) {
 	if event == nil {
 		event = func(Event) {}
 	}
 	if routes == nil {
 		routes = &Routes{Order: []string{"direct"}}
 	}
+	destination, err := FilePath(directory, t.Source, t.SourceID)
+	if err != nil {
+		return "", err
+	}
+	if FileExists(destination) {
+		return destination, nil
+	}
+	directory = filepath.Dir(destination)
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		return "", "", fmt.Errorf("ffmpeg is required: %w", err)
+		return "", fmt.Errorf("ffmpeg is required: %w", err)
 	}
 	if err := os.MkdirAll(directory, 0700); err != nil {
-		return "", "", err
+		return "", err
 	}
 	var input *os.File
 	var release func() error
 	var video string
 	if t.Source == "vk" {
 		if !vkAudioID.MatchString(t.SourceID) {
-			return "", "", fmt.Errorf("invalid VK audio ID")
+			return "", fmt.Errorf("invalid VK audio ID")
 		}
 		event(Event{Stage: "downloading"})
 		f, _, closeFile, err := vk.DownloadMP3(ctx, t.AudioURL)
 		if err != nil {
-			return "", "", err
+			return "", err
 		}
 		input, release = f, closeFile
-	} else if t.Source == "spotify" {
-		if !spotifyID.MatchString(t.SourceID) {
-			return "", "", fmt.Errorf("invalid Spotify track ID")
+	} else if t.Source == "spotify" || t.Source == "youtube" {
+		video = youtubeVideo(t.AudioURL)
+		if video == "" {
+			return "", fmt.Errorf("YouTube URL has not been resolved")
 		}
 		executable, err := exec.LookPath("yt-dlp")
 		if err != nil {
-			return "", "", fmt.Errorf("yt-dlp is required: %w", err)
-		}
-		query := strings.TrimSpace(t.Artist + " " + t.Title)
-		searchCtx, cancel := context.WithTimeout(ctx, time.Minute)
-		defer cancel()
-		err = routes.try(searchCtx, event, "searching", func(proxy string) error {
-			output, stderr, runErr := youtube.Run(searchCtx, executable, proxy, "", nil, "--flat-playlist", "--dump-single-json", "--", "ytsearch1:"+query)
-			if runErr != nil {
-				return ytError(stderr, runErr)
-			}
-			var result struct {
-				Entries []struct {
-					ID string `json:"id"`
-				} `json:"entries"`
-			}
-			if json.Unmarshal(output, &result) != nil || result.Entries == nil {
-				return fmt.Errorf("invalid YouTube search response")
-			}
-			if len(result.Entries) == 0 {
-				return errNoMatch
-			}
-			if !videoID.MatchString(result.Entries[0].ID) {
-				return fmt.Errorf("invalid YouTube video ID")
-			}
-			video = result.Entries[0].ID
-			return nil
-		})
-		if err != nil {
-			return "", "", err
+			return "", fmt.Errorf("yt-dlp is required: %w", err)
 		}
 		root := filepath.Join(directory, ".sources")
 		if err := os.MkdirAll(root, 0700); err != nil {
-			return "", "", err
+			return "", err
 		}
 		// Isolate incomplete yt-dlp output from other workers and from completed MP3s.
 		dir, err := os.MkdirTemp(root, ".download-*")
 		if err != nil {
-			return "", "", err
+			return "", err
 		}
 		defer os.RemoveAll(dir)
 		dlCtx, stop := context.WithTimeout(ctx, 5*time.Minute)
@@ -241,7 +218,7 @@ func Save(ctx context.Context, t Track, directory, trackedPath string, routes *R
 			return nil
 		})
 		if err != nil {
-			return "", "", err
+			return "", err
 		}
 		matches, _ := filepath.Glob(filepath.Join(dir, "audio.*"))
 		var source string
@@ -252,36 +229,29 @@ func Save(ctx context.Context, t Track, directory, trackedPath string, routes *R
 			}
 		}
 		if source == "" {
-			return "", "", fmt.Errorf("downloaded YouTube audio is empty")
+			return "", fmt.Errorf("downloaded YouTube audio is empty")
 		}
 		event(Event{Stage: "converting"})
 		f, _, closeFile, err := audio.ConvertFileMP3(ctx, source)
 		if err != nil {
-			return "", "", err
+			return "", err
 		}
 		input, release = f, closeFile
 	} else {
-		return "", "", fmt.Errorf("unknown track source")
+		return "", fmt.Errorf("unknown track source")
 	}
 	defer release()
-	filename := t.SourceID
-	if t.Source == "spotify" {
-		// Spotify IDs are case-sensitive. Lowercase byte encoding keeps them
-		// distinct even on case-insensitive filesystems.
-		filename = hex.EncodeToString([]byte(t.SourceID))
-	}
-	destination := filepath.Join(directory, filename+".mp3")
 	stage, err := os.CreateTemp(directory, ".download-*.mp3")
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 	defer os.Remove(stage.Name())
 	if _, err := io.Copy(stage, input); err != nil {
 		stage.Close()
-		return "", "", err
+		return "", err
 	}
 	if err := stage.Close(); err != nil {
-		return "", "", err
+		return "", err
 	}
 	event(Event{Stage: "metadata"})
 	var image []byte
@@ -297,52 +267,31 @@ func Save(ctx context.Context, t Track, directory, trackedPath string, routes *R
 	}
 	if err := tag(ctx, stage.Name(), t.Title, t.Artist, image); err != nil {
 		if len(image) == 0 {
-			return "", "", err
+			return "", err
 		}
 		if err := tag(ctx, stage.Name(), t.Title, t.Artist, nil); err != nil {
-			return "", "", err
+			return "", err
 		}
 	}
 	if err := ctx.Err(); err != nil {
-		return "", "", err
+		return "", err
 	}
-	f, err := os.Open(stage.Name())
-	if err != nil {
-		return "", "", err
-	}
-	h := sha256.New()
-	_, err = io.Copy(h, f)
-	err = errors.Join(err, f.Close())
-	if err != nil {
-		return "", "", err
+	if !FileExists(stage.Name()) {
+		return "", fmt.Errorf("downloaded MP3 is empty")
 	}
 	if err := os.Link(stage.Name(), destination); err != nil {
 		if !errors.Is(err, os.ErrExist) {
-			return "", "", err
+			return "", err
 		}
-		if trackedPath == destination {
+		if !FileExists(destination) {
 			if err := os.Rename(stage.Name(), destination); err != nil {
-				return "", "", err
+				return "", err
 			}
-			return destination, hex.EncodeToString(h.Sum(nil)), nil
+			return destination, nil
 		}
-		// Another process may have saved this source ID concurrently. Keep the
-		// first file and record its actual checksum.
-		f, err := os.Open(destination)
-		if err != nil {
-			return "", "", err
-		}
-		defer f.Close()
-		info, err := f.Stat()
-		if err != nil || !info.Mode().IsRegular() || info.Size() == 0 {
-			return "", "", fmt.Errorf("existing audio file is invalid")
-		}
-		h = sha256.New()
-		if _, err := io.Copy(h, f); err != nil {
-			return "", "", err
-		}
+		// Another worker already published a nonempty file; keep it.
 	}
-	return destination, hex.EncodeToString(h.Sum(nil)), nil
+	return destination, nil
 }
 
 func ytError(stderr []byte, err error) error {

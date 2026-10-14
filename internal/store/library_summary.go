@@ -14,10 +14,10 @@ type LibrarySummary struct {
 func (s *Store) LibrarySummary(userID int64) (LibrarySummary, error) {
 	var summary LibrarySummary
 	err := s.db.QueryRow(`SELECT
-		(SELECT COUNT(*) FROM catalog_tracks),
+		(SELECT COUNT(*) FROM tracks),
 		(SELECT COUNT(*) FROM user_tracks WHERE user_id=?),
-		(SELECT COUNT(*) FROM user_tracks p JOIN catalog_tracks t ON t.id=p.track_id WHERE p.user_id=? AND t.source='spotify'),
-		(SELECT COUNT(*) FROM user_tracks p JOIN catalog_tracks t ON t.id=p.track_id WHERE p.user_id=? AND t.source='vk'),
+		(SELECT COUNT(*) FROM user_tracks p JOIN tracks t ON t.id=p.track_id WHERE p.user_id=? AND t.source='spotify'),
+		(SELECT COUNT(*) FROM user_tracks p JOIN tracks t ON t.id=p.track_id WHERE p.user_id=? AND t.source='vk'),
 		EXISTS(SELECT 1 FROM user_credentials WHERE user_id=? AND source='spotify'),
 		EXISTS(SELECT 1 FROM user_credentials WHERE user_id=? AND source='vk')`,
 		userID, userID, userID, userID, userID).

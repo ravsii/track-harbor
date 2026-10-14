@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// playAudio serves only tracks registered in the server's own download history.
+// playAudio serves catalog tracks present at their deterministic download path.
 // ServeContent implements HTTP byte ranges for seeking without exposing paths.
 func (s *Server) playAudio(w http.ResponseWriter, r *http.Request) {
 	if s.downloads == nil {
