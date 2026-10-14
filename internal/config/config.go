@@ -34,6 +34,22 @@ func (cfg Config) ValidateJWTSigningKey() error {
 	return nil
 }
 
+// DatabasePath resolves the server database without loading authentication settings.
+func DatabasePath() (string, error) {
+	if path := os.Getenv("TRACKHARBOR_SERVER_DB"); path != "" {
+		return path, nil
+	}
+	dir := os.Getenv("TRACKHARBOR_SERVER_DIR")
+	if dir == "" {
+		executable, err := os.Executable()
+		if err != nil {
+			return "", fmt.Errorf("locate server executable: %w", err)
+		}
+		dir = filepath.Dir(executable)
+	}
+	return filepath.Join(dir, "library.db"), nil
+}
+
 func Load() (Config, string, error) {
 	dir := os.Getenv("TRACKHARBOR_SERVER_DIR")
 	if dir == "" {
@@ -47,9 +63,9 @@ func Load() (Config, string, error) {
 	if configPath == "" {
 		configPath = filepath.Join(dir, "config.yaml")
 	}
-	dbPath := os.Getenv("TRACKHARBOR_SERVER_DB")
-	if dbPath == "" {
-		dbPath = filepath.Join(dir, "library.db")
+	dbPath, err := DatabasePath()
+	if err != nil {
+		return Config{}, "", err
 	}
 	for _, path := range []string{configPath, dbPath} {
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {

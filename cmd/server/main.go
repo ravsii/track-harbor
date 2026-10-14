@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/ravsii/trackharbor/internal/config"
@@ -17,6 +19,8 @@ import (
 )
 
 func main() {
+	migrateDB := flag.Bool("migrate-db", false, "Apply database migrations and exit without starting the server")
+	flag.Parse()
 	if err := logger.Init("logs"); err != nil {
 		fmt.Fprintln(os.Stderr, "initialize server logger:", err)
 		os.Exit(1)
@@ -24,11 +28,36 @@ func main() {
 	defer zap.L().Sync()
 
 	ctx := context.Background()
-	if err := run(ctx); err != nil {
+	var err error
+	if *migrateDB {
+		err = migrateDatabase(ctx)
+	} else {
+		err = run(ctx)
+	}
+	if err != nil {
 		logger.Err(ctx, "server stopped", zap.Error(err))
 		_ = zap.L().Sync()
 		os.Exit(1)
 	}
+}
+
+func migrateDatabase(ctx context.Context) error {
+	dbPath, err := config.DatabasePath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0700); err != nil {
+		return fmt.Errorf("create server database directory: %w", err)
+	}
+	db, err := store.Open(dbPath)
+	if err != nil {
+		return fmt.Errorf("migrate server database: %w", err)
+	}
+	if err := db.Close(); err != nil {
+		return fmt.Errorf("close server database: %w", err)
+	}
+	logger.Info(ctx, "database migrations completed")
+	return nil
 }
 
 func run(ctx context.Context) error {
