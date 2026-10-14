@@ -143,6 +143,12 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 				}
 			}
 		}
+		if !public && r.URL.Path != "/logout" {
+			if err := s.auth.renew(w, r); err != nil {
+				http.Error(w, "could not renew session", http.StatusInternalServerError)
+				return
+			}
+		}
 		mux.ServeHTTP(w, r)
 	}))
 }

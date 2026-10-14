@@ -21,7 +21,8 @@ import (
 
 // The __Host- prefix requires Secure and cannot be used for direct LAN HTTP.
 const sessionCookie = "trackharbor-session"
-const sessionLifetime = 7 * 24 * time.Hour
+const sessionLifetime = 24 * time.Hour
+const sessionRenewInterval = time.Hour
 
 type authContextKey struct{}
 type authenticatedUser struct {
@@ -68,6 +69,31 @@ func (a *authentication) authenticate(r *http.Request) (store.User, string, erro
 		return store.User{}, "", store.ErrAuthentication
 	}
 	return u, claims.ID, nil
+}
+
+func (a *authentication) sessionToken(u store.User, id string, now, expires time.Time) (string, error) {
+	claims := jwt.RegisteredClaims{Issuer: "trackharbor", Subject: strconv.FormatInt(u.ID, 10), Audience: jwt.ClaimStrings{"trackharbor-web"}, ID: id, IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(expires)}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(a.key)
+}
+
+func setSessionCookie(w http.ResponseWriter, r *http.Request, token string, expires time.Time) {
+	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureSessionCookie(r), SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(sessionLifetime.Seconds())})
+}
+
+func (a *authentication) renew(w http.ResponseWriter, r *http.Request) error {
+	user := r.Context().Value(authContextKey{}).(authenticatedUser)
+	now := time.Now()
+	expires := now.Add(sessionLifetime)
+	renewed, err := a.db.RenewSession(user.SessionID, user.ID, now, expires, sessionRenewInterval)
+	if err != nil || !renewed {
+		return err
+	}
+	token, err := a.sessionToken(user.User, user.SessionID, now, expires)
+	if err != nil {
+		return err
+	}
+	setSessionCookie(w, r, token, expires)
+	return nil
 }
 
 func (a *authentication) allowLogin(remote string) bool {
@@ -166,17 +192,16 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	expires := now.Add(sessionLifetime)
 	id := hex.EncodeToString(sid)
-	claims := jwt.RegisteredClaims{Issuer: "trackharbor", Subject: strconv.FormatInt(u.ID, 10), Audience: jwt.ClaimStrings{"trackharbor-web"}, ID: id, IssuedAt: jwt.NewNumericDate(now), ExpiresAt: jwt.NewNumericDate(expires)}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(s.auth.key)
+	token, err := s.auth.sessionToken(u, id, now, expires)
 	if err != nil {
 		http.Error(w, "could not sign in", 500)
 		return
 	}
-	if err = s.store.CreateSession(u, id, expires); err != nil {
+	if err = s.store.CreateSession(u, id, now, expires); err != nil {
 		s.renderLogin(w, 401, "Account changed. Sign in again.")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: sessionCookie, Value: token, Path: "/", HttpOnly: true, Secure: secureSessionCookie(r), SameSite: http.SameSiteLaxMode, Expires: expires, MaxAge: int(sessionLifetime.Seconds())})
+	setSessionCookie(w, r, token, expires)
 	http.Redirect(w, r, "/", 303)
 }
 func secureSessionCookie(r *http.Request) bool {

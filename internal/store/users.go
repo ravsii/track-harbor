@@ -123,7 +123,7 @@ func (s *Store) SetPassword(id int64, password string) error {
 	if n == 0 {
 		return sql.ErrNoRows
 	}
-	if _, err = tx.Exec(`DELETE FROM sessions WHERE user_id=?`, id); err != nil {
+	if _, err = tx.Exec(`DELETE FROM user_sessions WHERE user_id=?`, id); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -154,8 +154,8 @@ func (s *Store) DeleteUser(id int64) error {
 	return tx.Commit()
 }
 
-func (s *Store) CreateSession(u User, id string, expires time.Time) error {
-	result, err := s.db.Exec(`INSERT INTO sessions(id,user_id,expires_at) SELECT ?,id,? FROM users WHERE id=? AND password_hash=?`, id, expires.Unix(), u.ID, u.PasswordHash)
+func (s *Store) CreateSession(u User, id string, now, expires time.Time) error {
+	result, err := s.db.Exec(`INSERT INTO user_sessions(id,user_id,expires_at,renewed_at) SELECT ?,id,?,? FROM users WHERE id=? AND password_hash=?`, id, expires.Unix(), now.Unix(), u.ID, u.PasswordHash)
 	if err != nil {
 		return err
 	}
@@ -168,7 +168,7 @@ func (s *Store) CreateSession(u User, id string, expires time.Time) error {
 
 func (s *Store) SessionUser(id string, now time.Time) (User, error) {
 	var u User
-	err := s.db.QueryRow(`SELECT u.id,u.username FROM users u JOIN sessions s ON s.user_id=u.id WHERE s.id=? AND s.expires_at>?`, id, now.Unix()).Scan(&u.ID, &u.Username)
+	err := s.db.QueryRow(`SELECT u.id,u.username FROM users u JOIN user_sessions s ON s.user_id=u.id WHERE s.id=? AND s.expires_at>?`, id, now.Unix()).Scan(&u.ID, &u.Username)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrAuthentication
 	}
@@ -176,6 +176,19 @@ func (s *Store) SessionUser(id string, now time.Time) (User, error) {
 }
 
 func (s *Store) RevokeSession(id string) error {
-	_, err := s.db.Exec(`DELETE FROM sessions WHERE id=?`, id)
+	_, err := s.db.Exec(`DELETE FROM user_sessions WHERE id=?`, id)
 	return err
+}
+
+// RenewSession updates only an existing, unexpired session that is due for renewal.
+// The conditional update prevents parallel requests from renewing it repeatedly.
+func (s *Store) RenewSession(id string, userID int64, now, expires time.Time, interval time.Duration) (bool, error) {
+	result, err := s.db.Exec(`UPDATE user_sessions SET expires_at=?,renewed_at=?
+ WHERE id=? AND user_id=? AND expires_at>? AND renewed_at<=?`,
+		expires.Unix(), now.Unix(), id, userID, now.Unix(), now.Add(-interval).Unix())
+	if err != nil {
+		return false, err
+	}
+	n, err := result.RowsAffected()
+	return n > 0, err
 }
