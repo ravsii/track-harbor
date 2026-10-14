@@ -68,12 +68,12 @@ func (s *Store) SaveCredentials(userID int64, source string, credentials any) er
 	if err := gob.NewEncoder(&data).Encode(credentials); err != nil {
 		return fmt.Errorf("encode source credentials: %w", err)
 	}
-	_, err := s.db.Exec(`INSERT INTO users_credentials(user_id,source,data) VALUES(?,?,?) ON CONFLICT(user_id,source) DO UPDATE SET data=excluded.data`, userID, source, data.Bytes())
+	_, err := s.db.Exec(`INSERT INTO user_credentials(user_id,source,data) VALUES(?,?,?) ON CONFLICT(user_id,source) DO UPDATE SET data=excluded.data`, userID, source, data.Bytes())
 	return err
 }
 func (s *Store) Credentials(userID int64, source string, credentials any) error {
 	var data []byte
-	if err := s.db.QueryRow(`SELECT data FROM users_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&data); err != nil {
+	if err := s.db.QueryRow(`SELECT data FROM user_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&data); err != nil {
 		return err
 	}
 	if err := gob.NewDecoder(bytes.NewReader(data)).Decode(credentials); err != nil {
@@ -83,7 +83,7 @@ func (s *Store) Credentials(userID int64, source string, credentials any) error 
 }
 func (s *Store) Connected(userID int64, source string) (bool, error) {
 	var n int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM users_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&n)
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM user_credentials WHERE user_id=? AND source=?`, userID, source).Scan(&n)
 	return n > 0, err
 }
 
