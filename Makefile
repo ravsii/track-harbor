@@ -1,4 +1,6 @@
-.PHONY: build run run-server run-server-watch css-build css-watch
+.PHONY: build run run-server run-server-watch css-build css-watch install-lint lint
+
+GOLANGCI_LINT := ./bin/golangci-lint
 
 css-build:
 	npm run css:build
@@ -18,8 +20,10 @@ run-server: build
 run-server-watch:
 	python3 scripts/run-server-watch.py
 
-install-lint: ./bin/golangci-lint
+install-lint: $(GOLANGCI_LINT)
+
+./bin/golangci-lint:
 	curl -sSfL https://golangci-lint.run/install.sh | sh -s v2.14.0
 
 lint: install-lint
-	./bin/golangci-lint run ./...
+	$(GOLANGCI_LINT) run ./...
