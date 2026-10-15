@@ -62,10 +62,11 @@
     const sync = document.getElementById('sidebar-sync-status');
     if (sync) {
       const status = snapshot.library_sync;
+      const active = ['Syncing', 'Downloading', 'Stopping'].includes(status);
       sync.querySelector('span').textContent = status;
-      sync.dataset.state = status === 'Attention' ? 'attention' : status === 'Syncing' ? 'active' : 'ready';
-      sync.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${status === 'Syncing' ? 'reload' : status === 'Ready' ? 'checkmark-circle-02' : 'circle'}`);
-      sync.title = `Library synchronization across all users: ${status}. Open Downloads`;
+      sync.dataset.state = status === 'Attention' ? 'attention' : active ? 'active' : 'ready';
+      sync.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${active ? 'reload' : status === 'Ready' ? 'checkmark-circle-02' : 'circle'}`);
+      sync.title = `Library synchronization and downloads across all users: ${status}. Open Downloads`;
       sync.setAttribute('aria-label', sync.title);
     }
   }

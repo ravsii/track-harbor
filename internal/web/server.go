@@ -324,14 +324,35 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 // Return an aggregate state without exposing another user's source details.
 func (s *Server) librarySyncStatus() string {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	status := "Ready"
+	syncing := false
 	for _, message := range s.status {
 		if message == "Syncing…" {
-			return "Syncing"
+			syncing = true
 		}
 		if strings.HasPrefix(message, "Sync failed.") || strings.HasPrefix(message, "Sync timed out.") || strings.HasPrefix(message, "Library synced, but") {
 			status = "Attention"
+		}
+	}
+	s.mu.Unlock()
+	if syncing {
+		return "Syncing"
+	}
+	if s.downloads != nil {
+		s.downloads.mu.Lock()
+		running, stopped, failed := s.downloads.state.Running, s.downloads.stopped, s.downloads.failed
+		s.downloads.mu.Unlock()
+		if running {
+			if stopped {
+				return "Stopping"
+			}
+			return "Downloading"
+		}
+		if failed > 0 {
+			status = "Attention"
+		}
+		if stopped && status == "Ready" {
+			return "Stopped"
 		}
 	}
 	return status

@@ -104,7 +104,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
     <section class="sidebar-summary" aria-label="Server status">
       <h2 class="sidebar-label">Server status</h2>
       <div class="sidebar-summary-row"><span>Total tracks</span><strong data-catalog-count>{{.Library.Total}}</strong></div>
-      <div class="sidebar-summary-row"><span>Sync</span><a id="sidebar-sync-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" title="Library synchronization across all users">{{template "icon" "circle"}}<span>{{.LibrarySync}}</span></a></div>
+      <div class="sidebar-summary-row"><span>Sync</span><a id="sidebar-sync-status" href="/?source=downloads" hx-get="/?source=downloads" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true" title="Library synchronization and downloads across all users">{{template "icon" "circle"}}<span>{{.LibrarySync}}</span></a></div>
     </section>
     <div class="sidebar-bottom grid grid-cols-1 gap-3">
       <nav class="grid grid-cols-1 gap-1.5" aria-label="Settings"><a class="{{if eq .Source "settings"}}active{{end}}" href="/?source=settings" hx-get="/?source=settings" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true">{{template "icon" "computer"}}<span>Settings</span></a></nav>
