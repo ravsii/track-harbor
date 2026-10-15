@@ -416,7 +416,7 @@ func (s *Server) downloadStatus(w http.ResponseWriter, r *http.Request) {
 		}
 		personal = append(personal, item{ID: t.ID, SourceID: t.SourceID, Cover: coverURL(t.CoverURL), Playable: playable, Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: stage})
 	}
-	available, err := s.store.ListPlayable()
+	available, err := s.store.ListPlayable(currentUser(r).ID)
 	if err != nil {
 		http.Error(w, "unable to read available tracks", 500)
 		return

@@ -175,7 +175,7 @@ func (s *Server) playableTracks(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	tracks, err := s.store.ListPlayable()
+	tracks, err := s.store.ListPlayable(currentUser(r).ID)
 	if err != nil {
 		http.Error(w, "unable to read saved tracks", http.StatusInternalServerError)
 		return

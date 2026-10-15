@@ -114,8 +114,8 @@ func (s *Store) ListAll() ([]Track, error) {
 func (s *Store) Downloadable() ([]Track, error) {
 	return s.queryTracks(catalogSelect + ` WHERE EXISTS(SELECT 1 FROM user_tracks p WHERE p.track_id=t.id) ORDER BY t.id DESC`)
 }
-func (s *Store) ListPlayable() ([]Track, error) {
-	tracks, err := s.queryTracks(catalogSelect + ` ORDER BY t.id DESC`)
+func (s *Store) ListPlayable(userID int64) ([]Track, error) {
+	tracks, err := s.ListUser(userID)
 	if err != nil {
 		return nil, err
 	}
