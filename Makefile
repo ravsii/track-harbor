@@ -1,4 +1,4 @@
-.PHONY: build run run-server run-server-watch css-build css-watch install-lint lint
+.PHONY: build run run-server run-server-watch migrate-up css-build css-watch install-lint lint
 
 GOLANGCI_LINT := ./bin/golangci-lint
 
@@ -16,6 +16,9 @@ run: run-server
 
 run-server: build
 	./.local-server/trackharbor-server
+
+migrate-up: build
+	./.local-server/trackharbor-server --migrate-db
 
 run-server-watch:
 	python3 scripts/run-server-watch.py

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 type DownloadSettings struct {
@@ -12,41 +13,51 @@ type DownloadSettings struct {
 	PublicProxy   []string
 }
 
-type PersonalProxy struct {
-	ID      int64
-	Address string
+type Proxy struct {
+	ID            int64
+	Address       string
+	LastCheckedAt time.Time
+	LastSuccessAt time.Time
 }
 
-func (s *Store) PersonalProxies() ([]PersonalProxy, error) {
-	rows, err := s.db.Query(`SELECT id, address FROM personal_proxies ORDER BY id`)
+func (s *Store) Proxies() ([]Proxy, error) {
+	rows, err := s.db.Query(`SELECT id, address, last_checked_at, last_success_at FROM proxy ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var proxies []PersonalProxy
+	var proxies []Proxy
 	for rows.Next() {
-		var proxy PersonalProxy
-		if err := rows.Scan(&proxy.ID, &proxy.Address); err != nil {
+		var proxy Proxy
+		var checkedAt, successAt int64
+		if err := rows.Scan(&proxy.ID, &proxy.Address, &checkedAt, &successAt); err != nil {
 			return nil, err
 		}
+		proxy.LastCheckedAt = time.Unix(checkedAt, 0).UTC()
+		proxy.LastSuccessAt = time.Unix(successAt, 0).UTC()
 		proxies = append(proxies, proxy)
 	}
 	return proxies, rows.Err()
 }
 
-func (s *Store) PersonalProxy(id int64) (string, error) {
+func (s *Store) Proxy(id int64) (string, error) {
 	var address string
-	err := s.db.QueryRow(`SELECT address FROM personal_proxies WHERE id=?`, id).Scan(&address)
+	err := s.db.QueryRow(`SELECT address FROM proxy WHERE id=?`, id).Scan(&address)
 	return address, err
 }
 
-func (s *Store) AddPersonalProxy(address string) error {
-	_, err := s.db.Exec(`INSERT INTO personal_proxies(address) VALUES(?)`, address)
+func (s *Store) AddProxy(address string, checkedAt time.Time) error {
+	_, err := s.db.Exec(`INSERT INTO proxy(address, last_checked_at, last_success_at) VALUES(?, ?, ?)`, address, checkedAt.Unix(), checkedAt.Unix())
 	return err
 }
 
-func (s *Store) DeletePersonalProxy(id int64) (bool, error) {
-	result, err := s.db.Exec(`DELETE FROM personal_proxies WHERE id=?`, id)
+func (s *Store) RecordProxyCheck(address string, checkedAt time.Time, success bool) error {
+	_, err := s.db.Exec(`UPDATE proxy SET last_checked_at=?, last_success_at=CASE WHEN ? THEN ? ELSE last_success_at END WHERE address=?`, checkedAt.Unix(), success, checkedAt.Unix(), address)
+	return err
+}
+
+func (s *Store) DeleteProxy(id int64) (bool, error) {
+	result, err := s.db.Exec(`DELETE FROM proxy WHERE id=?`, id)
 	if err != nil {
 		return false, err
 	}
@@ -98,7 +109,7 @@ func (s *Store) InitDownloadSettings(defaults DownloadSettings) (DownloadSetting
 	}
 	if inserted, _ := result.RowsAffected(); inserted != 0 {
 		for _, address := range defaults.PersonalProxy {
-			if _, err := tx.Exec(`INSERT INTO personal_proxies(address) VALUES(?)`, address); err != nil {
+			if _, err := tx.Exec(`INSERT INTO proxy(address) VALUES(?)`, address); err != nil {
 				return DownloadSettings{}, err
 			}
 		}
@@ -122,7 +133,7 @@ func (s *Store) DownloadSettings() (DownloadSettings, error) {
 	if err := json.Unmarshal([]byte(public), &settings.PublicProxy); err != nil {
 		return DownloadSettings{}, err
 	}
-	proxies, err := s.PersonalProxies()
+	proxies, err := s.Proxies()
 	if err != nil {
 		return DownloadSettings{}, err
 	}

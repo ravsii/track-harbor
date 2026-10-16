@@ -8,11 +8,12 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
 
-type personalProxyView struct {
+type proxyView struct {
 	ID           int64
 	Host, Masked string
 }
@@ -79,13 +80,19 @@ func (s *Server) addPersonalProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "enter a valid proxy port", http.StatusBadRequest)
 		return
 	}
-	if err := probePersonalProxy(r.Context(), address); err != nil {
+	probeErr := probePersonalProxy(r.Context(), address)
+	checkedAt := time.Now()
+	if err := s.store.RecordProxyCheck(address, checkedAt, probeErr == nil); err != nil {
+		http.Error(w, "unable to save proxy check result", http.StatusInternalServerError)
+		return
+	}
+	if probeErr != nil {
 		http.Error(w, "proxy could not reach YouTube; check its address, credentials and HTTPS access", http.StatusBadRequest)
 		return
 	}
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
-	proxies, err := s.store.PersonalProxies()
+	proxies, err := s.store.Proxies()
 	if err != nil {
 		http.Error(w, "unable to read personal proxies", http.StatusInternalServerError)
 		return
@@ -100,7 +107,7 @@ func (s *Server) addPersonalProxy(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.store.AddPersonalProxy(address); err != nil {
+	if err := s.store.AddProxy(address, checkedAt); err != nil {
 		http.Error(w, "unable to save personal proxy", http.StatusInternalServerError)
 		return
 	}
@@ -131,7 +138,7 @@ func (s *Server) deletePersonalProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
-	if _, err := s.store.PersonalProxy(id); err == sql.ErrNoRows {
+	if _, err := s.store.Proxy(id); err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return
 	} else if err != nil {
@@ -147,7 +154,7 @@ func (s *Server) deletePersonalProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "add another proxy or enable a usable route before removing the last personal proxy", http.StatusBadRequest)
 		return
 	}
-	deleted, err := s.store.DeletePersonalProxy(id)
+	deleted, err := s.store.DeleteProxy(id)
 	if err != nil {
 		http.Error(w, "unable to remove personal proxy", http.StatusInternalServerError)
 		return
@@ -172,7 +179,7 @@ func (s *Server) personalProxyAddress(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid proxy ID", http.StatusBadRequest)
 		return
 	}
-	address, err := s.store.PersonalProxy(id)
+	address, err := s.store.Proxy(id)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return

@@ -221,7 +221,7 @@ type pageData struct {
 	Connected                                 bool
 	Tracks                                    []store.Track
 	SettingsStrategy                          string
-	PersonalProxies                           []personalProxyView
+	PersonalProxies                           []proxyView
 	PublicProxyCount                          int
 	ProxyImport                               proxyImportState
 	SettingsSaved                             bool
@@ -271,7 +271,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		s.importMu.Lock()
 		data.ProxyImport = s.proxyImport
 		s.importMu.Unlock()
-		proxies, proxyErr := s.store.PersonalProxies()
+		proxies, proxyErr := s.store.Proxies()
 		if proxyErr != nil {
 			http.Error(w, "unable to read personal proxies", http.StatusInternalServerError)
 			return
@@ -281,7 +281,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				continue
 			}
-			data.PersonalProxies = append(data.PersonalProxies, personalProxyView{ID: proxy.ID, Host: parsed.Host, Masked: maskPersonalProxy(proxy.Address, parsed)})
+			data.PersonalProxies = append(data.PersonalProxies, proxyView{ID: proxy.ID, Host: parsed.Host, Masked: maskPersonalProxy(proxy.Address, parsed)})
 		}
 		data.SettingsSaved = r.URL.Query().Get("saved") == "1"
 	} else if source == "music" {
