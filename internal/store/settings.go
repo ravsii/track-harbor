@@ -4,8 +4,42 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 )
+
+const (
+	settingDownloadsStopped = "downloads_stopped"
+	settingDownloadStrategy = "download_strategy"
+	settingPublicProxy      = "public_proxy"
+)
+
+func (s *Store) Setting(name string) (string, error) {
+	var value string
+	err := s.db.QueryRow(`SELECT value FROM settings WHERE name=?`, name).Scan(&value)
+	return value, err
+}
+
+func (s *Store) SetSetting(name, value string) error {
+	_, err := s.db.Exec(`INSERT INTO settings(name, value) VALUES(?, ?) ON CONFLICT(name) DO UPDATE SET value=excluded.value`, name, value)
+	return err
+}
+
+func (s *Store) DownloadsStopped() (bool, error) {
+	value, err := s.Setting(settingDownloadsStopped)
+	if err != nil {
+		return false, err
+	}
+	stopped, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("invalid downloads_stopped setting")
+	}
+	return stopped, nil
+}
+
+func (s *Store) SetDownloadsStopped(stopped bool) error {
+	return s.SetSetting(settingDownloadsStopped, strconv.FormatBool(stopped))
+}
 
 type DownloadSettings struct {
 	Strategy      []string
@@ -16,12 +50,13 @@ type DownloadSettings struct {
 type Proxy struct {
 	ID            int64
 	Address       string
+	Type          string
 	LastCheckedAt time.Time
 	LastSuccessAt time.Time
 }
 
 func (s *Store) Proxies() ([]Proxy, error) {
-	rows, err := s.db.Query(`SELECT id, address, last_checked_at, last_success_at FROM proxy ORDER BY id`)
+	rows, err := s.db.Query(`SELECT id, address, type, last_checked_at, last_success_at FROM proxy ORDER BY id`)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +65,7 @@ func (s *Store) Proxies() ([]Proxy, error) {
 	for rows.Next() {
 		var proxy Proxy
 		var checkedAt, successAt int64
-		if err := rows.Scan(&proxy.ID, &proxy.Address, &checkedAt, &successAt); err != nil {
+		if err := rows.Scan(&proxy.ID, &proxy.Address, &proxy.Type, &checkedAt, &successAt); err != nil {
 			return nil, err
 		}
 		proxy.LastCheckedAt = time.Unix(checkedAt, 0).UTC()
@@ -79,8 +114,7 @@ func validateStrategy(strategy []string) error {
 
 // InitDownloadSettings imports legacy YAML values only when no settings have been saved.
 func (s *Store) InitDownloadSettings(defaults DownloadSettings) (DownloadSettings, error) {
-	var id int
-	err := s.db.QueryRow(`SELECT id FROM download_settings WHERE id=1`).Scan(&id)
+	_, err := s.Setting(settingDownloadStrategy)
 	if err == nil {
 		return s.DownloadSettings()
 	}
@@ -103,11 +137,14 @@ func (s *Store) InitDownloadSettings(defaults DownloadSettings) (DownloadSetting
 		return DownloadSettings{}, err
 	}
 	defer tx.Rollback()
-	result, err := tx.Exec(`INSERT OR IGNORE INTO download_settings(id, strategy, personal_proxy, public_proxy) VALUES(1, ?, '[]', ?)`, strategy, public)
+	result, err := tx.Exec(`INSERT INTO settings(name, value) VALUES(?, ?) ON CONFLICT(name) DO NOTHING`, settingDownloadStrategy, string(strategy))
 	if err != nil {
 		return DownloadSettings{}, err
 	}
 	if inserted, _ := result.RowsAffected(); inserted != 0 {
+		if _, err := tx.Exec(`INSERT INTO settings(name, value) VALUES(?, ?) ON CONFLICT(name) DO NOTHING`, settingPublicProxy, string(public)); err != nil {
+			return DownloadSettings{}, err
+		}
 		for _, address := range defaults.PersonalProxy {
 			if _, err := tx.Exec(`INSERT INTO proxy(address) VALUES(?)`, address); err != nil {
 				return DownloadSettings{}, err
@@ -122,7 +159,9 @@ func (s *Store) InitDownloadSettings(defaults DownloadSettings) (DownloadSetting
 
 func (s *Store) DownloadSettings() (DownloadSettings, error) {
 	var strategy, public string
-	err := s.db.QueryRow(`SELECT strategy, public_proxy FROM download_settings WHERE id=1`).Scan(&strategy, &public)
+	err := s.db.QueryRow(`SELECT strategy.value, public_proxy.value
+		FROM settings AS strategy CROSS JOIN settings AS public_proxy
+		WHERE strategy.name=? AND public_proxy.name=?`, settingDownloadStrategy, settingPublicProxy).Scan(&strategy, &public)
 	if err != nil {
 		return DownloadSettings{}, err
 	}
@@ -155,6 +194,7 @@ func (s *Store) SaveDownloadSettings(settings DownloadSettings) error {
 	if err != nil {
 		return err
 	}
-	_, err = s.db.Exec(`UPDATE download_settings SET strategy=?, public_proxy=? WHERE id=1`, strategy, public)
+	_, err = s.db.Exec(`INSERT INTO settings(name, value) VALUES(?, ?), (?, ?)
+		ON CONFLICT(name) DO UPDATE SET value=excluded.value`, settingDownloadStrategy, string(strategy), settingPublicProxy, string(public))
 	return err
 }

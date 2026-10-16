@@ -1,0 +1,1 @@
+ALTER TABLE proxy ADD COLUMN type TEXT NOT NULL DEFAULT 'personal';

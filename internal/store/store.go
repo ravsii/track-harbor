@@ -61,15 +61,6 @@ func Open(path string, directories ...string) (*Store, error) {
 }
 
 func (s *Store) Close() error { return s.db.Close() }
-func (s *Store) DownloadsStopped() (bool, error) {
-	var v bool
-	err := s.db.QueryRow(`SELECT stopped FROM download_control WHERE id=1`).Scan(&v)
-	return v, err
-}
-func (s *Store) SetDownloadsStopped(v bool) error {
-	_, err := s.db.Exec(`UPDATE download_control SET stopped=? WHERE id=1`, v)
-	return err
-}
 
 func validSource(source string) bool { return source == "spotify" || source == "vk" }
 func (s *Store) SaveCredentials(userID int64, source string, credentials any) error {
