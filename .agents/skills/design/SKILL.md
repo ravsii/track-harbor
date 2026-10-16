@@ -5,11 +5,12 @@ description: Use when creating, reviewing, or changing TrackHarbor UI elements, 
 
 # UI Design
 
-Use one consistent visual language across the application. These are reusable
-element rules, not page specifications. Reuse the values below instead of
-inventing sizes for each screen. This guide defines the target standard;
-existing differences must be addressed through reviewed, focused UI changes,
-not an automatic application-wide rewrite.
+Use one consistent visual language across the application. Reuse the elements
+and page-composition contracts below instead of inventing a style for each
+screen. A page varies its content and actions, not its typography, control
+geometry, spacing, or surface treatment. This guide defines the target standard;
+apply it through reviewed, focused UI changes, not an automatic application-wide
+rewrite. Updating this guide does not approve application changes.
 
 ## Workflow
 
@@ -17,11 +18,113 @@ not an automatic application-wide rewrite.
 2. Before changing appearance, create separate temporary HTML previews with
    dummy content. Show both themes, desktop and narrow layouts, and relevant
    hover, keyboard-focus, disabled, and error states to the user.
+   For a shared-design change, include every affected page using the same CSS
+   and element recipes. Put preview navigation and state selectors outside the
+   application frame; illustrate states in their real form or list, not in a
+   demonstration section added to the product page.
+   During incremental review, show only pages still under review. Retain approved
+   designs for implementation without repeatedly presenting them. Implement the
+   page the user selects; approval of several previews is not a request to roll
+   out every page at once unless they explicitly request the complete redesign.
 3. Apply the reviewed design without changing unrelated behavior. Delete
-   preview files and preview-only assets afterward; never commit them.
+   preview files and preview-only assets afterward; keep them available during
+   review, and never commit them.
 
 Documentation-only and appearance-neutral backend changes need no preview.
 Prioritize usable controls and content over decorative copy or illustrations.
+
+## Shared page composition
+
+The visual baseline is the existing centered header/player, quiet left
+navigation, and a single main content surface. Use this hierarchy on every
+authenticated page:
+
+1. **Page header:** one left-aligned `h1`, optional count beside it, and optional
+   page-level actions aligned to the trailing edge. Tracks has a heading too.
+   Counts use secondary `13px` text; they are not badges or uppercase captions.
+2. **Content sections:** stack full-width sections with a `24px` gap. Each has
+   an optional `h2`/trailing status row, then content after `18px`. Between
+   adjacent sections, use one `1px` border and `24px` top padding on the next
+   section. Do not add a separator immediately under the page header.
+3. **Section content:** use shared forms, action groups, feedback, and lists.
+   A form belongs to its section, not to an extra bordered card. The main
+   surface supplies the background, border, radius, and padding once.
+
+Use `24px` main-surface padding (`22px` at ≤ `700px`), within the shared outer
+page gutters. Content starts at the top and grows naturally; use document
+scrolling instead of a fixed-height scrolling track list. Keep the main column
+and section width consistent across pages. Small forms may use multiple columns
+with `12px` gaps; stack them at ≤ `700px`.
+
+No numbered overlines such as `01 / CONNECTION`, oversized collection headings,
+decorative footer slogans, nested panel borders, or source-specific font/color
+themes. Use short task labels: “Connection”, “Your tracks”, “Add a video”.
+Explain behavior only when it helps complete an action or recover from failure.
+
+### Page recipes
+
+These are content variations of the same composition, not separate designs.
+
+| Page | Composition |
+| --- | --- |
+| Tracks | Page header/count, shared media list with source, personal added date, duration and actions. |
+| Server tracks | Page header/count, the same media list with source and download readiness instead of a personal added date. Preserve shared-catalog semantics. |
+| Spotify / VK Music | Identical source-page structure: Connection heading/status; Sync library and Check connection actions; concise feedback; credentials disclosure when connected, visible form when disconnected; Your tracks section. Only the credential fields and authorization instructions differ. |
+| YouTube | Page header/count; Add a video form; Your videos list. Keep this page to adding videos and showing the user's collection. |
+| Downloads | Download control section with start/stop and status; My downloads; Shared download queue. Both lists show only unfinished downloads and use the shared media cell/status recipe. Queued, active, stopped and failed items remain visible; completed/downloaded items leave both lists and their counts. Preserve personal/shared boundaries and existing action permissions. |
+| Settings | Users, Public proxy sources, Personal proxies, in one vertical stack of equal sections. Reuse the same form/action/list recipes in all three. A user's name, Change password and Delete actions share one row; reveal the password editor below only on request. Personal proxies have a Ping action per row, a Ping all section action, and individual check results. |
+| Sign in | Centered surface, `380px` maximum width; brand/theme row, page heading, form and inline feedback. Use the same elements as inside the application, without the player/sidebar. |
+
+## Shared implementation contract
+
+### Canonical implementation
+
+| Location | Responsibility |
+| --- | --- |
+| `internal/web/assets/app.css` | Shared element geometry, typography, states, lists and navigation/player appearance. This is the only place to define these primitives. |
+| `internal/web/assets/theme.css` | Semantic palette and theme selection only. No page overrides or duplicate component rules. |
+| `internal/web/tailwind.css` | Semantic utility aliases and explicit template/script sources; generated output is `assets/tailwind.css`. |
+| `internal/web/view_components.go` | `media-cell`, `source-label`, `track-status`, `track-list`, and the download-row template. Browser-created download rows clone the same markup. |
+| `internal/web/views.go`, `internal/web/view_settings.go` | Page composition and existing behavior hooks. |
+| `internal/web/assets/login.css` | Sign-in composition only; reuse the main app's elements. |
+| `internal/web/assets/ui.js` | Navigation disclosure, password-editor disclosure and HTMX form feedback. Theme behavior remains in `theme-toggle.js`. |
+
+**For every new element:** find its recipe here, reuse the class/template below,
+then compose it in the page. When a genuinely new primitive is needed, define
+it once in the canonical files, document its recipe here, and review it in
+both themes and narrow layouts. Do not copy a page's controls into a new set of
+source-specific styles. Add new Go template/script files to Tailwind's explicit
+`@source` list and regenerate assets with `npm run assets:build`.
+
+| Element | Reuse |
+| --- | --- |
+| Content surface and sections | `.surface.content`, `.page-heading`, `.page-identity`, `.page-count`, `.content-section`, `.section-heading` |
+| Forms | `.form`, `.field`, `.actions`; responsive field columns use Tailwind |
+| Actions | `.button`, `.button.primary`, `.button.danger`, `.icon-button`; `.responsive-action` with `.action-label` for user/proxy actions |
+| Messages | `.helper`, `.meta`, `.feedback`; `data-error="true"` and `role="alert"` for errors |
+| Status | `.status` with `data-state="ready|pending|failed"`; track statuses use the `track-status` template and `data-stage` |
+| Media | `track-list`/`media-cell` templates; `.media-list` variants `.personal`, `.catalog`, `.queue` supply columns, not new row styles |
+| Utility rows | `.user-list`, `.user-item`, `.user-summary`, `.password-editor`; `.proxy-list`, `.proxy-row`, `.proxy-identity` |
+| Empty/disclosure | `.empty`, `.disclosure`; keep real titles and recovery text inside these shared elements |
+
+Preserve JS/HTMX IDs and `data-*` hooks when composing shared elements. User
+forms use `data-feedback` to target a shared `.feedback` region. Include native
+pending/disabled behavior and accessible labels in the first implementation,
+not in a later page-specific correction.
+
+Define each visual primitive once: page header, section header, field, primary/
+secondary/icon button, action group, disclosure, media cell/row, status, feedback
+and empty state. Reuse shared template partials and CSS classes across pages.
+Express layout and responsive grid placement with Tailwind; express element
+appearance with the shared recipes. Source-specific selectors may arrange
+content but must not redefine the size, font, palette or radius of a primitive.
+
+When standardizing an element, replace its conflicting legacy rules instead
+of appending a higher-specificity override for each page. In particular, do not
+use broad rules such as `#content .grid`, `#content .panel button` or global
+`form label` rules to impose a second density system. Keep one canonical token
+for each semantic role; errors and selected/hover surfaces must not acquire
+page-specific color aliases. Keep Tailwind Preflight disabled.
 
 ## Typography
 
@@ -127,6 +230,21 @@ and native `disabled` where supported. Do not communicate unavailability
 through color alone. **Pending action:** show concise status and prevent
 duplicate submissions without moving surrounding elements.
 
+**Action hierarchy:** use one primary action per operation group. Secondary
+actions use the same height and padding. Destructive actions use a secondary
+button with semantic error text and an explicit verb; retain existing
+confirmation behavior. Icon-only actions need an accessible name and tooltip.
+Place feedback immediately below the action group, using `13px` sentence-case
+text with normal letter spacing, never uppercase status captions.
+
+**Disclosure:** use a native `details`/`summary` for optional credentials.
+The summary has a `40px` minimum hit area, `13px` text and an
+`18px` Hugeicons indicator; use the standard focus ring. Its expanded form
+uses the normal field geometry and `12px` gaps. Required first-time setup stays
+visible rather than hidden inside a disclosure. In a user row, use the shared
+password action button with `aria-controls` and `aria-expanded` to reveal the
+`.password-editor` below the row; the name and action group stay together.
+
 **Surface:** panel background, shared surface geometry, no gradient or shadow.
 **Centered two-column layout:** cap the shared frame at `1280px`, center it with
 the standard page gutters, and use a `232px` navigation column with a `24px`
@@ -147,9 +265,58 @@ in templates; do not duplicate these layout declarations in component CSS.
 Navigation rows use `40px` minimum height, `8px 10px` padding, `10px` gaps,
 `18px` icons, and `6px` radii. Use selected background for hover and selection;
 keep count metadata at `12px`, aligned to the trailing edge.
-**List row:** shared row spacing, subtle border separator; hover uses selected
-background. Keep column alignment consistent. Wrap or scroll content rather
-than shrinking text or controls to fit.
+**Media list:** one shared media cell: `28px` cover/placeholder, `10px` gap,
+title at body size/weight `600`, artist underneath at metadata size. Use the
+same cell on Tracks, Server tracks, every source, and Downloads. Allow long
+titles to wrap. Row height follows content, with `8px 10px` padding and `10px`
+column gaps; no fixed row height or page-specific compact density.
+
+List headers use sentence-case `12px` secondary text. Define each list's grid
+once for both its header and rows. Shared desktop column widths: playback and
+download actions `32px`, source `96px`, personal added date `152px`, status
+`160px`, duration `44px`; the media column takes remaining space. Omit columns
+that do not apply to that page rather than inserting empty placeholder columns.
+Queue rows have the media cell, source and a flexible status column with a
+`160px` minimum; they do not gain playback or membership actions implicitly.
+
+Use subtle horizontal separators, selected background on hover and for the
+current track, and the same `32px` action buttons everywhere. Playback/download
+controls stay discoverable on touch and keyboard; unavailable actions use the
+normal disabled treatment. Source icons and labels use secondary text, not a
+different brand-colored badge for every provider. Dates and durations use
+tabular numerals. Retain all displayed data when adapting the layout.
+
+When the list's available width is ≤ `700px`, use playback / media / download
+columns, with metadata and status wrapping below the media cell. Use a container
+query so this also works beside the desktop sidebar on intermediate screens.
+Queue rows stack media, source and status. Hide
+the redundant desktop header; retain labels where a value would be ambiguous.
+Decorative covers may be omitted in narrow playback rows to preserve title
+space; their dimensions stay unchanged wherever shown. Avoid a fixed table
+minimum width that forces horizontal scrolling for routine music browsing.
+
+**Utility list:** user and proxy rows share the same padding, separators and
+action geometry. Let addresses and usernames wrap. Proxy actions may wrap below
+the identity rather than squeezing fields or abbreviating action labels.
+Keep the user name and its action group in one horizontal row. When space is
+limited, show password/delete actions as shared icon buttons with explicit
+accessible names and tooltips. Keep an expanded password editor separate from
+the summary row. Proxy Ping checks YouTube reachability through that specific
+proxy; Ping all reports a result for each personal proxy, including failures.
+Place the result alongside its proxy identity and disable duplicate checks
+while pending. Preview results must be clearly identified as demonstrations.
+
+**Status:** use `13px` secondary text plus an `18px` icon and `6px` gap. Ready/
+connected states may use primary text; errors use the shared error token. Use
+literal labels such as “Ready”, “Queued”, “Downloading”, “Stopped”, “Failed”.
+Progress is a `3px` accent track below the status text, with a numeric value and
+an accessible label. A status is not a primary button or a decorative pill.
+
+**Empty state:** place a left-aligned short title and, when useful, a recovery
+sentence in the list's normal position. Use body text and helper sizes, a
+`5px` text gap and `24px 10px` padding. Offer only an existing relevant action.
+Do not replace the page with a large illustration, dashed card or marketing
+copy. Preserve the page heading and applicable forms; empty is not an error.
 
 **Helper text and errors:** use the label text size; helpers use secondary
 text, errors use the semantic error color and explain how to recover. Associate
@@ -192,13 +359,24 @@ not prevent switching for the current page. Keep open tabs consistent.
 
 Use the same element dimensions on desktop and narrow screens. At ≤ `700px`,
 apply the padding values above; wrap action groups and stack form columns.
+The navigation may collapse into a native disclosure showing the current page,
+above the content. Keep one navigation tree, expand it on desktop, and retain
+access to every route and account action when expanded. The fixed player must
+reserve its measured wrapped height so it cannot cover navigation or content.
 No overlapping controls, clipped content, or fixed heights that hide errors.
 Keep actions available on touch and keyboard, not only on hover. All text,
 surfaces, borders, icons, and interactive states must work in both themes.
 
 ## Consistency check
 
-Before delivery, compare every changed element against these tables, check
-both themes and narrow layouts, and remove preview artifacts. Reuse existing
-components instead of duplicating markup or theme logic. Do not change the
-palette or enable Tailwind Preflight as part of an unrelated UI change.
+Before delivery, compare every changed element against these tables and the
+same element on sibling pages. For a cross-page redesign, review Tracks,
+Server tracks, Spotify, VK Music, YouTube, Downloads, all Settings sections,
+and Sign in in both themes at desktop and narrow widths. Include connected/
+disconnected, empty/populated, pending, disabled, error and stopped states
+where relevant. Check long titles/addresses, focus visibility and wrapped
+actions. Do not claim browser review when only source was inspected.
+
+Keep previews available until review and implementation are complete, then
+remove them. Reuse existing components instead of duplicating markup or theme
+logic. Do not change the palette as part of an unrelated UI change.

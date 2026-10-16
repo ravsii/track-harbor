@@ -12,8 +12,59 @@ import (
 )
 
 type proxyView struct {
-	ID           int64
 	Host, Masked string
+	CheckedAt    string
+	ID           int64
+}
+
+func (s *Server) pingPersonalProxy(w http.ResponseWriter, r *http.Request) {
+	id, err := proxyID(r)
+	if err != nil {
+		http.Error(w, "invalid proxy ID", http.StatusBadRequest)
+		return
+	}
+	proxy, err := s.store.Proxy(id)
+	if err == sql.ErrNoRows || (err == nil && proxy.Type != "personal") {
+		http.NotFound(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "unable to read personal proxy", http.StatusInternalServerError)
+		return
+	}
+	s.mu.Lock()
+	if s.proxyPings[id] {
+		s.mu.Unlock()
+		http.Error(w, "this proxy is already being checked; try again shortly", http.StatusConflict)
+		return
+	}
+	if s.proxyPings == nil {
+		s.proxyPings = make(map[int64]bool)
+	}
+	s.proxyPings[id] = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		delete(s.proxyPings, id)
+		s.mu.Unlock()
+	}()
+
+	reachable := probePersonalProxy(r.Context(), proxy.Address) == nil
+	if r.Context().Err() != nil {
+		return
+	}
+	checkedAt := time.Now()
+	if err = s.store.RecordProxyCheck(proxy.Address, checkedAt, reachable); err != nil {
+		http.Error(w, "unable to save proxy check result", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	if err = json.NewEncoder(w).Encode(struct {
+		Reachable bool  `json:"reachable"`
+		CheckedAt int64 `json:"checked_at"`
+	}{reachable, checkedAt.Unix()}); err != nil {
+		s.logger.Error("write personal proxy check result failed")
+	}
 }
 
 func maskPersonalProxy(address string, parsed *url.URL) string {

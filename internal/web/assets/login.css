@@ -1,25 +1,5 @@
-/* Approved login card B. Keep these overrides scoped to the login page. */
-.login-page { font: 15px/1.5 system-ui, sans-serif; }
-.login-layout { display: flex; align-items: center; justify-content: center; min-height: 100svh; max-width: none; padding: 40px 24px; margin: 0; }
-.login-card { width: 100%; max-width: 380px; padding: 24px; border: 1px solid var(--edge); border-radius: 10px; background: var(--panel); }
-.login-header { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.login-brand { display: flex; align-items: center; gap: 10px; font-size: 21px; font-weight: 650; letter-spacing: -.6px; }
-.login-mark { display: flex; align-items: center; justify-content: center; flex: none; gap: 3px; width: 28px; height: 28px; border: 1px solid var(--accent); border-radius: 7px; }
-.login-mark i { width: 3px; height: 10px; border-radius: 2px; background: var(--accent); }
-.login-mark i:nth-child(2) { height: 17px; }
-.login-card .theme-toggle { display: grid; place-items: center; flex: none; width: 32px; height: 32px; margin-left: auto; padding: 0; border: 1px solid var(--edge); border-radius: 6px; background: var(--panel); color: var(--muted); cursor: pointer; }
-.login-card .theme-toggle .icon { width: 18px; height: 18px; }
-.login-card .theme-toggle:hover { background: var(--selected); color: var(--ink); }
-.login-card h1 { margin: 22px 0 18px; font-size: 25px; font-weight: 600; line-height: 1.2; letter-spacing: -.7px; }
-.login-card form { display: grid; gap: 12px; margin: 0; }
-.login-card label { display: grid; gap: 5px; color: var(--muted); font-size: 13px; font-weight: 400; letter-spacing: normal; }
-.login-card input { width: 100%; min-width: 0; min-height: 40px; padding: 8px 10px; border: 1px solid var(--edge); border-radius: 6px; background: var(--bg); color: var(--ink); }
-.login-card input:hover { border-color: var(--muted); }
-.login-submit { min-height: 40px; margin-top: 4px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: var(--accent-ink); font-weight: 600; cursor: pointer; }
-.login-submit:hover { filter: brightness(.93); }
-.login-card input:focus-visible, .login-card button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.login-error { --login-error: light-dark(#a12622, #ffb4ab); margin: 0 0 14px; padding: 6px 10px; border-left: 3px solid var(--login-error); color: var(--login-error); font-size: 13px; }
-@media (max-width: 700px) {
-  .login-layout { padding: 32px 20px; }
-  .login-card { padding: 22px; }
-}
+/* Composition only; fields, buttons, branding and feedback use app.css. */
+.login-layout { display: grid; place-items: center; min-height: 100svh; padding: 24px; }
+.login-card { display: grid; gap: 24px; width: 100%; max-width: 380px; }
+.login-card .brand { white-space: normal; }
+@media (max-width: 700px) { .login-layout { padding: 22px 20px; } }

@@ -30,11 +30,7 @@
   };
   document.addEventListener('htmx:afterSwap', status);
   document.addEventListener('htmx:responseError', event => {
-    if (event.detail.xhr.status === 401) { expire(); return; }
-    const form = event.detail.elt;
-    if (!form?.closest('.users-panel')) return;
-    const feedback = document.getElementById('users-feedback');
-    if (feedback) feedback.textContent = event.detail.xhr.responseText || 'Could not update user.';
+    if (event.detail.xhr.status === 401) expire();
   });
   document.addEventListener('submit', event => {
     if (event.target.id === 'logout-form') document.dispatchEvent(new Event('auth:expired'));

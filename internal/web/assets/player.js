@@ -25,6 +25,7 @@
       const button = row.querySelector('.play-track');
       button.querySelector('use').setAttribute('href', `/assets/icons.svg#hg-${playing ? 'pause' : 'play'}`);
       button.setAttribute('aria-label', `${playing ? 'Pause' : 'Play'} ${row.dataset.title}`);
+      button.title = button.getAttribute('aria-label');
       if (active) row.setAttribute('aria-current', 'true');
       else row.removeAttribute('aria-current');
     });
@@ -89,10 +90,12 @@
     $('player-volume').value = audio.muted ? 0 : Math.round(audio.volume * 100);
   }
   function applyTracks(items) {
+    const selectedFromQueue = tracks.some(track => track.id === selected?.id);
     tracks = items;
     const updated = tracks.find(track => track.id === selected?.id);
     if (updated) select(updated); // Metadata refreshes never reset the audio source.
-    else {
+    // Explicit catalog playback is independent of the personal automatic queue.
+    else if (!selected || !started || selectedFromQueue) {
       audio.pause();
       started = false;
       selected = undefined;

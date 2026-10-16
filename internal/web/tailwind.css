@@ -1,5 +1,5 @@
-/* Preserve existing component styles and the Go-only build while moving markup
-   to Tailwind utilities. Preflight is intentionally excluded. */
+/* Shared elements live in app.css; Tailwind composes page layouts.
+   Preflight is intentionally excluded. */
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "./assets/app.css" layer(components);
@@ -7,8 +7,11 @@
 @import "tailwindcss/utilities.css" layer(utilities) source(none);
 
 @source "./views.go";
+@source "./view_components.go";
+@source "./view_settings.go";
 @source "./auth.go";
 @source "./assets/auth.js";
+@source "./assets/ui.js";
 @source "./assets/download.js";
 @source "./assets/player.js";
 @source "./assets/settings.js";
@@ -26,4 +29,5 @@
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);
   --color-selected: var(--selected);
+  --color-error: var(--error);
 }

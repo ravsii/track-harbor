@@ -403,16 +403,18 @@ func (s *Server) downloadStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	personal := make([]item, 0, len(mine))
+	queuedByID := make(map[int64]item, len(items))
+	for i := range items {
+		queuedByID[items[i].ID] = items[i]
+	}
 	for _, t := range mine {
 		stage, playable := "waiting", false
 		if info, e := os.Stat(t.FilePath); e == nil && info.Mode().IsRegular() && info.Size() > 0 {
 			stage, playable = "downloaded", true
 		}
-		for _, queued := range items {
-			if queued.ID == t.ID {
-				stage = queued.Stage
-				break
-			}
+		if queued, ok := queuedByID[t.ID]; ok && !playable {
+			personal = append(personal, queued)
+			continue
 		}
 		personal = append(personal, item{ID: t.ID, SourceID: t.SourceID, Cover: coverURL(t.CoverURL), Playable: playable, Source: t.Source, Artist: t.Artist, Title: t.Title, Stage: stage})
 	}

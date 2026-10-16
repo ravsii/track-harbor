@@ -130,24 +130,24 @@ var loginTemplate = template.Must(template.New("login").Parse(`<!doctype html>
   <link rel="stylesheet" href="/assets/login.css">
   <script src="/assets/theme.js"></script>
 </head>
-<body class="login-page">
+<body>
 <main class="login-layout">
-  <section class="login-card" aria-labelledby="login-title">
-    <div class="login-header">
-      <div class="login-brand"><span class="login-mark" aria-hidden="true"><i></i><i></i><i></i></span>TrackHarbor</div>
-      <button type="button" id="theme-choice" class="theme-toggle" aria-label="Change color theme">{{template "icon" "sun-01"}}</button>
+  <section class="surface login-card" aria-labelledby="login-title">
+    <div class="section-heading">
+      <span class="brand">{{template "brand-mark"}}<strong>TrackHarbor</strong></span>
+      <button type="button" id="theme-choice" class="icon-button" aria-label="Change color theme">{{template "icon" "sun-01"}}</button>
     </div>
     <h1 id="login-title">Sign in</h1>
-    {{if .}}<p class="login-error" role="alert">{{.}}</p>{{end}}
-    <form method="post" action="/login">
-      <label for="login-username">Username<input id="login-username" name="username" autocomplete="username" maxlength="64" placeholder="Username" required autofocus></label>
-      <label for="login-password">Password<input id="login-password" type="password" name="password" autocomplete="current-password" placeholder="Password" required></label>
-      <button class="login-submit" type="submit">Sign in</button>
+    <form class="form" method="post" action="/login">
+      {{if .}}<p class="feedback" data-error="true" id="login-feedback" role="alert">{{.}}</p>{{end}}
+      <label class="field" for="login-username">Username<input id="login-username" name="username" autocomplete="username" maxlength="64" placeholder="Username" required autofocus{{if .}} aria-describedby="login-feedback"{{end}}></label>
+      <label class="field" for="login-password">Password<input id="login-password" type="password" name="password" autocomplete="current-password" placeholder="Password" required{{if .}} aria-describedby="login-feedback"{{end}}></label>
+      <button class="button primary" type="submit">Sign in</button>
     </form>
   </section>
 </main>
 </body>
-</html>` + iconTemplate))
+</html>` + iconTemplate + brandMarkTemplate))
 
 func (s *Server) loginPage(w http.ResponseWriter, r *http.Request) { s.renderLogin(w, 200, "") }
 func (s *Server) renderLogin(w http.ResponseWriter, status int, message string) {

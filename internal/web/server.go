@@ -38,6 +38,7 @@ type Server struct {
 	auth        *authentication
 	status      map[string]string
 	pingStatus  map[string]string
+	proxyPings  map[int64]bool
 	downloads   *downloadJob
 }
 
@@ -91,6 +92,7 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("GET /settings/public/import/status", s.publicProxyImportStatus)
 	mux.HandleFunc("POST /settings/personal", s.addPersonalProxy)
 	mux.HandleFunc("POST /settings/personal/{id}/delete", s.deletePersonalProxy)
+	mux.HandleFunc("POST /settings/personal/{id}/ping", s.pingPersonalProxy)
 	mux.HandleFunc("GET /settings/personal/{id}/address", s.personalProxyAddress)
 	mux.HandleFunc("GET /audio", s.playAudio)
 	mux.HandleFunc("GET /audio/tracks", s.playableTracks)
@@ -289,7 +291,11 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				continue
 			}
-			data.PersonalProxies = append(data.PersonalProxies, proxyView{ID: proxy.ID, Host: parsed.Host, Masked: maskPersonalProxy(proxy.Address, parsed)})
+			view := proxyView{ID: proxy.ID, Host: parsed.Host, Masked: maskPersonalProxy(proxy.Address, parsed)}
+			if proxy.LastCheckedAt.Unix() > 0 {
+				view.CheckedAt = proxy.LastCheckedAt.Format("02 Jan 2006, 15:04 UTC")
+			}
+			data.PersonalProxies = append(data.PersonalProxies, view)
 		}
 		data.SourcesSaved = r.URL.Query().Get("sources_saved") == "1"
 	} else if source == "music" {
