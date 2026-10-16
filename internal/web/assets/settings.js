@@ -14,6 +14,7 @@
       status.textContent = state.message;
       status.dataset.running = state.running;
       status.dataset.error = 'false';
+      status.setAttribute('role', 'status');
       const button = document.querySelector('#public-proxy-import-form button');
       if (button) button.disabled = state.running;
       const count = document.getElementById('public-proxy-count');
@@ -25,6 +26,7 @@
     } catch (_) {
       status.textContent = 'Could not check import status. Reopen Settings to retry.';
       status.dataset.error = 'true';
+      status.setAttribute('role', 'alert');
       clearInterval(importTimer);
       importTimer = undefined;
     }
@@ -41,12 +43,13 @@
     const form = event.target;
     if (form.id === 'public-proxy-import-form') {
       event.preventDefault();
-      if (!window.confirm('Import and check public proxies? Matching host:port entries that fail the check will be removed.')) return;
+      if (!window.confirm('Download the saved source files and check public proxies? Proxies that fail the check will stay saved.')) return;
       const button = form.querySelector('button[type="submit"]');
       const status = document.getElementById('public-proxy-import-status');
       button.disabled = true;
       status.textContent = 'Starting public proxy import…';
       status.dataset.error = 'false';
+      status.setAttribute('role', 'status');
       try {
         const response = await fetch(form.action, {
           method: 'POST',
@@ -56,6 +59,7 @@
         if (!response.ok) {
           status.textContent = (await response.text()).trim() || 'Could not start public proxy import.';
           status.dataset.error = 'true';
+          status.setAttribute('role', 'alert');
           button.disabled = false;
           return;
         }
@@ -64,19 +68,23 @@
       } catch (_) {
         status.textContent = 'Could not start public proxy import. Try again.';
         status.dataset.error = 'true';
+        status.setAttribute('role', 'alert');
         button.disabled = false;
       }
       return;
     }
-    if (form.id !== 'settings-form' && form.id !== 'personal-proxy-form' && !form.classList.contains('proxy-delete')) return;
+    if (form.id !== 'proxy-sources-form' && form.id !== 'personal-proxy-form' && !form.classList.contains('proxy-delete')) return;
     event.preventDefault();
     const removing = form.classList.contains('proxy-delete');
     if (removing && !window.confirm(`Remove proxy ${form.closest('[data-proxy-id]').dataset.proxyHost}?`)) return;
-    const feedback = document.getElementById(form.id === 'settings-form' ? 'settings-feedback' : 'personal-proxy-feedback');
+    const savingSources = form.id === 'proxy-sources-form';
+    const feedback = document.getElementById(savingSources ? 'proxy-sources-feedback' : 'personal-proxy-feedback');
     const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
-    feedback.textContent = form.id === 'personal-proxy-form' ? 'Checking YouTube through proxy…' : 'Saving settings…';
+    feedback.textContent = form.id === 'personal-proxy-form' ? 'Checking YouTube through proxy…' : savingSources ? 'Saving sources…' : 'Removing proxy…';
     feedback.dataset.error = 'false';
+    feedback.setAttribute('role', 'status');
+    if (savingSources) form.elements.proxy_sources.removeAttribute('aria-invalid');
     try {
       const data = new URLSearchParams(new FormData(form));
       if (removing) data.set('confirm', 'yes');
@@ -88,12 +96,15 @@
       if (!response.ok) {
         feedback.textContent = (await response.text()).trim() || 'Could not update settings.';
         feedback.dataset.error = 'true';
+        feedback.setAttribute('role', 'alert');
+        if (savingSources && response.status === 400) form.elements.proxy_sources.setAttribute('aria-invalid', 'true');
         return;
       }
-      htmx.ajax('GET', '/?source=settings&saved=1', {target: '#content', select: '#content', swap: 'outerHTML'});
+      htmx.ajax('GET', savingSources ? '/?source=settings&sources_saved=1' : '/?source=settings', {target: '#content', select: '#content', swap: 'outerHTML'});
     } catch (_) {
       feedback.textContent = 'Could not save settings. Try again.';
       feedback.dataset.error = 'true';
+      feedback.setAttribute('role', 'alert');
     } finally {
       if (button.isConnected) button.disabled = false;
     }

@@ -184,7 +184,7 @@ func (d *downloadJob) runQueue(ctx context.Context) {
 func (d *downloadJob) runBatch(ctx context.Context, tracks []store.Track) {
 	d.mu.Lock()
 	routes := &download.Routes{
-		Order: append([]string(nil), d.config.Strategy...), Personal: append([]string(nil), d.config.PersonalProxy...), Public: append([]string(nil), d.config.PublicProxy...),
+		Personal: append([]string(nil), d.config.PersonalProxy...), Public: append([]string(nil), d.config.PublicProxy...),
 	}
 	d.mu.Unlock()
 	process := func(t store.Track) {

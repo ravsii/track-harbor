@@ -34,11 +34,11 @@ type Event struct {
 }
 
 type Routes struct {
-	Order, Personal, Public []string
-	mu                      sync.Mutex
-	next                    int
-	cooling                 map[string]time.Time
-	nextDownload            time.Time
+	Personal, Public []string
+	mu               sync.Mutex
+	next             int
+	cooling          map[string]time.Time
+	nextDownload     time.Time
 }
 
 var videoID = regexp.MustCompile(`^[A-Za-z0-9_-]{11}$`)
@@ -48,19 +48,10 @@ var vkAudioID = regexp.MustCompile(`^-?[0-9]+_[0-9]+$`)
 func (r *Routes) candidates() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	var addresses []string
-	for _, name := range r.Order {
-		switch name {
-		case "direct":
-			addresses = append(addresses, "")
-		case "personal_proxy":
-			addresses = append(addresses, r.Personal...)
-		case "random_proxy":
-			if len(r.Public) != 0 {
-				addresses = append(addresses, r.Public[r.next])
-				r.next = (r.next + 1) % len(r.Public)
-			}
-		}
+	addresses := append([]string{""}, r.Personal...)
+	if len(r.Public) != 0 {
+		addresses = append(addresses, r.Public[r.next])
+		r.next = (r.next + 1) % len(r.Public)
 	}
 	return addresses
 }
@@ -153,7 +144,7 @@ func Save(ctx context.Context, t Track, directory string, routes *Routes, event 
 		event = func(Event) {}
 	}
 	if routes == nil {
-		routes = &Routes{Order: []string{"direct"}}
+		routes = &Routes{}
 	}
 	destination, err := FilePath(directory, t.Source, t.SourceID)
 	if err != nil {
@@ -257,7 +248,7 @@ func Save(ctx context.Context, t Track, directory string, routes *Routes, event 
 	var image []byte
 	artworkRoutes := routes
 	if t.Source == "vk" {
-		artworkRoutes = &Routes{Order: []string{"direct"}}
+		artworkRoutes = &Routes{}
 	}
 	if t.CoverURL != "" {
 		image, _ = artwork(ctx, t.CoverURL, artworkRoutes, event)

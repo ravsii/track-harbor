@@ -36,6 +36,15 @@ func (s *Server) importPublicProxies(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "confirm public proxy import before submitting", http.StatusBadRequest)
 		return
 	}
+	rawSources, err := s.store.Setting("proxy_sources")
+	if err != nil {
+		http.Error(w, "unable to read proxy sources", http.StatusInternalServerError)
+		return
+	}
+	if len(settingsLines(rawSources)) == 0 {
+		http.Error(w, "save at least one source URL before importing", http.StatusBadRequest)
+		return
+	}
 	s.importMu.Lock()
 	if s.proxyImport.Running {
 		s.importMu.Unlock()
@@ -57,9 +66,9 @@ func (s *Server) publicProxyImportStatus(w http.ResponseWriter, r *http.Request)
 	s.importMu.Lock()
 	state := s.proxyImport
 	s.importMu.Unlock()
-	settings, err := s.store.DownloadSettings()
+	count, err := s.store.ProxyCount("public")
 	if err != nil {
-		http.Error(w, "unable to read download settings", http.StatusInternalServerError)
+		http.Error(w, "unable to count public proxies", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -67,129 +76,104 @@ func (s *Server) publicProxyImportStatus(w http.ResponseWriter, r *http.Request)
 		Running bool   `json:"running"`
 		Message string `json:"message"`
 		Count   int    `json:"count"`
-	}{state.Running, state.Message, len(settings.PublicProxy)}); err != nil {
+	}{state.Running, state.Message, count}); err != nil {
 		s.logger.Error("write public proxy import status failed")
 	}
 }
 
 type proxyProbeResult struct {
-	key     string
-	address string // Empty when every protocol for this host:port failed.
+	address   string
+	checkedAt time.Time
+	success   bool
 }
 
 func (s *Server) runPublicProxyImport() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	groups, sources, err := fetchPublicProxies(ctx)
+	rawSources, err := s.store.Setting("proxy_sources")
+	if err != nil {
+		s.setProxyImport("Could not read proxy sources. Try again later.", false)
+		s.logger.Error("read proxy sources failed")
+		return
+	}
+	addresses, sources, err := fetchPublicProxies(ctx, settingsLines(rawSources))
 	if err != nil {
 		s.setProxyImport("Could not load public proxy lists. Saved proxies were kept; try again later.", false)
 		s.logger.Warn("public proxy sources unavailable")
 		return
 	}
-	s.setProxyImport(fmt.Sprintf("Checking 0/%d public proxies against YouTube…", len(groups)), true)
-	jobs := make(chan publicProxyGroup)
+	added, err := s.store.AddPublicProxies(addresses)
+	if err != nil {
+		s.setProxyImport("Could not save discovered proxies. Try again later.", false)
+		s.logger.Error("save discovered public proxies failed")
+		return
+	}
+	s.setProxyImport(fmt.Sprintf("Saved proxies. Checking 0/%d against YouTube…", len(addresses)), true)
+	jobs := make(chan string)
 	results := make(chan proxyProbeResult, publicProbeWorkers)
 	var workers sync.WaitGroup
-	for range min(publicProbeWorkers, len(groups)) {
+	for range min(publicProbeWorkers, len(addresses)) {
 		workers.Go(func() {
-			for group := range jobs {
-				result := proxyProbeResult{key: group.key}
-				for _, address := range group.candidates {
-					if ctx.Err() != nil {
-						return
-					}
-					if probeYouTube(ctx, address, time.Second) == nil {
-						result.address = address
-						break
-					}
-				}
-				select {
-				case results <- result:
-				case <-ctx.Done():
+			for address := range jobs {
+				if ctx.Err() != nil {
 					return
 				}
+				success := probeYouTube(ctx, address, 5*time.Second) == nil
+				results <- proxyProbeResult{address: address, checkedAt: time.Now(), success: success}
 			}
 		})
 	}
 	go func() {
 		defer close(jobs)
-		for _, group := range groups {
+		for _, address := range addresses {
 			select {
-			case jobs <- group:
+			case jobs <- address:
 			case <-ctx.Done():
 				return
 			}
 		}
 	}()
 	go func() { workers.Wait(); close(results) }()
-	checked := make(map[string]string, len(groups))
+	checked, successful := 0, 0
+	saveFailed := false
 	for result := range results {
-		checked[result.key] = result.address
-		if len(checked)%250 == 0 || len(checked) == len(groups) {
-			s.setProxyImport(fmt.Sprintf("Checking %d/%d public proxies against YouTube…", len(checked), len(groups)), true)
+		if saveFailed {
+			continue
 		}
-	}
-	if ctx.Err() != nil {
-		s.setProxyImport("Public proxy check timed out. Saved proxies were kept; try again later.", false)
-		s.logger.Warn("public proxy import timed out")
-		return
-	}
-	if len(checked) == 0 {
-		s.setProxyImport("No public proxies could be checked. Saved proxies were kept.", false)
-		return
+		if err := s.store.RecordProxyCheck(result.address, result.checkedAt, result.success); err != nil {
+			saveFailed = true
+			cancel()
+			continue
+		}
+		checked++
+		if result.success {
+			successful++
+		}
+		if checked%250 == 0 || checked == len(addresses) {
+			s.setProxyImport(fmt.Sprintf("Checking %d/%d public proxies against YouTube…", checked, len(addresses)), true)
+		}
 	}
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 	current, err := s.store.DownloadSettings()
 	if err != nil {
-		s.setProxyImport("Could not read saved public proxies. Try again later.", false)
-		s.logger.Error("read public proxies for import failed")
-		return
-	}
-	updated := make([]string, 0, len(current.PublicProxy)+len(groups))
-	seen := make(map[string]bool)
-	replaced, removed, added := 0, 0, 0
-	for _, address := range current.PublicProxy {
-		key := proxyHostPort(address)
-		if key == "" {
-			key = address
-		}
-		if seen[key] {
-			continue
-		}
-		seen[key] = true
-		if replacement, found := checked[key]; found {
-			if replacement == "" {
-				removed++
-				continue
-			}
-			updated = append(updated, replacement)
-			replaced++
-		} else {
-			updated = append(updated, address)
-		}
-	}
-	for _, group := range groups {
-		if seen[group.key] || checked[group.key] == "" {
-			continue
-		}
-		seen[group.key] = true
-		updated = append(updated, checked[group.key])
-		added++
-	}
-	if !settingsUsable(current.Strategy, current.PersonalProxy, updated) {
-		s.setProxyImport("Import would leave no usable download route. Saved proxies were kept.", false)
-		return
-	}
-	current.PublicProxy = updated
-	if err := s.store.SaveDownloadSettings(current); err != nil {
-		s.setProxyImport("Could not save imported proxies. Previous settings were kept.", false)
-		s.logger.Error("save imported public proxies failed")
+		s.setProxyImport("Proxies saved, but could not refresh download routes. Restart the server to reload them.", false)
+		s.logger.Error("refresh imported public proxies failed")
 		return
 	}
 	s.downloads.mu.Lock()
-	s.downloads.config.PublicProxy = append([]string(nil), updated...)
+	s.downloads.config.PublicProxy = append([]string(nil), current.PublicProxy...)
 	s.downloads.mu.Unlock()
-	s.setProxyImport(fmt.Sprintf("Import finished: %d added, %d replaced, %d removed; %d saved.", added, replaced, removed, len(updated)), false)
-	s.logger.Info("public proxy import finished", zap.Int("sources", sources), zap.Int("checked", len(checked)), zap.Int("added", added), zap.Int("replaced", replaced), zap.Int("removed", removed))
+	if saveFailed {
+		s.setProxyImport("Proxies saved, but some check results could not be saved. Try importing again.", false)
+		s.logger.Error("save public proxy check result failed")
+		return
+	}
+	if ctx.Err() != nil {
+		s.setProxyImport(fmt.Sprintf("Check timed out after %d/%d proxies. All discovered proxies stay saved.", checked, len(addresses)), false)
+		s.logger.Warn("public proxy import timed out")
+		return
+	}
+	s.setProxyImport(fmt.Sprintf("Import finished: %d discovered, %d added; %d/%d checks succeeded from %d sources. Failed proxies stay saved.", len(addresses), added, successful, checked, sources), false)
+	s.logger.Info("public proxy import finished", zap.Int("sources", sources), zap.Int("checked", checked), zap.Int("successful", successful), zap.Int("added", added))
 }

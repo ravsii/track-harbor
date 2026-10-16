@@ -118,10 +118,24 @@ a { color: var(--accent-label); text-decoration-color: var(--accent); }
 .credential-details[open] > p { margin-top: 5px; }
 .settings-panel textarea { min-height: 100px; font: 13px/1.5 ui-monospace, monospace; letter-spacing: 0; }
 .settings-panel > form > button { justify-self: start; }
-.settings-panel .clear-option { display: flex; align-items: center; gap: 4px; color: var(--ink); font: 12px/1.5 'DM Sans', sans-serif; letter-spacing: 0; }
-.settings-panel .clear-option input { width: auto; accent-color: var(--accent); }
 .settings-panel .status:empty { display: none; }
 .settings-panel .status[data-error="true"] { color: var(--error); }
+#content .proxy-sources { display: grid; gap: 18px; padding: 24px; border: 1px solid var(--edge); border-radius: 10px; background: var(--panel); }
+#content .proxy-sources h2 { margin: 0; font: 600 21px/1.3 system-ui, sans-serif; letter-spacing: normal; }
+#content .proxy-sources p, #content .proxy-sources .status { margin: 0; padding: 0; font: 400 13px/1.5 system-ui, sans-serif; letter-spacing: normal; color: var(--muted); }
+#content .proxy-sources form { display: grid; gap: 12px; margin: 0; }
+.proxy-sources label { display: grid; gap: 5px; font: 400 13px/1.5 system-ui, sans-serif; letter-spacing: normal; text-transform: none; color: var(--ink); }
+.proxy-sources textarea { width: 100%; min-height: 112px; padding: 8px 10px; border: 1px solid var(--edge); border-radius: 6px; background: var(--bg); color: var(--ink); font: 400 15px/1.5 system-ui, sans-serif; resize: vertical; }
+.proxy-sources textarea:hover { border-color: var(--muted); }
+.proxy-sources button { justify-content: center; min-height: 40px; padding: 8px 12px; border: 1px solid var(--accent); border-radius: 6px; background: var(--accent); color: var(--accent-ink); font: 600 15px/1.5 system-ui, sans-serif; letter-spacing: normal; }
+.proxy-sources button:hover:not(:disabled) { background: var(--accent); filter: brightness(.93); }
+.proxy-sources button.secondary { background: var(--panel); color: var(--ink); border-color: var(--edge); }
+.proxy-sources button.secondary:hover:not(:disabled) { background: var(--selected); color: var(--ink); filter: none; }
+.proxy-sources button:disabled { opacity: .5; cursor: default; }
+.proxy-sources button:focus-visible, .proxy-sources textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.proxy-sources .icon { width: 18px; height: 18px; }
+#content .proxy-sources .status[data-error="true"] { padding: 6px 10px; border-left: 3px solid var(--error); border-radius: 6px; color: var(--error); }
+@media (max-width: 700px) { #content .proxy-sources { padding: 22px; } }
 .personal-proxies { margin-top: 10px; }
 .personal-proxy-list { list-style: none; margin: 6px 0 0; padding: 0; }
 .personal-proxy-list li { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 6px; padding: 5px 0; border-top: 1px solid var(--edge); }

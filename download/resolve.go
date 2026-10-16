@@ -42,7 +42,7 @@ func Resolve(ctx context.Context, t Track, routes *Routes, event func(Event)) (s
 		return t.AudioURL, nil
 	}
 	if routes == nil {
-		routes = &Routes{Order: []string{"direct"}}
+		routes = &Routes{}
 	}
 	if event == nil {
 		event = func(Event) {}

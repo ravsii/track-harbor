@@ -85,7 +85,7 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("POST /download/start", s.startDownloads)
 	mux.HandleFunc("POST /download/stop", s.stopDownloads)
 	mux.HandleFunc("GET /download/events", s.downloadEvents)
-	mux.HandleFunc("POST /settings", s.saveSettings)
+	mux.HandleFunc("POST /settings/proxy-sources", s.saveProxySources)
 	mux.HandleFunc("POST /settings/public/import", s.importPublicProxies)
 	mux.HandleFunc("GET /settings/public/import/status", s.publicProxyImportStatus)
 	mux.HandleFunc("POST /settings/personal", s.addPersonalProxy)
@@ -220,11 +220,11 @@ type pageData struct {
 	Source, Name, Status, PingStatus, AuthURL string
 	Connected                                 bool
 	Tracks                                    []store.Track
-	SettingsStrategy                          string
+	ProxySources                              string
 	PersonalProxies                           []proxyView
 	PublicProxyCount                          int
 	ProxyImport                               proxyImportState
-	SettingsSaved                             bool
+	SourcesSaved                              bool
 }
 
 func (s *Server) page(w http.ResponseWriter, r *http.Request) {
@@ -261,17 +261,21 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 	} else if source == "settings" {
 		data.Users = users
 		data.Name = "Settings"
-		settings, settingsErr := s.store.DownloadSettings()
+		proxySources, settingsErr := s.store.Setting("proxy_sources")
 		if settingsErr != nil {
 			http.Error(w, "unable to read download settings", http.StatusInternalServerError)
 			return
 		}
-		data.SettingsStrategy = strings.Join(settings.Strategy, "\n")
-		data.PublicProxyCount = len(settings.PublicProxy)
+		data.ProxySources = proxySources
+		data.PublicProxyCount, err = s.store.ProxyCount("public")
+		if err != nil {
+			http.Error(w, "unable to count public proxies", http.StatusInternalServerError)
+			return
+		}
 		s.importMu.Lock()
 		data.ProxyImport = s.proxyImport
 		s.importMu.Unlock()
-		proxies, proxyErr := s.store.Proxies()
+		proxies, proxyErr := s.store.Proxies("personal")
 		if proxyErr != nil {
 			http.Error(w, "unable to read personal proxies", http.StatusInternalServerError)
 			return
@@ -283,7 +287,7 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 			}
 			data.PersonalProxies = append(data.PersonalProxies, proxyView{ID: proxy.ID, Host: parsed.Host, Masked: maskPersonalProxy(proxy.Address, parsed)})
 		}
-		data.SettingsSaved = r.URL.Query().Get("saved") == "1"
+		data.SourcesSaved = r.URL.Query().Get("sources_saved") == "1"
 	} else if source == "music" {
 		data.Tracks, err = s.store.ListUser(userID)
 	} else {

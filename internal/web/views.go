@@ -168,20 +168,20 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
           <form class="user-delete" action="/settings/users/{{.ID}}/delete?account_id={{$.User.ID}}" method="post" hx-post="/settings/users/{{.ID}}/delete" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-confirm="Delete this user, their source credentials and playlist? Shared music files will be kept."><input type="hidden" name="confirm" value="yes"><button type="submit" class="secondary">{{template "icon" "delete-02"}} Delete user</button></form>
         </li>{{end}}</ul>
     </section>
-    <section class="panel settings-panel min-w-0 rounded-2xl border border-edge bg-surface p-[9px]">
-	      <p>Choose the connection routes for new download batches. Downloads already running keep their current routes.</p>
-		      <form id="settings-form" action="/settings?account_id={{$.User.ID}}" method="post">
-	        <label>SPOTIFY / YOUTUBE ROUTE ORDER<textarea name="strategy" required spellcheck="false">{{.SettingsStrategy}}</textarea></label>
-	        <p>One per line, in priority order: <code>direct</code>, <code>personal_proxy</code>, <code>random_proxy</code>.</p>
-	        <label>PUBLIC PROXIES<textarea name="public_proxy" spellcheck="false" autocomplete="off" placeholder="One proxy URL per line. Leave empty to keep saved values."></textarea></label><p><span id="public-proxy-count">{{.PublicProxyCount}}</span> saved. Addresses are never shown again; enter new URLs to replace the entire list.</p><label class="clear-option"><input type="checkbox" name="clear_public_proxy"> Remove saved public proxies</label>
-	        <p>VK always uses <code>direct</code> (the only supported route). Set <code>listen</code> and <code>download_dir</code> in <code>config.yaml</code>; changing either requires a restart.</p>
-	        <button type="submit"><span>{{template "icon" "checkmark-circle-02"}}</span> Save settings</button>
+    <section class="panel settings-panel proxy-sources min-w-0 rounded-2xl border border-edge bg-surface p-[9px]">
+	      <h2>Public proxy sources</h2>
+	      <p>Spotify and YouTube use direct access first, then personal proxies, then public proxies. VK uses direct access.</p>
+	      <form id="proxy-sources-form" action="/settings/proxy-sources?account_id={{$.User.ID}}" method="post">
+	        <label>Source URLs<textarea name="proxy_sources" spellcheck="false" autocomplete="off" aria-describedby="proxy-sources-help proxy-sources-feedback">{{.ProxySources}}</textarea></label>
+	        <p id="proxy-sources-help">One HTTPS link to a text file per line. Bare IP:PORT entries use the protocol from the source filename or query, or SOCKS5 by default. Save sources before importing.</p>
+	        <button type="submit"><span>{{template "icon" "checkmark-circle-02"}}</span> Save sources</button>
 	      </form>
-	      <div id="settings-feedback" class="status" role="status" aria-live="polite">{{if .SettingsSaved}}Settings saved. New download batches will use them.{{end}}</div>
+	      <div id="proxy-sources-feedback" class="status" role="status" aria-live="polite">{{if .SourcesSaved}}Sources saved.{{end}}</div>
 		      <form id="public-proxy-import-form" action="/settings/public/import?account_id={{$.User.ID}}" method="post">
-	        <button type="submit" class="secondary" {{if .ProxyImport.Running}}disabled{{end}}>{{template "icon" "reload"}}<span>Import random proxies</span></button>
+	        <button type="submit" class="secondary" {{if or .ProxyImport.Running (not .ProxySources)}}disabled{{end}}>{{template "icon" "reload"}}<span>Import public proxies</span></button>
 	      </form>
-	      <p>Import from ProxyScrape, Proxifly and TheSpeedX. Check every discovered host:port against YouTube; replace matching entries if working, remove them if not. Other saved proxies stay unchanged.</p>
+	      <p><span id="public-proxy-count">{{.PublicProxyCount}}</span> public proxies saved.</p>
+	      <p>Download the saved source files, save every valid proxy, then check YouTube access. Proxies that fail the check stay saved.</p>
 	      <div id="public-proxy-import-status" class="status" role="status" aria-live="polite" data-running="{{.ProxyImport.Running}}">{{.ProxyImport.Message}}</div>
 	    </section>
     <section class="panel settings-panel personal-proxies min-w-0 rounded-2xl border border-edge bg-surface p-[9px]">

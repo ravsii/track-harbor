@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"gopkg.in/yaml.v3"
 )
@@ -17,7 +16,6 @@ type Config struct {
 	JWTSigningKey string   `yaml:"jwt_signing_key"`
 	DownloadDir   string   `yaml:"download_dir"`
 	ConfigPath    string   `yaml:"-"`
-	Strategy      []string `yaml:"strategy"`
 	PersonalProxy []string `yaml:"personal_proxy"`
 	PublicProxy   []string `yaml:"public_proxy"`
 	loadedYAML    []byte
@@ -114,15 +112,12 @@ func Load() (Config, string, error) {
 	if cfg.DownloadDir == "" {
 		cfg.DownloadDir = filepath.Join(filepath.Dir(dbPath), "downloads")
 	}
-	if len(cfg.Strategy) == 0 {
-		cfg.Strategy = []string{"direct"}
-	}
 	return cfg, dbPath, nil
 }
 
 // RemoveImportedSettings leaves startup-only settings in YAML after the
 // download routes and proxies have been safely imported into the database.
-func RemoveImportedSettings(cfg Config, strategy, personal, public []string) error {
+func RemoveImportedSettings(cfg Config) error {
 	path, err := filepath.EvalSymlinks(cfg.ConfigPath)
 	if err != nil {
 		return err
@@ -154,9 +149,6 @@ func RemoveImportedSettings(cfg Config, strategy, personal, public []string) err
 	}
 	if !changed {
 		return nil
-	}
-	if !slices.Equal(cfg.Strategy, strategy) || !slices.Equal(cfg.PersonalProxy, personal) || !slices.Equal(cfg.PublicProxy, public) {
-		return fmt.Errorf("legacy download settings differ from the database; review config.yaml before removing them")
 	}
 	root.Content = content
 	updated, err := yaml.Marshal(&doc)

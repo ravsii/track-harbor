@@ -9,8 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 type proxyView struct {
@@ -92,23 +90,22 @@ func (s *Server) addPersonalProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
-	proxies, err := s.store.Proxies()
+	count, err := s.store.ProxyCount("personal")
 	if err != nil {
 		http.Error(w, "unable to read personal proxies", http.StatusInternalServerError)
 		return
 	}
-	if len(proxies) >= 100 {
+	if count >= 100 {
 		http.Error(w, "use no more than 100 personal proxies", http.StatusBadRequest)
 		return
 	}
-	for _, proxy := range proxies {
-		if proxy.Address == address {
-			http.Error(w, "proxy already saved", http.StatusBadRequest)
-			return
-		}
-	}
-	if err := s.store.AddProxy(address, checkedAt); err != nil {
+	added, err := s.store.AddProxy(address, checkedAt)
+	if err != nil {
 		http.Error(w, "unable to save personal proxy", http.StatusInternalServerError)
+		return
+	}
+	if !added {
+		http.Error(w, "proxy already saved", http.StatusBadRequest)
 		return
 	}
 	settings, err := s.store.DownloadSettings()
@@ -138,20 +135,16 @@ func (s *Server) deletePersonalProxy(w http.ResponseWriter, r *http.Request) {
 	}
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
-	if _, err := s.store.Proxy(id); err == sql.ErrNoRows {
+	proxy, err := s.store.Proxy(id)
+	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return
 	} else if err != nil {
 		http.Error(w, "unable to read personal proxy", http.StatusInternalServerError)
 		return
 	}
-	settings, err := s.store.DownloadSettings()
-	if err != nil {
-		http.Error(w, "unable to read download settings", http.StatusInternalServerError)
-		return
-	}
-	if len(settings.PersonalProxy) == 1 && !settingsUsable(settings.Strategy, nil, settings.PublicProxy) {
-		http.Error(w, "add another proxy or enable a usable route before removing the last personal proxy", http.StatusBadRequest)
+	if proxy.Type != "personal" {
+		http.NotFound(w, r)
 		return
 	}
 	deleted, err := s.store.DeleteProxy(id)
@@ -163,7 +156,7 @@ func (s *Server) deletePersonalProxy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "proxy not found", http.StatusNotFound)
 		return
 	}
-	settings, err = s.store.DownloadSettings()
+	settings, err := s.store.DownloadSettings()
 	if err != nil {
 		http.Error(w, "proxy removed, but unable to refresh download settings", http.StatusInternalServerError)
 		return
@@ -179,7 +172,7 @@ func (s *Server) personalProxyAddress(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid proxy ID", http.StatusBadRequest)
 		return
 	}
-	address, err := s.store.Proxy(id)
+	proxy, err := s.store.Proxy(id)
 	if err == sql.ErrNoRows {
 		http.NotFound(w, r)
 		return
@@ -188,10 +181,14 @@ func (s *Server) personalProxyAddress(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unable to read personal proxy", http.StatusInternalServerError)
 		return
 	}
+	if proxy.Type != "personal" {
+		http.NotFound(w, r)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(struct {
 		Address string `json:"address"`
-	}{Address: address}); err != nil {
+	}{Address: proxy.Address}); err != nil {
 		s.logger.Error("write personal proxy address failed")
 	}
 }
@@ -200,17 +197,8 @@ func settingsResponse(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Accept") == "application/json" {
 		w.WriteHeader(http.StatusNoContent)
 	} else {
-		http.Redirect(w, r, "/?source=settings&saved=1", http.StatusSeeOther)
+		http.Redirect(w, r, "/?source=settings", http.StatusSeeOther)
 	}
-}
-
-func settingsUsable(routes, personal, public []string) bool {
-	for _, route := range routes {
-		if route == "direct" || (route == "personal_proxy" && len(personal) > 0) || (route == "random_proxy" && len(public) > 0) {
-			return true
-		}
-	}
-	return false
 }
 
 func settingsLines(raw string) []string {
@@ -221,19 +209,6 @@ func settingsLines(raw string) []string {
 		}
 	}
 	return lines
-}
-
-func settingsRoutes(raw string) ([]string, error) {
-	routes := settingsLines(raw)
-	if len(routes) == 0 || len(routes) > 100 {
-		return nil, fmt.Errorf("choose one to 100 routes, one per line")
-	}
-	for _, route := range routes {
-		if route != "direct" && route != "personal_proxy" && route != "random_proxy" {
-			return nil, fmt.Errorf("routes must be direct, personal_proxy or random_proxy")
-		}
-	}
-	return routes, nil
 }
 
 func settingsProxies(raw string) ([]string, error) {
@@ -255,57 +230,31 @@ func settingsProxies(raw string) ([]string, error) {
 	return proxies, nil
 }
 
-func (s *Server) saveSettings(w http.ResponseWriter, r *http.Request) {
-	if s.downloads == nil {
-		http.Error(w, "downloads unavailable", http.StatusServiceUnavailable)
-		return
-	}
+func (s *Server) saveProxySources(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, 256<<10)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "invalid settings form", http.StatusBadRequest)
 		return
 	}
-	routes, err := settingsRoutes(r.PostForm.Get("strategy"))
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+	sources := settingsLines(r.PostForm.Get("proxy_sources"))
+	if len(sources) > 100 {
+		http.Error(w, "use no more than 100 source links", http.StatusBadRequest)
 		return
 	}
-	s.settingsMu.Lock()
-	defer s.settingsMu.Unlock()
-	settings, err := s.store.DownloadSettings()
-	if err != nil {
-		http.Error(w, "unable to read download settings", http.StatusInternalServerError)
-		return
-	}
-	settings.Strategy = routes
-	clear := r.PostForm.Get("clear_public_proxy") == "on"
-	replacement := strings.TrimSpace(r.PostForm.Get("public_proxy"))
-	if clear && replacement != "" {
-		http.Error(w, "choose either replacement or removal for public_proxy", http.StatusBadRequest)
-		return
-	}
-	if clear {
-		settings.PublicProxy = nil
-	} else if replacement != "" {
-		settings.PublicProxy, err = settingsProxies(replacement)
-		if err != nil {
+	for _, source := range sources {
+		if err := validateProxySource(source); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 	}
-	if !settingsUsable(settings.Strategy, settings.PersonalProxy, settings.PublicProxy) {
-		http.Error(w, "configure proxies for the selected routes or include direct", http.StatusBadRequest)
+	if err := s.store.SetSetting("proxy_sources", strings.Join(sources, "\n")); err != nil {
+		http.Error(w, "unable to save proxy sources", http.StatusInternalServerError)
 		return
 	}
-	if err := s.store.SaveDownloadSettings(settings); err != nil {
-		http.Error(w, "unable to save download settings", http.StatusInternalServerError)
-		return
+	s.logger.Info("proxy sources saved")
+	if r.Header.Get("Accept") == "application/json" {
+		w.WriteHeader(http.StatusNoContent)
+	} else {
+		http.Redirect(w, r, "/?source=settings&sources_saved=1", http.StatusSeeOther)
 	}
-	s.downloads.mu.Lock()
-	s.downloads.config.Strategy = settings.Strategy
-	s.downloads.config.PersonalProxy = settings.PersonalProxy
-	s.downloads.config.PublicProxy = settings.PublicProxy
-	s.downloads.mu.Unlock()
-	s.logger.Info("download settings saved", zap.Int("routes", len(routes)), zap.Int("personal_proxies", len(settings.PersonalProxy)), zap.Int("public_proxies", len(settings.PublicProxy)))
-	settingsResponse(w, r)
 }

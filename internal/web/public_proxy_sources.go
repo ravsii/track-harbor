@@ -3,74 +3,121 @@ package web
 import (
 	"bufio"
 	"context"
-	"crypto/sha256"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
-	"slices"
+	"path"
 	"strconv"
 	"strings"
 	"time"
 )
 
-const (
-	proxyScrapePageSize     = 2000
-	maxProxySourceAddresses = 500000 // Reject unexpectedly large remote lists rather than truncate them.
-)
+const maxProxySourceAddresses = 500000
 
-type publicProxyGroup struct {
-	key        string
-	candidates []string
+func publicProxyIP(ip netip.Addr) bool {
+	if ip.Zone() != "" {
+		return false
+	}
+	ip = ip.Unmap()
+	if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
+		return false
+	}
+	for _, prefix := range []string{"0.0.0.0/8", "100.64.0.0/10", "198.18.0.0/15"} {
+		if netip.MustParsePrefix(prefix).Contains(ip) {
+			return false
+		}
+	}
+	return true
 }
 
-func proxyHostPort(address string) string {
-	u, err := url.Parse(address)
-	if err != nil || u.Hostname() == "" || u.Port() == "" {
-		return ""
-	}
-	port, err := strconv.Atoi(u.Port())
-	if err != nil || port < 1 || port > 65535 {
-		return ""
-	}
-	return net.JoinHostPort(strings.ToLower(u.Hostname()), strconv.Itoa(port))
-}
-
-// Only probe literal, globally routable public IPs from third-party lists.
-func discoveredProxy(raw, protocol string) (string, string, bool) {
+// Only probe literal public IPs from third-party lists, never local services.
+func discoveredProxy(raw, protocol string) (string, bool) {
 	if !strings.Contains(raw, "://") {
 		raw = protocol + "://" + raw
 	}
 	u, err := url.Parse(raw)
 	if err != nil || u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
-		return "", "", false
+		return "", false
 	}
 	switch u.Scheme {
-	case "http", "https", "socks4", "socks5":
+	case "http", "https", "socks4", "socks4a", "socks5", "socks5h":
 	default:
-		return "", "", false
+		return "", false
 	}
 	ip, err := netip.ParseAddr(u.Hostname())
-	if err != nil || ip.Zone() != "" || !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() {
-		return "", "", false
-	}
-	ip = ip.Unmap()
-	for _, prefix := range []string{"0.0.0.0/8", "100.64.0.0/10", "198.18.0.0/15"} {
-		if netip.MustParsePrefix(prefix).Contains(ip) {
-			return "", "", false
-		}
+	if err != nil || !publicProxyIP(ip) {
+		return "", false
 	}
 	port, err := strconv.Atoi(u.Port())
 	if err != nil || port < 1 || port > 65535 {
-		return "", "", false
+		return "", false
 	}
-	key := net.JoinHostPort(ip.String(), strconv.Itoa(port))
-	return key, u.Scheme + "://" + key, true
+	return u.Scheme + "://" + net.JoinHostPort(ip.Unmap().String(), strconv.Itoa(port)), true
+}
+
+func validateProxySource(endpoint string) error {
+	u, err := url.Parse(endpoint)
+	if err != nil || len(endpoint) > 2048 || u.Scheme != "https" || u.Hostname() == "" || u.User != nil || u.Fragment != "" {
+		return fmt.Errorf("use HTTPS links to public text files, without credentials or fragments")
+	}
+	if u.Port() != "" {
+		port, err := strconv.Atoi(u.Port())
+		if err != nil || port < 1 || port > 65535 {
+			return fmt.Errorf("source URL has an invalid port")
+		}
+	}
+	if ip, err := netip.ParseAddr(u.Hostname()); err == nil && !publicProxyIP(ip) {
+		return fmt.Errorf("proxy sources must use public network addresses")
+	}
+	return nil
+}
+
+// Validate the actual dial destination as well as the URL, including redirects
+// and DNS changes. Source downloads must never reach loopback/private services.
+func dialProxySource(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
+	if err != nil {
+		return nil, err
+	}
+	for _, ip := range ips {
+		if !publicProxyIP(ip) {
+			continue
+		}
+		conn, err := (&net.Dialer{Timeout: 10 * time.Second}).DialContext(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+	}
+	return nil, fmt.Errorf("public proxy source unavailable")
+}
+
+// Explicit proxy URLs retain their protocol. Bare IP:PORT entries use the
+// protocol in the source query/filename, falling back to SOCKS5 for other files.
+func proxySourceProtocol(endpoint string) string {
+	u, _ := url.Parse(endpoint)
+	protocol := u.Query().Get("protocol")
+	if protocol == "" {
+		protocol = strings.TrimSuffix(strings.ToLower(path.Base(u.Path)), ".txt")
+	}
+	switch protocol {
+	case "http", "https", "socks4", "socks4a", "socks5", "socks5h":
+		return protocol
+	default:
+		return "socks5"
+	}
 }
 
 func fetchProxyLines(ctx context.Context, client *http.Client, endpoint string, limit int64) ([]string, error) {
+	if err := validateProxySource(endpoint); err != nil {
+		return nil, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, err
@@ -90,117 +137,52 @@ func fetchProxyLines(ctx context.Context, client *http.Client, endpoint string, 
 	scanner := bufio.NewScanner(strings.NewReader(string(body)))
 	var lines []string
 	for scanner.Scan() {
-		if line := strings.TrimSpace(scanner.Text()); line != "" {
+		if line := strings.TrimSpace(scanner.Text()); line != "" && !strings.HasPrefix(line, "#") {
+			if len(lines) >= maxProxySourceAddresses {
+				return nil, fmt.Errorf("proxy source exceeds address limit")
+			}
 			lines = append(lines, line)
 		}
 	}
 	return lines, scanner.Err()
 }
 
-func fetchProxyScrape(ctx context.Context, client *http.Client) ([]string, error) {
-	var addresses []string
-	for _, protocol := range []string{"http", "socks4", "socks5"} {
-		seenPages := make(map[[32]byte]bool)
-		for skip := 0; ; {
-			if len(addresses) >= maxProxySourceAddresses {
-				return nil, fmt.Errorf("proxy source exceeds address limit")
-			}
-			u, _ := url.Parse("https://api.proxyscrape.com/v4/free-proxy-list/get")
-			query := u.Query()
-			query.Set("request", "getproxies")
-			query.Set("protocol", protocol)
-			query.Set("ssl", "all")
-			query.Set("timeout", "10000")
-			query.Set("limit", strconv.Itoa(proxyScrapePageSize))
-			query.Set("skip", strconv.Itoa(skip))
-			u.RawQuery = query.Encode()
-			page, err := fetchProxyLines(ctx, client, u.String(), 2<<20)
-			if err != nil {
-				return nil, err
-			}
-			if len(page) == 0 {
-				break
-			}
-			fingerprint := sha256.Sum256([]byte(strings.Join(page, "\n")))
-			if seenPages[fingerprint] {
-				return nil, fmt.Errorf("proxy source repeated a page")
-			}
-			seenPages[fingerprint] = true
-			for _, address := range page {
-				if len(addresses) >= maxProxySourceAddresses {
-					return nil, fmt.Errorf("proxy source exceeds address limit")
-				}
-				if !strings.Contains(address, "://") {
-					address = protocol + "://" + address
-				}
-				addresses = append(addresses, address)
-			}
-			skip += len(page)
-			if len(page) < proxyScrapePageSize {
-				break
-			}
+func fetchPublicProxies(ctx context.Context, sources []string) ([]string, int, error) {
+	transport := &http.Transport{DialContext: dialProxySource, TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: 15 * time.Second}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport, Timeout: 30 * time.Second, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("too many proxy source redirects")
 		}
-	}
-	return addresses, nil
-}
-
-func fetchPublicProxies(ctx context.Context) ([]publicProxyGroup, int, error) {
-	client := &http.Client{Timeout: 30 * time.Second, CheckRedirect: func(req *http.Request, _ []*http.Request) error {
-		if req.URL.Scheme != "https" || (req.URL.Host != "raw.githubusercontent.com" && req.URL.Host != "api.proxyscrape.com") {
-			return http.ErrUseLastResponse
-		}
-		return nil
+		return validateProxySource(req.URL.String())
 	}}
-	sources := []struct {
-		endpoint, protocol string
-		paged              bool
-	}{
-		{"", "", true},
-		{"https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/all/data.txt", "", false},
-		{"https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt", "http", false},
-		{"https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks4.txt", "socks4", false},
-		{"https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/socks5.txt", "socks5", false},
-	}
-	groups := make(map[string]int)
-	var ordered []publicProxyGroup
+	seen := make(map[string]bool)
+	var addresses []string
 	loaded := 0
-	for _, source := range sources {
+	for _, endpoint := range sources {
 		if err := ctx.Err(); err != nil {
-			return nil, loaded, err
+			break
 		}
-		var lines []string
-		var err error
-		if source.paged {
-			lines, err = fetchProxyScrape(ctx, client)
-		} else {
-			lines, err = fetchProxyLines(ctx, client, source.endpoint, 16<<20)
-		}
+		lines, err := fetchProxyLines(ctx, client, endpoint, 32<<20)
 		if err != nil {
-			continue // An unavailable source must not discard the other lists.
+			continue // One unavailable source must not discard the other lists.
 		}
 		loaded++
+		protocol := proxySourceProtocol(endpoint)
 		for _, line := range lines {
-			key, address, valid := discoveredProxy(line, source.protocol)
-			if !valid {
+			address, valid := discoveredProxy(line, protocol)
+			if !valid || seen[address] {
 				continue
 			}
-			i, exists := groups[key]
-			if !exists {
-				if len(ordered) >= maxProxySourceAddresses {
-					return nil, loaded, fmt.Errorf("proxy sources exceed address limit")
-				}
-				i = len(ordered)
-				groups[key] = i
-				ordered = append(ordered, publicProxyGroup{key: key})
+			if len(addresses) >= maxProxySourceAddresses {
+				return nil, loaded, fmt.Errorf("proxy sources exceed address limit")
 			}
-			seen := slices.Contains(ordered[i].candidates, address)
-			if !seen {
-				ordered[i].candidates = append(ordered[i].candidates, address)
-			}
+			seen[address] = true
+			addresses = append(addresses, address)
 		}
 	}
-	if loaded == 0 || len(ordered) == 0 {
-		return nil, loaded, fmt.Errorf("no usable public proxy candidates from sources")
+	if len(addresses) == 0 {
+		return nil, loaded, fmt.Errorf("no valid public proxies found in source files")
 	}
-	return ordered, loaded, nil
+	return addresses, loaded, nil
 }

@@ -74,14 +74,14 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("open server database: %w", err)
 	}
 	defer db.Close()
-	settings, err := db.InitDownloadSettings(store.DownloadSettings{Strategy: cfg.Strategy, PersonalProxy: cfg.PersonalProxy, PublicProxy: cfg.PublicProxy})
+	settings, err := db.InitDownloadSettings(store.DownloadSettings{PersonalProxy: cfg.PersonalProxy, PublicProxy: cfg.PublicProxy})
 	if err != nil {
-		return errors.New("load download settings failed; check the server database or legacy strategy in config.yaml")
+		return errors.New("load download proxies failed; check the server database and legacy proxies in config.yaml")
 	}
-	if err := config.RemoveImportedSettings(cfg, settings.Strategy, settings.PersonalProxy, settings.PublicProxy); err != nil {
+	if err := config.RemoveImportedSettings(cfg); err != nil {
 		return errors.New("move download settings from config.yaml failed; check file permissions or conflicting legacy values")
 	}
-	cfg.Strategy, cfg.PersonalProxy, cfg.PublicProxy = settings.Strategy, settings.PersonalProxy, settings.PublicProxy
+	cfg.PersonalProxy, cfg.PublicProxy = settings.PersonalProxy, settings.PublicProxy
 	httpLog, err := zap.NewStdLogAt(zap.L(), zap.ErrorLevel)
 	if err != nil {
 		return fmt.Errorf("configure HTTP error logging: %w", err)
