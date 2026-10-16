@@ -81,6 +81,7 @@ func New(db *store.Store, logger *zap.Logger, configs ...config.Config) http.Han
 	mux.HandleFunc("POST /connect", s.connect)
 	mux.HandleFunc("POST /ping", s.pingSource)
 	mux.HandleFunc("POST /sync", s.syncSource)
+	mux.HandleFunc("POST /youtube/add", s.addYouTubeVideo)
 	mux.HandleFunc("GET /download/status", s.downloadStatus)
 	mux.HandleFunc("POST /download/start", s.startDownloads)
 	mux.HandleFunc("POST /download/stop", s.stopDownloads)
@@ -188,6 +189,9 @@ func (s *Server) playableTracks(w http.ResponseWriter, r *http.Request) {
 }
 
 func sourceName(r *http.Request) string {
+	if r.FormValue("source") == "youtube" {
+		return "youtube"
+	}
 	if r.FormValue("source") == "vk" {
 		return "vk"
 	}
@@ -290,6 +294,9 @@ func (s *Server) page(w http.ResponseWriter, r *http.Request) {
 		data.SourcesSaved = r.URL.Query().Get("sources_saved") == "1"
 	} else if source == "music" {
 		data.Tracks, err = s.store.ListUser(userID)
+	} else if source == "youtube" {
+		data.Name = "YouTube"
+		data.Tracks, err = s.store.List(userID, "youtube")
 	} else {
 		data.Connected, err = s.store.Connected(userID, source)
 		if err == nil {

@@ -51,11 +51,11 @@ func Resolve(ctx context.Context, t Track, routes *Routes, event func(Event)) (s
 	if err != nil {
 		return "", fmt.Errorf("yt-dlp is required: %w", err)
 	}
-	ctx, cancel := context.WithTimeout(ctx, time.Minute)
-	defer cancel()
 	var resolved string
 	err = routes.try(ctx, event, "searching", func(proxy string) error {
-		output, stderr, err := youtube.Run(ctx, executable, proxy, "", nil,
+		attemptCtx, cancel := context.WithTimeout(ctx, time.Minute)
+		defer cancel()
+		output, stderr, err := youtube.Run(attemptCtx, executable, proxy, "", nil,
 			"--flat-playlist", "--dump-single-json", "--", "ytsearch1:"+strings.TrimSpace(t.Artist+" "+t.Title))
 		if err != nil {
 			return ytError(stderr, err)

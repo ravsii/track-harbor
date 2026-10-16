@@ -7,6 +7,7 @@ type LibrarySummary struct {
 	Personal         int  `json:"personal"`
 	Spotify          int  `json:"spotify"`
 	VK               int  `json:"vk"`
+	YouTube          int  `json:"youtube"`
 	SpotifyConnected bool `json:"spotify_connected"`
 	VKConnected      bool `json:"vk_connected"`
 }
@@ -18,9 +19,10 @@ func (s *Store) LibrarySummary(userID int64) (LibrarySummary, error) {
 		(SELECT COUNT(*) FROM user_tracks WHERE user_id=?),
 		(SELECT COUNT(*) FROM user_tracks p JOIN tracks t ON t.id=p.track_id WHERE p.user_id=? AND t.source='spotify'),
 		(SELECT COUNT(*) FROM user_tracks p JOIN tracks t ON t.id=p.track_id WHERE p.user_id=? AND t.source='vk'),
+		(SELECT COUNT(*) FROM user_tracks p JOIN tracks t ON t.id=p.track_id WHERE p.user_id=? AND t.source='youtube'),
 		EXISTS(SELECT 1 FROM user_credentials WHERE user_id=? AND source='spotify'),
 		EXISTS(SELECT 1 FROM user_credentials WHERE user_id=? AND source='vk')`,
-		userID, userID, userID, userID, userID).
-		Scan(&summary.Total, &summary.Personal, &summary.Spotify, &summary.VK, &summary.SpotifyConnected, &summary.VKConnected)
+		userID, userID, userID, userID, userID, userID).
+		Scan(&summary.Total, &summary.Personal, &summary.Spotify, &summary.VK, &summary.YouTube, &summary.SpotifyConnected, &summary.VKConnected)
 	return summary, err
 }

@@ -25,6 +25,7 @@ import {
   VkIcon,
   VolumeHighIcon,
   VolumeMuteIcon,
+  YoutubeIcon,
 } from '@hugeicons/core-free-icons';
 
 // Keep public symbol names stable for Go templates and browser controls.
@@ -34,6 +35,7 @@ const icons = {
   'music-note-01': MusicNote01Icon,
   spotify: SpotifyIcon,
   vk: VkIcon,
+  youtube: YoutubeIcon,
   'arrow-right-01': ArrowRight01Icon,
   'external-link': ExternalLinkIcon,
   previous: PreviousIcon,

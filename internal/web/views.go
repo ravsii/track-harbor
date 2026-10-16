@@ -39,6 +39,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 		  <script src="/assets/auth.js" defer></script>
 	  <script src="/assets/download.js" defer></script>
 	  <script src="/assets/settings.js" defer></script>
+	  <script src="/assets/youtube.js" defer></script>
 	  <script src="/assets/player.js" defer></script>
 	  <script src="/assets/duration.js" defer></script>
 </head>
@@ -91,8 +92,9 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
       <nav class="grid grid-cols-1 gap-1.5" aria-label="Your connected sources">
         <a class="sidebar-source {{if eq .Source "spotify"}}active{{end}}" data-source="spotify" href="/?source=spotify" hx-get="/?source=spotify" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"{{if not .Library.SpotifyConnected}} hidden{{end}}>{{template "icon" "spotify"}}<span>Spotify</span><span class="sidebar-count" data-source-count="spotify">{{.Library.Spotify}} tracks</span></a>
         <a class="sidebar-source {{if eq .Source "vk"}}active{{end}}" data-source="vk" href="/?source=vk" hx-get="/?source=vk" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true"{{if not .Library.VKConnected}} hidden{{end}}>{{template "icon" "vk"}}<span>VK Music</span><span class="sidebar-count" data-source-count="vk">{{.Library.VK}} tracks</span></a>
+	    <a class="sidebar-source {{if eq .Source "youtube"}}active{{end}}" data-source="youtube" href="/?source=youtube" hx-get="/?source=youtube" hx-target="#content" hx-select="#content" hx-swap="outerHTML" hx-push-url="true">{{template "icon" "youtube"}}<span>YouTube</span><span class="sidebar-count" data-source-count="youtube">{{.Library.YouTube}} tracks</span></a>
       </nav>
-      <p class="sidebar-note" id="sidebar-no-sources"{{if or .Library.SpotifyConnected .Library.VKConnected}} hidden{{end}}>No connected sources.</p>
+      <p class="sidebar-note" id="sidebar-no-sources"{{if or .Library.SpotifyConnected .Library.VKConnected}} hidden{{end}}>Spotify and VK are not connected.</p>
       <details class="source-connect" id="sidebar-connect"{{if and .Library.SpotifyConnected .Library.VKConnected}} hidden{{end}}>
         <summary>Connect source</summary>
         <nav class="grid grid-cols-1 gap-1.5" aria-label="Connect a source">
@@ -214,6 +216,27 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	      <ol class="tracks" id="download-tracks"></ol>
 	    </section>
 	    {{else}}
+	    {{if eq .Source "youtube"}}
+	    <section class="panel youtube-add">
+	      <h2>Add a video</h2>
+	      <form id="youtube-add-form" action="/youtube/add?account_id={{.User.ID}}" method="post">
+	        <label>YouTube link or video ID<input name="video" type="text" required autocomplete="off" spellcheck="false" placeholder="https://www.youtube.com/watch?v=…" aria-describedby="youtube-feedback"></label>
+	        <button type="submit">{{template "icon" "youtube"}}<span>Add video</span></button>
+	      </form>
+	      <div id="youtube-feedback" role="status" aria-live="polite"></div>
+	    </section>
+	    <section class="library youtube-library" aria-label="Your YouTube videos">
+	      <h2>Your videos</h2>
+	      {{if .Tracks}}<ol class="tracks">{{range .Tracks}}
+	        <li data-id="{{.ID}}" data-source="youtube" data-source-id="{{.SourceID}}" data-artist="{{.Artist}}" data-title="{{.Title}}" data-playable="{{if .FilePath}}true{{else}}false{{end}}">
+	          <span class="track-number"><button class="play-track" type="button" {{if not .FilePath}}disabled{{end}} aria-label="Play {{.Title}}">{{template "icon" "play"}}</button><span class="playing-indicator" aria-hidden="true"><span></span><span></span><span></span></span></span>
+	          <div class="youtube-track-info"><span class="track-cover" aria-hidden="true">{{template "brand-mark"}}<img src="{{coverURL .CoverURL}}" alt="" loading="lazy"></span><div><strong class="track-title">{{.Title}}</strong><div class="youtube-track-meta"><span>{{.Artist}}</span><span class="track-duration">—</span></div></div></div>
+	          <span class="download-stage">{{if .FilePath}}Ready to play{{else}}Queued{{end}}</span>
+	          <a class="download-track{{if not .FilePath}} unavailable{{end}}" href="/audio?id={{.ID}}&amp;download=1" aria-label="Download {{.Title}} as MP3" title="Download MP3"{{if not .FilePath}} aria-disabled="true" tabindex="-1"{{end}}>{{template "icon" "download-01"}}</a>
+	        </li>
+	      {{end}}</ol>{{else}}<p>No YouTube videos added yet.</p>{{end}}
+	    </section>
+	    {{else}}
 	    <section class="library {{if eq .Source "music"}}music-library{{end}}"{{if eq .Source "music"}} aria-label="Tracks"{{end}}>{{if ne .Source "music"}}<div class="library-heading"><div><span class="index">03 / COLLECTION</span><h2>Your tracks</h2></div><span class="count">{{len .Tracks}} TRACKS</span></div>{{end}}
       {{if .Tracks}}
         <div class="track-head grid items-center"><span>#</span><span>TRACK</span><span>ARTIST</span>{{if eq .Source "music"}}<span>SOURCE</span><span>ADDED</span>{{end}}<span aria-label="Duration">TIME</span></div>
@@ -221,13 +244,14 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
           <li data-id="{{$t.ID}}" data-source="{{$t.Source}}" data-source-id="{{$t.SourceID}}" data-artist="{{$t.Artist}}" data-title="{{$t.Title}}" data-playable="{{if $t.FilePath}}true{{else}}false{{end}}">
             <span class="track-number"><span class="number">{{add $i 1}}</span><button type="button" class="play-track" {{if not $t.FilePath}}disabled{{end}} aria-label="Play {{$t.Title}}">{{template "icon" "play"}}</button><span class="playing-indicator" aria-hidden="true"><span></span><span></span><span></span></span></span>
             <strong class="flex min-w-0 items-center gap-2"><span class="track-cover relative grid size-7 shrink-0 place-items-center overflow-hidden rounded-[7px] bg-selected" aria-hidden="true">{{template "brand-mark"}}{{with coverURL $t.CoverURL}}<img class="absolute inset-0 size-full object-cover" src="{{.}}" alt="" loading="lazy">{{end}}</span><span class="track-title">{{$t.Title}}</span></strong>
-            <span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{if eq $t.Source "spotify"}}spotify{{else}}vk{{end}}">{{if eq $t.Source "spotify"}}Spotify{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}
+            <span class="artist">{{if $t.Artist}}{{$t.Artist}}{{else}}Unknown artist{{end}}</span>{{if eq $.Source "music"}}<span class="source-tag {{$t.Source}}">{{if eq $t.Source "spotify"}}Spotify{{else if eq $t.Source "youtube"}}YouTube{{else}}VK Music{{end}}</span><time class="added-date">{{addedDate $t.AddedAt}}</time>{{end}}
             <span class="track-duration">—</span><a class="download-track{{if not $t.FilePath}} unavailable{{end}}" href="/audio?id={{$t.ID}}&amp;download=1" aria-label="Download {{$t.Title}} as MP3" title="Download MP3"{{if not $t.FilePath}} aria-disabled="true" tabindex="-1"{{end}}>{{template "icon" "download-01"}}</a>
           </li>{{end}}</ol>
       {{else}}
         <div class="empty"><span>{{template "icon" "disc"}}</span><h3>Nothing here yet</h3><p>{{if eq .Source "music"}}Connect and sync Spotify or VK Music to fill your library.{{else if .Connected}}Run your first sync to see tracks from {{.Name}}.{{else}}Connect {{.Name}} above, then sync your library.{{end}}</p></div>
       {{end}}
 	    </section>
+	    {{end}}
 	    {{end}}
 	    {{if ne .Source "music"}}<footer>LOCAL DOWNLOADS · TRACKHARBOR</footer>{{end}}
   </main>

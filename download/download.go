@@ -36,7 +36,6 @@ type Event struct {
 type Routes struct {
 	Personal, Public []string
 	mu               sync.Mutex
-	next             int
 	cooling          map[string]time.Time
 	nextDownload     time.Time
 }
@@ -49,11 +48,7 @@ func (r *Routes) candidates() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	addresses := append([]string{""}, r.Personal...)
-	if len(r.Public) != 0 {
-		addresses = append(addresses, r.Public[r.next])
-		r.next = (r.next + 1) % len(r.Public)
-	}
-	return addresses
+	return append(addresses, r.Public...)
 }
 
 func (r *Routes) try(ctx context.Context, event func(Event), stage string, request func(string) error) error {
@@ -66,16 +61,22 @@ func (r *Routes) try(ctx context.Context, event func(Event), stage string, reque
 		if len(addresses) == 0 {
 			return fmt.Errorf("no configured download routes")
 		}
-		var next time.Time
 		for _, address := range addresses {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
 			r.mu.Lock()
 			until := r.cooling[address]
 			r.mu.Unlock()
-			if time.Now().Before(until) {
-				if next.IsZero() || until.Before(next) {
-					next = until
+			if wait := time.Until(until); wait > 0 {
+				event(Event{Stage: "retrying"})
+				timer := time.NewTimer(wait)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return ctx.Err()
+				case <-timer.C:
 				}
-				continue
 			}
 			if stage == "downloading" {
 				r.mu.Lock()
@@ -98,9 +99,6 @@ func (r *Routes) try(ctx context.Context, event func(Event), stage string, reque
 				return nil
 			}
 			last = err
-			if errors.Is(err, errNoMatch) {
-				return err
-			}
 			if errors.Is(err, errRateLimit) {
 				r.mu.Lock()
 				if r.cooling == nil {
@@ -110,15 +108,12 @@ func (r *Routes) try(ctx context.Context, event func(Event), stage string, reque
 				r.mu.Unlock()
 			}
 		}
-		if attempt >= 5 && !errors.Is(last, errRateLimit) {
+		if errors.Is(last, errNoMatch) || (attempt >= 5 && !errors.Is(last, errRateLimit)) {
 			return last
 		}
 		wait := time.Second << min(attempt, 4)
 		if errors.Is(last, errRateLimit) {
 			wait = 0
-		}
-		if !next.IsZero() && next.After(time.Now()) {
-			wait = time.Until(next)
 		}
 		if wait > 30*time.Second {
 			wait = 30 * time.Second
@@ -192,9 +187,9 @@ func Save(ctx context.Context, t Track, directory string, routes *Routes, event 
 			return "", err
 		}
 		defer os.RemoveAll(dir)
-		dlCtx, stop := context.WithTimeout(ctx, 5*time.Minute)
-		defer stop()
-		err = routes.try(dlCtx, event, "downloading", func(proxy string) error {
+		err = routes.try(ctx, event, "downloading", func(proxy string) error {
+			dlCtx, stop := context.WithTimeout(ctx, 5*time.Minute)
+			defer stop()
 			matches, _ := filepath.Glob(filepath.Join(dir, "audio.*"))
 			for _, path := range matches {
 				os.Remove(path)

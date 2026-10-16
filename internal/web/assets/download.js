@@ -46,6 +46,8 @@
     for (const field of document.querySelectorAll('[data-catalog-count]')) field.textContent = library.total;
     const personal = document.getElementById('sidebar-personal-count');
     if (personal) personal.textContent = library.personal;
+    const youtubeCount = document.querySelector('[data-source-count="youtube"]');
+    if (youtubeCount) youtubeCount.textContent = `${library.youtube} tracks`;
     for (const source of ['spotify', 'vk']) {
       const connected = library[`${source}_connected`];
       const link = document.querySelector(`.sidebar-source[data-source="${source}"]`);
@@ -99,7 +101,7 @@
   }
 
   function status(row, track) {
-    const labels = {waiting: 'Waiting for sync', queued: 'Queued', checking: 'Checking', missing: 'Missing · downloading again', searching: 'Searching', downloading: 'Downloading', converting: 'Converting', metadata: 'Saving', retrying: 'Retrying', skipped: 'Saved', done: 'Saved', saved: 'Saved', failed: 'Failed'};
+    const labels = {waiting: track.source === 'youtube' ? (state?.stopped ? 'Stopped' : 'Queued') : 'Waiting for sync', queued: 'Queued', checking: 'Checking', missing: 'Missing · downloading again', searching: 'Searching', downloading: 'Downloading', converting: 'Converting', metadata: 'Saving', retrying: 'Retrying', skipped: 'Saved', done: 'Saved', saved: 'Saved', downloaded: 'Ready to play', stopped: 'Stopped', failed: 'Failed'};
     const progress = track.total_bytes > 0 && !['stopped', 'failed'].includes(track.stage) ? ` · ${Math.round(track.bytes / track.total_bytes * 100)}%` : '';
     const field = row.querySelector('.download-stage');
     field.textContent = (labels[track.stage] || track.stage || 'Waiting') + progress;
@@ -144,6 +146,11 @@
       document.dispatchEvent(new CustomEvent('download:catalog', {detail: snapshot.available_tracks}));
       sidebarSummary();
       control();
+      const myTracks = new Map(snapshot.my_tracks.map(track => [String(track.id), track]));
+      for (const row of document.querySelectorAll('.youtube-library .tracks li[data-id]')) {
+        const track = myTracks.get(row.dataset.id);
+        if (track) status(row, track);
+      }
       if (!list || document.getElementById('download-tracks') !== list) return;
       summary();
       const mine = document.getElementById('my-download-tracks');
@@ -192,7 +199,7 @@
     artist.textContent = track.artist;
     const source = document.createElement('span');
     source.className = 'source-tag';
-    source.textContent = track.source === 'spotify' ? 'Spotify' : 'VK Music';
+    source.textContent = track.source === 'spotify' ? 'Spotify' : track.source === 'youtube' ? 'YouTube' : 'VK Music';
     const stage = document.createElement('span');
     stage.className = 'download-stage';
     row.append(title, artist, source, stage);
@@ -250,7 +257,7 @@
     const content = document.getElementById('content');
     if (!content) return;
     const source = new URL(event.detail.path, location.href).searchParams.get('source');
-    content.dataset.source = ['all', 'spotify', 'vk', 'downloads', 'settings'].includes(source) ? source : 'music';
+    content.dataset.source = ['all', 'spotify', 'vk', 'youtube', 'downloads', 'settings'].includes(source) ? source : 'music';
     sidebarNavigation();
     syncMessage = document.getElementById('sync-state')?.textContent;
     load();
