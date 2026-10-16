@@ -181,7 +181,7 @@ var pageTemplate = template.Must(template.New("page").Funcs(template.FuncMap{
 	        <button type="submit" class="secondary" {{if or .ProxyImport.Running (not .ProxySources)}}disabled{{end}}>{{template "icon" "reload"}}<span>Import public proxies</span></button>
 	      </form>
 	      <p><span id="public-proxy-count">{{.PublicProxyCount}}</span> public proxies saved.</p>
-	      <p>Download the saved source files, save every valid proxy, then check YouTube access. Proxies that fail the check stay saved.</p>
+	      <p>Download the saved source files and check YouTube access. New proxies are saved only after a successful check. Previously working proxies keep their check history.</p>
 	      <div id="public-proxy-import-status" class="status" role="status" aria-live="polite" data-running="{{.ProxyImport.Running}}">{{.ProxyImport.Message}}</div>
 	    </section>
     <section class="panel settings-panel personal-proxies min-w-0 rounded-2xl border border-edge bg-surface p-[9px]">

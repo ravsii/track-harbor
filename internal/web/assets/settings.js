@@ -43,7 +43,7 @@
     const form = event.target;
     if (form.id === 'public-proxy-import-form') {
       event.preventDefault();
-      if (!window.confirm('Download the saved source files and check public proxies? Proxies that fail the check will stay saved.')) return;
+      if (!window.confirm('Download the saved source files and check public proxies? New proxies will be saved only if they reach YouTube.')) return;
       const button = form.querySelector('button[type="submit"]');
       const status = document.getElementById('public-proxy-import-status');
       button.disabled = true;

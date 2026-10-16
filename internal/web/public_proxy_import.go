@@ -102,13 +102,7 @@ func (s *Server) runPublicProxyImport() {
 		s.logger.Warn("public proxy sources unavailable")
 		return
 	}
-	added, err := s.store.AddPublicProxies(addresses)
-	if err != nil {
-		s.setProxyImport("Could not save discovered proxies. Try again later.", false)
-		s.logger.Error("save discovered public proxies failed")
-		return
-	}
-	s.setProxyImport(fmt.Sprintf("Saved proxies. Checking 0/%d against YouTube…", len(addresses)), true)
+	s.setProxyImport(fmt.Sprintf("Checking 0/%d public proxies against YouTube…", len(addresses)), true)
 	jobs := make(chan string)
 	results := make(chan proxyProbeResult, publicProbeWorkers)
 	var workers sync.WaitGroup
@@ -134,18 +128,22 @@ func (s *Server) runPublicProxyImport() {
 		}
 	}()
 	go func() { workers.Wait(); close(results) }()
-	checked, successful := 0, 0
+	checked, successful, added := 0, 0, 0
 	saveFailed := false
 	for result := range results {
 		if saveFailed {
 			continue
 		}
-		if err := s.store.RecordProxyCheck(result.address, result.checkedAt, result.success); err != nil {
+		inserted, err := s.store.RecordPublicProxyCheck(result.address, result.checkedAt, result.success)
+		if err != nil {
 			saveFailed = true
 			cancel()
 			continue
 		}
 		checked++
+		if inserted {
+			added++
+		}
 		if result.success {
 			successful++
 		}
@@ -170,10 +168,10 @@ func (s *Server) runPublicProxyImport() {
 		return
 	}
 	if ctx.Err() != nil {
-		s.setProxyImport(fmt.Sprintf("Check timed out after %d/%d proxies. All discovered proxies stay saved.", checked, len(addresses)), false)
+		s.setProxyImport(fmt.Sprintf("Check timed out after %d/%d proxies. Only successfully checked new proxies were saved.", checked, len(addresses)), false)
 		s.logger.Warn("public proxy import timed out")
 		return
 	}
-	s.setProxyImport(fmt.Sprintf("Import finished: %d discovered, %d added; %d/%d checks succeeded from %d sources. Failed proxies stay saved.", len(addresses), added, successful, checked, sources), false)
+	s.setProxyImport(fmt.Sprintf("Import finished: %d discovered, %d added; %d/%d checks succeeded from %d sources. New proxies that failed were not saved.", len(addresses), added, successful, checked, sources), false)
 	s.logger.Info("public proxy import finished", zap.Int("sources", sources), zap.Int("checked", checked), zap.Int("successful", successful), zap.Int("added", added))
 }

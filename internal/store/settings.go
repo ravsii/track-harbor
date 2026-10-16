@@ -95,32 +95,24 @@ func (s *Store) AddProxy(address string, checkedAt time.Time) (bool, error) {
 	return n != 0, err
 }
 
-// AddPublicProxies persists candidates before probing. Zero means not checked/successful yet.
-// Existing addresses, especially personal proxies, retain their type and history.
-func (s *Store) AddPublicProxies(addresses []string) (int, error) {
-	tx, err := s.db.Begin()
+// RecordPublicProxyCheck adds new addresses only after a successful probe.
+// Existing addresses retain their type and previous successful checks.
+func (s *Store) RecordPublicProxyCheck(address string, checkedAt time.Time, success bool) (bool, error) {
+	if !success {
+		return false, s.RecordProxyCheck(address, checkedAt, false)
+	}
+	result, err := s.db.Exec(`INSERT INTO proxy(address, type, last_checked_at, last_success_at) VALUES(?, 'public', ?, ?) ON CONFLICT(address) DO NOTHING`, address, checkedAt.Unix(), checkedAt.Unix())
 	if err != nil {
-		return 0, err
+		return false, err
 	}
-	defer tx.Rollback()
-	stmt, err := tx.Prepare(`INSERT INTO proxy(address, type, last_checked_at, last_success_at) VALUES(?, 'public', 0, 0) ON CONFLICT(address) DO NOTHING`)
+	n, err := result.RowsAffected()
 	if err != nil {
-		return 0, err
+		return false, err
 	}
-	defer stmt.Close()
-	added := 0
-	for _, address := range addresses {
-		result, err := stmt.Exec(address)
-		if err != nil {
-			return 0, err
-		}
-		n, err := result.RowsAffected()
-		if err != nil {
-			return 0, err
-		}
-		added += int(n)
+	if n != 0 {
+		return true, nil
 	}
-	return added, tx.Commit()
+	return false, s.RecordProxyCheck(address, checkedAt, true)
 }
 
 func (s *Store) RecordProxyCheck(address string, checkedAt time.Time, success bool) error {
